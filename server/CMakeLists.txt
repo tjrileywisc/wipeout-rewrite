@@ -6,4 +6,5 @@ project(server)
 add_executable(
     server
     main.c
+    network.c
 )
