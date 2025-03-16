@@ -8,3 +8,10 @@ add_executable(
     main.c
     network.c
 )
+
+if(WIN32)
+    target_link_libraries(
+        server PRIVATE
+        Ws2_32.lib
+    )
+endif()

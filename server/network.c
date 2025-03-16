@@ -60,7 +60,11 @@ int network_ip_socket(char* ip_addr, int port) {
         return 0;
     }
 
+#if defined(WIN32)
+    if(ioctlsocket(new_socket, FIONBIO, &_true) == -1) {
+#else
     if(ioctl(new_socket, FIONBIO, &_true) == -1) {
+#endif
         printf("can't make socket non-blocking: %s\n", strerror(errno));
         return 0;
     }
@@ -73,7 +77,11 @@ int network_ip_socket(char* ip_addr, int port) {
 
     if(bind(new_socket, (void*)&address, sizeof(address)) == -1) {
         printf("couldn't bind address and port: %s\n", strerror(errno));
+#if defined(WIN32)
+        closesocket(new_socket);
+#else
         close(new_socket);
+#endif
         return 0;
     }
 
