@@ -7,7 +7,7 @@
 
 int main(int argc, char** argv) {
 
-    printf("welcome to the server!");
+    printf("welcome to the server!\n");
 
     bool should_quit = false;
 
