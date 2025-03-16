@@ -46,6 +46,7 @@ find_package(OpenGL)
 find_package(GLEW REQUIRED)
 find_package(SDL2 CONFIG REQUIRED)
 
+# MAIN GAME TARGET
 set(common_src
 	src/wipeout/camera.c
 	src/wipeout/camera.h
@@ -228,6 +229,7 @@ elseif("${PLATFORM}" STREQUAL SOKOL)
 	target_sources(wipeout PRIVATE src/platform_sokol.c)
 endif()
 
+# SERVER TARGET
 add_subdirectory(server)
 
 install(TARGETS wipeout)
