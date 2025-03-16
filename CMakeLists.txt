@@ -7,7 +7,6 @@ endif()
 
 include(GNUInstallDirs)
 include(CMakeDependentOption)
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 
 if("${CMAKE_SYSTEM_NAME}" STREQUAL "Emscripten")
 	set(EMSCRIPTEN true)
@@ -239,5 +238,7 @@ add_custom_command(
         "${DESTINATION_FOLDER}"
     COMMENT "Copying folder ${SOURCE_FOLDER} to ${DESTINATION_FOLDER} after build"
 )
+
+add_subdirectory(server)
 
 install(TARGETS wipeout)
