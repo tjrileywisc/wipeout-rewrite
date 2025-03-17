@@ -5,6 +5,7 @@
 #include <stdio.h>
 
 #if defined(WIN32)
+#define WIN32_LEAN_AND_MEAN
 #include <winsock2.h>
 #include <Windows.h>
 #else
