@@ -17,6 +17,9 @@
 #include <sys/socket.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
+
+#define INVALID_SOCKET -1
+
 #endif
 
 #if defined(WIN32)
@@ -73,7 +76,12 @@ void string_to_socket_addr(const char *str_addr, struct sockaddr *sadr) {
 // attempt to open network connection
 int network_ip_socket(char* ip_addr, int port) {
 
+#if defined(WIN32)
     SOCKET new_socket;
+#else
+    int new_socket;
+#endif
+
     struct sockaddr_in address;
 
     string_to_socket_addr(ip_addr, (struct sockaddr*)&address);
@@ -120,11 +128,13 @@ int network_ip_socket(char* ip_addr, int port) {
 void network_open_ip()
 {
 
+#if defined(WIN32)
     if ((WSAStartup(MAKEWORD(1, 1), &winsockdata)))
     {
         printf("unable to init windows socket: %s\n", network_get_last_error());
         return;
     }
+#endif
 
     char *address = "localhost";
     int port = 8000;
