@@ -6,8 +6,10 @@
 
 #if defined(WIN32)
 #include <winsock2.h>
+#include <Windows.h>
 #else
 #include <arpa/inet.h>
+#include <errno.h>
 #include <netdb.h>
 #include <netinet/in.h>
 #include <string.h>
@@ -16,7 +18,34 @@
 #include <unistd.h>
 #endif
 
+#if defined(WIN32)
+static WSADATA	winsockdata;
+#endif
+
 int ip_socket;
+
+const char *network_get_last_error()
+{
+#if defined(WIN32)
+    DWORD code = WSAGetLastError();
+
+    char* errorMsg = NULL;
+
+    FormatMessage(
+        FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+        NULL,
+        code,
+        MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+        (LPSTR)&errorMsg,
+        0,
+        NULL);
+
+    return errorMsg;
+
+#else
+    return strerror(errno);
+#endif
+}
 
 void string_to_socket_addr(const char *str_addr, struct sockaddr *sadr) {
     struct hostent *h;
@@ -43,20 +72,19 @@ void string_to_socket_addr(const char *str_addr, struct sockaddr *sadr) {
 // attempt to open network connection
 int network_ip_socket(char* ip_addr, int port) {
 
+    SOCKET new_socket;
     struct sockaddr_in address;
 
     string_to_socket_addr(ip_addr, (struct sockaddr*)&address);
 
-    //address.sin_addr.s_addr = ip_addr;
     address.sin_port = htons((short)port);
     address.sin_family = AF_INET;
 
-    int new_socket = -1;
     bool _true = true;
     int i = 1;
     
-    if((new_socket = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1) {
-        printf("unable to open socket: %s\n", strerror(errno));
+    if((new_socket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == INVALID_SOCKET) {
+        printf("unable to open socket: %s\n", network_get_last_error());
         return 0;
     }
 
@@ -65,18 +93,18 @@ int network_ip_socket(char* ip_addr, int port) {
 #else
     if(ioctl(new_socket, FIONBIO, &_true) == -1) {
 #endif
-        printf("can't make socket non-blocking: %s\n", strerror(errno));
+        printf("can't make socket non-blocking: %s\n", network_get_last_error());
         return 0;
     }
 
     if(setsockopt(new_socket, SOL_SOCKET, SO_BROADCAST, (char*)&i, sizeof(i)) == -1) {
-        printf("can't make socket broadcastable: %s\n", strerror(errno));
+        printf("can't make socket broadcastable: %s\n", network_get_last_error());
         return 0;
     }
 
 
     if(bind(new_socket, (void*)&address, sizeof(address)) == -1) {
-        printf("couldn't bind address and port: %s\n", strerror(errno));
+        printf("couldn't bind address and port: %s\n", network_get_last_error());
 #if defined(WIN32)
         closesocket(new_socket);
 #else
@@ -88,16 +116,25 @@ int network_ip_socket(char* ip_addr, int port) {
     return new_socket;
 }
 
-void network_open_ip() {
+void network_open_ip()
+{
 
-    char* address = "localhost";
+    if ((WSAStartup(MAKEWORD(1, 1), &winsockdata)))
+    {
+        printf("unable to init windows socket: %s\n", network_get_last_error());
+        return;
+    }
+
+    char *address = "localhost";
     int port = 8000;
 
     // make several attempts to grab an open port
-    for(int i = 0; i < 10; i++) {
+    for (int i = 0; i < 10; i++)
+    {
         ip_socket = network_ip_socket(address, port + i);
 
-        if(ip_socket) {
+        if (ip_socket)
+        {
             printf("established connection at %s:%d\n", address, port);
             return;
         }
