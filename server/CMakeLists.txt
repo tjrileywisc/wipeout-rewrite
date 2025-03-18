@@ -1,17 +1,16 @@
 
-cmake_minimum_required(VERSION 3.28 FATAL_ERROR)
-
-project(server)
-
 add_executable(
     server
     main.c
-    network.c
 )
 
+set(OS_LIBS "")
 if(WIN32)
-    target_link_libraries(
-        server PRIVATE
-        Ws2_32.lib
-    )
+    set(OS_LIBS "Ws2_32.lib;OS_LIBS")
 endif()
+
+target_link_libraries(
+    server PRIVATE
+    ${OS_LIBS}
+    network
+)

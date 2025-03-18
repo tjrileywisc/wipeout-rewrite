@@ -229,6 +229,9 @@ elseif("${PLATFORM}" STREQUAL SOKOL)
 	target_sources(wipeout PRIVATE src/platform_sokol.c)
 endif()
 
+# NETWORK LIBRARY TARGET
+add_subdirectory(network)
+
 # SERVER TARGET
 add_subdirectory(server)
 

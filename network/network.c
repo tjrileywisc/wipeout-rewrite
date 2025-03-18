@@ -1,4 +1,5 @@
 
+#include "network.h"
 
 #include <errno.h>
 #include <stdbool.h>

@@ -1,0 +1,6 @@
+
+add_library(network
+    network.c
+)
+
+target_include_directories(network PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
