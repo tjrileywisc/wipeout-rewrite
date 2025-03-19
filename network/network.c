@@ -52,7 +52,8 @@ const char *network_get_last_error()
 #endif
 }
 
-void string_to_socket_addr(const char *str_addr, struct sockaddr *sadr) {
+// translate a network address (like localhost) or ip to a soecket address
+static void string_to_socket_addr(const char *str_addr, struct sockaddr *sadr) {
     struct hostent *h;
 
     memset(sadr, 0, sizeof(*sadr));
@@ -72,6 +73,28 @@ void string_to_socket_addr(const char *str_addr, struct sockaddr *sadr) {
     }
 
     return;
+}
+
+static const char* addr_to_string(netadr_t addr) {
+    static char str[64];
+
+    snprintf(str, sizeof(str), "%i.%i.%i.%i:%hu", addr.ip[0], addr.ip[1], addr.ip[2], addr.ip[3], addr.port);
+
+    return str;
+}
+
+static void netadr_to_sockadr(netadr_t* addr, struct sockaddr_in *s) {
+
+    memset(s, 0, sizeof(*s));
+
+    s->sin_family = AF_INET;
+    *(int *)&s->sin_addr = *(int *)&addr->ip;
+    s->sin_port = addr->port;
+}
+
+static void sockadr_to_netadr(struct sockaddr_in* s, netadr_t* addr) {
+    *(int *)&addr->ip = *(int *)&s->sin_addr;
+    addr->port = s->sin_port;
 }
 
 // attempt to open network connection
@@ -152,4 +175,24 @@ void network_open_ip()
         }
     }
     perror("could not establish network connection... quitting.\n");
+}
+
+void network_send_packet(int length, void* data, netadr_t dest_net) {
+
+    if(!ip_socket) {
+        printf("ip connection hasn't been established...");
+        return;
+    }
+
+    int net_socket = ip_socket;
+    struct sockaddr_in dest_addr;
+
+    netadr_to_sockadr(&dest_net, &dest_addr);
+
+    int ret = sendto(net_socket, data, length, 0, (struct sockaddr*)&dest_addr, sizeof(dest_addr));
+
+    if(ret == -1) {
+        printf("unable to send packet to %s: %s\n", addr_to_string(dest_net), network_get_last_error());
+    }
+
 }
