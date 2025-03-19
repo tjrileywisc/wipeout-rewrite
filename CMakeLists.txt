@@ -42,9 +42,25 @@ if (DEV_BUILD)
 	set(PATH_USERDATA "${CMAKE_SOURCE_DIR}/")
 endif()
 
+# 3RD PARTY LIBRARIES
 find_package(OpenGL)
 find_package(GLEW REQUIRED)
 find_package(SDL2 CONFIG REQUIRED)
+
+# COMMON COMPLIER FLAGS, DEFINES
+set(CMAKE_C_STANDARD 11)
+add_compile_options(
+    $<$<CXX_COMPILER_ID:MSVC>:/W4>
+    $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall>
+    $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wextra>
+)
+
+# INTERNAL LIBRARIES
+# NETWORK LIBRARY TARGET
+add_subdirectory(network)
+
+# SERVER TARGET
+add_subdirectory(server)
 
 # MAIN GAME TARGET
 set(common_src
@@ -108,17 +124,16 @@ set(common_src
 )
 
 add_executable(wipeout WIN32 ${common_src})
-set_property(TARGET wipeout PROPERTY C_STANDARD 11)
 target_include_directories(wipeout PRIVATE src)
 target_include_directories(wipeout SYSTEM PRIVATE src/libs)
-target_compile_options(wipeout PRIVATE
-	$<$<CXX_COMPILER_ID:MSVC>:/W4>
-	$<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra>
-)
+
 target_compile_definitions(wipeout PRIVATE
 	$<$<BOOL:${PATH_ASSETS}>:-DPATH_ASSETS=${PATH_ASSETS}>
 	$<$<BOOL:${PATH_USERDATA}>:-DPATH_USERDATA=${PATH_USERDATA}>
 )
+
+# COMMON LIBRARIES
+target_link_libraries(wipeout PRIVATE network)
 
 if(WIN32)
 	target_compile_definitions(wipeout PRIVATE
@@ -228,11 +243,5 @@ if("${PLATFORM}" STREQUAL SDL2)
 elseif("${PLATFORM}" STREQUAL SOKOL)
 	target_sources(wipeout PRIVATE src/platform_sokol.c)
 endif()
-
-# NETWORK LIBRARY TARGET
-add_subdirectory(network)
-
-# SERVER TARGET
-add_subdirectory(server)
 
 install(TARGETS wipeout)
