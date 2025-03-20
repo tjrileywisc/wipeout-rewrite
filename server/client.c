@@ -35,7 +35,7 @@ void server_connect_client(netadr_t from) {
 	// send the connect packet to the client
 	network_out_of_band_print(SERVER, from, "connnectRepsonse");
 
-	//Com_DPrintf( "Going from CS_FREE to CS_CONNECTED for %s\n" client->name );
+	printf(" %s has connected...\n", client->name );
 
 	client->state = CONNECTED;
 }
