@@ -2,6 +2,7 @@
 #include "network.h"
 
 #include <errno.h>
+#include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
 
@@ -97,6 +98,28 @@ static void sockadr_to_netadr(struct sockaddr_in* s, netadr_t* addr) {
     addr->port = s->sin_port;
 }
 
+
+// perhaps a platform specific interface to send a packet? it's really sent here
+static void system_send_packet(int length, const void* data, netadr_t dest_net) {
+
+    if(!ip_socket) {
+        printf("ip connection hasn't been established...");
+        return;
+    }
+
+    int net_socket = ip_socket;
+    struct sockaddr_in dest_addr;
+
+    netadr_to_sockadr(&dest_net, &dest_addr);
+
+    int ret = sendto(net_socket, data, length, 0, (struct sockaddr*)&dest_addr, sizeof(dest_addr));
+
+    if(ret == -1) {
+        printf("unable to send packet to %s: %s\n", addr_to_string(dest_net), network_get_last_error());
+    }
+
+}
+
 // attempt to open network connection
 int network_ip_socket(char* ip_addr, int port) {
 
@@ -177,22 +200,25 @@ void network_open_ip()
     perror("could not establish network connection... quitting.\n");
 }
 
-void network_send_packet(int length, void* data, netadr_t dest_net) {
+void network_out_of_band_print(netsrc_t sock, netadr_t adr, const char *format, ...)
+{
+    va_list argptr;
+    char str[1024];
 
-    if(!ip_socket) {
-        printf("ip connection hasn't been established...");
-        return;
-    }
+    // header
+    str[0] = -1;
+    str[1] = -1;
+    str[2] = -1;
+    str[3] = -1;
 
-    int net_socket = ip_socket;
-    struct sockaddr_in dest_addr;
+    va_start(argptr, format);
+    vsprintf(str + 4, format, argptr);
+    va_end(argptr);
 
-    netadr_to_sockadr(&dest_net, &dest_addr);
+    network_send_packet(sock, strlen(str), str, adr);
+}
 
-    int ret = sendto(net_socket, data, length, 0, (struct sockaddr*)&dest_addr, sizeof(dest_addr));
+void network_send_packet(netsrc_t sock, int length, const void* data, netadr_t dest_net) {
 
-    if(ret == -1) {
-        printf("unable to send packet to %s: %s\n", addr_to_string(dest_net), network_get_last_error());
-    }
-
+    system_send_packet(length, data, dest_net);
 }

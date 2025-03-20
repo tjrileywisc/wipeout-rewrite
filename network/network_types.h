@@ -9,4 +9,9 @@ typedef struct {
     unsigned short port;
 } netadr_t;
 
+typedef enum {
+    CLIENT,
+    SERVER
+} netsrc_t;
+
 #endif

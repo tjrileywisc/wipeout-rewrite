@@ -2,6 +2,7 @@
 add_executable(
     server
     main.c
+    client.c
 )
 
 set(OS_LIBS "")
