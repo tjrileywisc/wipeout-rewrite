@@ -1,5 +1,6 @@
 
 #include <network.h>
+#include <stdio.h>
 
 // concerning syncing of clients to the game state
 
