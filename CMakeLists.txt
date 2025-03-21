@@ -66,6 +66,7 @@ add_subdirectory(server)
 set(common_src
 	src/wipeout/camera.c
 	src/wipeout/camera.h
+	src/wipeout/client.c
 	src/wipeout/droid.c
 	src/wipeout/droid.h
 	src/wipeout/game.c

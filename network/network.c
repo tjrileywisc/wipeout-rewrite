@@ -189,7 +189,8 @@ void network_open_ip()
     // make several attempts to grab an open port
     for (int i = 0; i < 10; i++)
     {
-        ip_socket = network_ip_socket(address, port + i);
+        port += i;
+        ip_socket = network_ip_socket(address, port);
 
         if (ip_socket)
         {
