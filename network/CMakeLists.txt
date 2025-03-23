@@ -1,5 +1,6 @@
 
 add_library(network
+    msg.c
     network.c
 )
 
