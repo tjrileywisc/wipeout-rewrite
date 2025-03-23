@@ -1,4 +1,5 @@
 
+#include "client.h"
 
 #include <msg.h>
 #include <network.h>
@@ -23,20 +24,20 @@ static void server_status() {
 
 static void server_anonymous_packet(netadr_t from, msg_t* msg) {
 
-    if(!strncmp("connect", &msg->data[PACKET_HDR_SIZE], strlen("connect"))) {
+    if(strncmp("connect", &msg->data[PACKET_HDR_SIZE], strlen("connect") != 0)) {
         // a more complex message
     }
 
     char* s = msg_read_string_line(msg);
-    char* tokens = strtok(s, ' ');
+    char* tokens = strtok(s, " ");
 
-    if(strcmp(tokens[0], "getstatus")) {
+    if(strcmp(tokens, "getstatus") == 0) {
         server_status();
     }
-    else if (strcmp(tokens[0], "connect")) {
-        // connect
+    else if (strcmp(tokens, "connect") == 0) {
+        server_connect_client(from);
     }
-    else if (strcmp(tokens[0], "command")) {
+    else if (strcmp(tokens, "command") == 0) {
         // perform a command given the message
     }
     else {
@@ -61,7 +62,7 @@ static void server_init() {
     server.num_clients = 0;
 }
 
-int main(int argc, char** argv) {
+int main(int, char**) {
 
     printf("welcome to the server!\n");
 
