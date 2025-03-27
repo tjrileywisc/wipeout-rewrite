@@ -10,6 +10,8 @@
 #include "image.h"
 #include "ui.h"
 
+#include <network.h>
+
 static void page_main_init(menu_t *menu);
 static void page_options_init(menu_t *menu);
 static void page_race_class_init(menu_t *menu);
@@ -148,7 +150,26 @@ static void page_network_draw(menu_t *menu, int data) {
 }
 
 static void page_network_query(menu_t *menu, int data) {
+	if(!network_has_ip_socket()) {
+		return;
+	}
 
+	byte* ip = malloc(4 * sizeof(int));
+	if(!ip) {
+		return;
+	}
+
+	ip[0] = 127;
+	ip[1] = 0;
+	ip[2] = 0;
+	ip[3] = 1;
+	
+	netadr_t dest = {
+		.ip = ip, 
+		.port = 8000
+	};
+
+	network_send_packet(CLIENT, 5, "hello", dest);
 }
 
 static void page_network_init(menu_t *menu) {

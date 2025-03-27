@@ -137,3 +137,7 @@ char *msg_read_string_line(msg_t *msg)
 
     return string;
 }
+
+void msg_bitstream(msg_t* buf) {
+    buf->oob = true;
+}

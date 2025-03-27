@@ -7,6 +7,7 @@
 typedef unsigned char byte;
 
 #define MAX_STRING_CHARS 1024
+#define MAX_MSGLEN 16
 
 typedef struct {
     byte ip[4];
@@ -17,6 +18,7 @@ typedef struct {
     int cursize;
     int readcount;
     int bit;
+    int maxsize;
     bool oob;
     byte* data;
 } msg_t;

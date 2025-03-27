@@ -25,7 +25,7 @@
 #endif
 
 #if defined(WIN32)
-static WSADATA	winsockdata;
+static WSADATA winsockdata;
 #endif
 
 int ip_socket;
@@ -35,7 +35,7 @@ const char *network_get_last_error()
 #if defined(WIN32)
     DWORD code = WSAGetLastError();
 
-    char* errorMsg = NULL;
+    char *errorMsg = NULL;
 
     FormatMessage(
         FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
@@ -54,7 +54,8 @@ const char *network_get_last_error()
 }
 
 // translate a network address (like localhost) or ip to a soecket address
-static void string_to_socket_addr(const char *str_addr, struct sockaddr *sadr) {
+static void string_to_socket_addr(const char *str_addr, struct sockaddr *sadr)
+{
     struct hostent *h;
 
     memset(sadr, 0, sizeof(*sadr));
@@ -62,11 +63,13 @@ static void string_to_socket_addr(const char *str_addr, struct sockaddr *sadr) {
 
     ((struct sockaddr_in *)sadr)->sin_port = 0;
 
-    if (str_addr[0] >= '0' && str_addr[0] <= '9') {
+    if (str_addr[0] >= '0' && str_addr[0] <= '9')
+    {
         // it's an ip4 address
         *(int *)&((struct sockaddr_in *)sadr)->sin_addr = inet_addr(str_addr);
     }
-    else {
+    else
+    {
         // it's a string address
         if (!(h = gethostbyname(str_addr)))
             return;
@@ -76,7 +79,8 @@ static void string_to_socket_addr(const char *str_addr, struct sockaddr *sadr) {
     return;
 }
 
-static const char* addr_to_string(netadr_t addr) {
+static const char *addr_to_string(netadr_t addr)
+{
     static char str[64];
 
     snprintf(str, sizeof(str), "%i.%i.%i.%i:%hu", addr.ip[0], addr.ip[1], addr.ip[2], addr.ip[3], addr.port);
@@ -84,7 +88,8 @@ static const char* addr_to_string(netadr_t addr) {
     return str;
 }
 
-static void netadr_to_sockadr(netadr_t* addr, struct sockaddr_in *s) {
+static void netadr_to_sockadr(netadr_t *addr, struct sockaddr_in *s)
+{
 
     memset(s, 0, sizeof(*s));
 
@@ -93,16 +98,18 @@ static void netadr_to_sockadr(netadr_t* addr, struct sockaddr_in *s) {
     s->sin_port = addr->port;
 }
 
-static void sockadr_to_netadr(struct sockaddr_in* s, netadr_t* addr) {
+static void sockadr_to_netadr(struct sockaddr_in *s, netadr_t *addr)
+{
     *(int *)&addr->ip = *(int *)&s->sin_addr;
     addr->port = s->sin_port;
 }
 
-
 // perhaps a platform specific interface to send a packet? it's really sent here
-static void system_send_packet(int length, const void* data, netadr_t dest_net) {
+static void system_send_packet(int length, const void *data, netadr_t dest_net)
+{
 
-    if(!ip_socket) {
+    if (!ip_socket)
+    {
         printf("ip connection hasn't been established...");
         return;
     }
@@ -112,16 +119,51 @@ static void system_send_packet(int length, const void* data, netadr_t dest_net) 
 
     netadr_to_sockadr(&dest_net, &dest_addr);
 
-    int ret = sendto(net_socket, data, length, 0, (struct sockaddr*)&dest_addr, sizeof(dest_addr));
+    int ret = sendto(net_socket, data, length, 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
 
-    if(ret == -1) {
+    if (ret == -1)
+    {
         printf("unable to send packet to %s: %s\n", addr_to_string(dest_net), network_get_last_error());
     }
+}
 
+static bool system_get_packet(netadr_t *net_from, msg_t *net_msg)
+{
+    struct sockaddr_in from;
+
+    if (!ip_socket)
+        return false;
+
+    int fromlen = sizeof(from);
+    int ret = recvfrom(ip_socket, net_msg->data, net_msg->maxsize, 0, (struct sockaddr *)&from, &fromlen);
+
+    sockadr_to_netadr(&from, net_from);
+    net_msg->readcount = 0;
+
+    if (ret == -1)
+    {
+        int err = errno;
+
+        if (err == EWOULDBLOCK || err == ECONNREFUSED) {
+            return false;
+        }
+        
+        printf("%s from %s\n", network_get_last_error(), addr_to_string(*net_from));
+    }
+
+    if (ret == net_msg->maxsize)
+    {
+        printf("oversize packet from %s\n", addr_to_string(*net_from));
+        return false;
+    }
+
+    net_msg->cursize = ret;
+    return true;
 }
 
 // attempt to open network connection
-int network_ip_socket(char* ip_addr, int port) {
+int network_ip_socket(char *ip_addr, int port)
+{
 
 #if defined(WIN32)
     SOCKET new_socket;
@@ -131,35 +173,39 @@ int network_ip_socket(char* ip_addr, int port) {
 
     struct sockaddr_in address;
 
-    string_to_socket_addr(ip_addr, (struct sockaddr*)&address);
+    string_to_socket_addr(ip_addr, (struct sockaddr *)&address);
 
     address.sin_port = htons((short)port);
     address.sin_family = AF_INET;
 
     bool _true = true;
     int i = 1;
-    
-    if((new_socket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == INVALID_SOCKET) {
+
+    if ((new_socket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == INVALID_SOCKET)
+    {
         printf("unable to open socket: %s\n", network_get_last_error());
         return 0;
     }
 
 #if defined(WIN32)
-    if(ioctlsocket(new_socket, FIONBIO, &_true) == -1) {
+    if (ioctlsocket(new_socket, FIONBIO, &_true) == -1)
+    {
 #else
-    if(ioctl(new_socket, FIONBIO, &_true) == -1) {
+    if (ioctl(new_socket, FIONBIO, &_true) == -1)
+    {
 #endif
         printf("can't make socket non-blocking: %s\n", network_get_last_error());
         return 0;
     }
 
-    if(setsockopt(new_socket, SOL_SOCKET, SO_BROADCAST, (char*)&i, sizeof(i)) == -1) {
+    if (setsockopt(new_socket, SOL_SOCKET, SO_BROADCAST, (char *)&i, sizeof(i)) == -1)
+    {
         printf("can't make socket broadcastable: %s\n", network_get_last_error());
         return 0;
     }
 
-
-    if(bind(new_socket, (void*)&address, sizeof(address)) == -1) {
+    if (bind(new_socket, (void *)&address, sizeof(address)) == -1)
+    {
         printf("couldn't bind address and port: %s\n", network_get_last_error());
 #if defined(WIN32)
         closesocket(new_socket);
@@ -170,6 +216,11 @@ int network_ip_socket(char* ip_addr, int port) {
     }
 
     return new_socket;
+}
+
+bool network_has_ip_socket()
+{
+    return ip_socket;
 }
 
 void network_open_ip()
@@ -219,7 +270,53 @@ void network_out_of_band_print(netsrc_t sock, netadr_t adr, const char *format, 
     network_send_packet(sock, strlen(str), str, adr);
 }
 
-void network_send_packet(netsrc_t sock, int length, const void* data, netadr_t dest_net) {
-
+void network_send_packet(netsrc_t sock, int length, const void *data, netadr_t dest_net)
+{
     system_send_packet(length, data, dest_net);
+}
+
+// there needs to be enough loopback messages to hold a complete
+// gamestate of maximum size
+#define MAX_LOOPBACK 16
+#define MAX_PACKETLEN 1024
+
+typedef struct
+{
+    byte data[MAX_PACKETLEN];
+    int datalen;
+} loopmsg_t;
+
+typedef struct
+{
+    loopmsg_t msgs[MAX_LOOPBACK];
+    int get, send;
+} loopback_t;
+
+// one for client, one for server
+loopback_t loopbacks[2];
+
+bool network_get_loop_packet(netsrc_t sock, netadr_t *net_from, msg_t *net_message)
+{
+
+    loopback_t *loop;
+    loop = &loopbacks[sock];
+    int i = loop->get & (MAX_LOOPBACK - 1);
+    loop->get++;
+
+    memcpy(net_message->data, loop->msgs[i].data, loop->msgs[i].datalen);
+    net_message->cursize = loop->msgs[i].datalen;
+    memset(net_from, 0, sizeof(*net_from));
+
+    return true;
+}
+
+void network_send_loop_packet(netsrc_t sock, int length, const void *data, netadr_t to)
+{
+    loopback_t *loop = &loopbacks[sock ^ 1];
+
+    int i = loop->send & (MAX_LOOPBACK - 1);
+    loop->send++;
+
+    memcpy(loop->msgs[i].data, data, length);
+    loop->msgs[i].datalen = length;
 }
