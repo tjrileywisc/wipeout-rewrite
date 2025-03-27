@@ -320,3 +320,19 @@ void network_send_loop_packet(netsrc_t sock, int length, const void *data, netad
     memcpy(loop->msgs[i].data, data, length);
     loop->msgs[i].datalen = length;
 }
+
+int network_sleep(int msec)
+{
+    struct timeval timeout;
+    fd_set fdset;
+
+    if (!ip_socket) {
+        return 0;
+    }
+
+    FD_ZERO(&fdset);
+    FD_SET(ip_socket, &fdset); // network socket
+    timeout.tv_sec = msec / 1000;
+    timeout.tv_usec = (msec % 1000) * 1000;
+    return select(ip_socket + 1, &fdset, NULL, NULL, &timeout);
+}

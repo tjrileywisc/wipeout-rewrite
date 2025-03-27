@@ -16,4 +16,12 @@ bool network_get_loop_packet(netsrc_t sock, netadr_t *net_from, msg_t *net_messa
 
 void network_send_loop_packet(netsrc_t sock, int length, const void *data, netadr_t to);
 
+/**
+ * sleep for a duration, or until we have socket activity
+ * 
+ * @param msec duration in milliseconds
+ * @return 0 if network is not available, or 1 if so
+ */
+int network_sleep(int msec);
+
 #endif

@@ -97,7 +97,11 @@ int main(int, char **)
 
     while (!should_quit)
     {
-        sleep(1);
+        int ret = network_sleep(100);
+
+        if(ret == 0) {
+            continue;
+        }
 
         // TODO: how do we know _IF_ we received a packet?
         while (network_get_loop_packet(CLIENT, &evFrom, &buf))
