@@ -11,6 +11,7 @@ typedef unsigned char byte;
 
 typedef struct {
     byte ip[4];
+    // N.B. needs to be big-endian
     unsigned short port;
 } netadr_t;
 
