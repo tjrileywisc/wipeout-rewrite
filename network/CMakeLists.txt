@@ -1,5 +1,6 @@
 
 add_library(network
+    addr_conversions.c
     msg.c
     network.c
 )

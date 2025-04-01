@@ -53,56 +53,6 @@ const char *network_get_last_error()
 #endif
 }
 
-// translate a network address (like localhost) or ip to a soecket address
-static void string_to_socket_addr(const char *str_addr, struct sockaddr *sadr)
-{
-    struct hostent *h;
-
-    memset(sadr, 0, sizeof(*sadr));
-    ((struct sockaddr_in *)sadr)->sin_family = AF_INET;
-
-    ((struct sockaddr_in *)sadr)->sin_port = 0;
-
-    if (str_addr[0] >= '0' && str_addr[0] <= '9')
-    {
-        // it's an ip4 address
-        *(int *)&((struct sockaddr_in *)sadr)->sin_addr = inet_addr(str_addr);
-    }
-    else
-    {
-        // it's a string address
-        if (!(h = gethostbyname(str_addr)))
-            return;
-        *(int *)&((struct sockaddr_in *)sadr)->sin_addr = *(int *)h->h_addr_list[0];
-    }
-
-    return;
-}
-
-static const char *addr_to_string(netadr_t addr)
-{
-    static char str[64];
-
-    snprintf(str, sizeof(str), "%i.%i.%i.%i:%hu", addr.ip[0], addr.ip[1], addr.ip[2], addr.ip[3], addr.port);
-
-    return str;
-}
-
-static void netadr_to_sockadr(netadr_t *addr, struct sockaddr_in *s)
-{
-
-    memset(s, 0, sizeof(*s));
-
-    s->sin_family = AF_INET;
-    *(int *)&s->sin_addr = *(int *)&addr->ip;
-    s->sin_port = addr->port;
-}
-
-static void sockadr_to_netadr(struct sockaddr_in *s, netadr_t *addr)
-{
-    *(int *)&addr->ip = *(int *)&s->sin_addr;
-    addr->port = s->sin_port;
-}
 
 // perhaps a platform specific interface to send a packet? it's really sent here
 static void system_send_packet(int length, const void *data, netadr_t dest_net)
