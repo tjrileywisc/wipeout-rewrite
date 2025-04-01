@@ -1,8 +1,11 @@
 
 #include "addr_conversions.h"
 
+#include <arpa/inet.h>
 #include <netdb.h>
 #include <netinet/in.h>
+#include <stdio.h>
+#include <string.h>
 #include <sys/socket.h>
 
 void string_to_socket_addr(const char *str_addr, struct sockaddr *sadr)
@@ -17,7 +20,7 @@ void string_to_socket_addr(const char *str_addr, struct sockaddr *sadr)
     if (str_addr[0] >= '0' && str_addr[0] <= '9')
     {
         // it's an ip4 address
-        *(int *)&((struct sockaddr_in *)sadr)->sin_addr = inet_addr(str_addr);
+        inet_pton(AF_INET, str_addr, &((struct sockaddr_in *)sadr)->sin_addr);
     }
     else
     {
