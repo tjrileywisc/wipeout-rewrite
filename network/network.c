@@ -247,9 +247,17 @@ loopback_t loopbacks[2];
 
 bool network_get_loop_packet(netsrc_t sock, netadr_t *net_from, msg_t *net_message)
 {
+    loopback_t *loop = &loopbacks[sock];
 
-    loopback_t *loop;
-    loop = &loopbacks[sock];
+    if (loop->send - loop->get > MAX_LOOPBACK)
+    {
+        loop->get = loop->send - MAX_LOOPBACK;
+    }
+
+    if (loop->get >= loop->send) {
+        return false;
+    }
+
     int i = loop->get & (MAX_LOOPBACK - 1);
     loop->get++;
 
