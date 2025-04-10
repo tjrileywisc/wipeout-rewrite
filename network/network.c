@@ -21,6 +21,7 @@
 #include <unistd.h>
 
 #define INVALID_SOCKET -1
+#define SERVER_PORT "8000"
 
 #endif
 
@@ -173,7 +174,7 @@ bool network_has_ip_socket()
     return ip_socket;
 }
 
-void network_open_ip()
+void network_bind_ip()
 {
 
 #if defined(WIN32)
@@ -200,6 +201,54 @@ void network_open_ip()
         }
     }
     perror("could not establish network connection... quitting.\n");
+}
+
+void network_connect_ip(const char* addr)
+{
+    struct addrinfo hints;
+    struct addrinfo* servinfo;
+    
+    memset(&hints, 0, sizeof hints);
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_DGRAM;
+
+    int ret;
+
+    if((ret = getaddrinfo(addr, SERVER_PORT, &hints, &servinfo)) != 0) {
+        printf("getaddrinfo error: %s\n", network_get_last_error());
+        return;
+    }
+
+    // loop through all the results and connect to the first we can
+    for(struct addrinfo* p = servinfo; p != NULL; p = p->ai_next) {
+        if ((ip_socket = socket(p->ai_family, p->ai_socktype,
+                p->ai_protocol)) == -1) {
+            perror("client: socket");
+            continue;
+        }
+
+        if (connect(ip_socket, p->ai_addr, p->ai_addrlen) == -1) {
+            //close(ip_socket);
+            perror("client: connect");
+            continue;
+        }
+
+        break;
+    }
+
+    freeaddrinfo(servinfo);
+}
+
+void network_close_connection()
+{
+    // TODO: how to confirm it's an open socket?
+    if(ip_socket > 0) {
+#if defined(WIN32)
+        closesocket(ip_socket);
+#else
+        close(ip_socket);
+#endif
+    }
 }
 
 void network_out_of_band_print(netsrc_t sock, netadr_t adr, const char *format, ...)

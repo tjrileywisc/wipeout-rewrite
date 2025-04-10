@@ -4,7 +4,7 @@
 #include <network.h>
 
 void client_init() {
-    network_open_ip();
+    network_connect_ip("localhost");
 }
 
 void client_init_server_info(server_info_t *server, netadr_t *adr)

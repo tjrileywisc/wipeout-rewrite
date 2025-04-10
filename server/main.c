@@ -93,7 +93,7 @@ int main(int, char **)
     netadr_t evFrom;
     msg_t buf;
 
-    network_open_ip();
+    network_bind_ip();
 
     while (!should_quit)
     {

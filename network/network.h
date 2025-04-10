@@ -6,7 +6,19 @@
 
 bool network_has_ip_socket();
 
-void network_open_ip();
+/**
+ * Bind to a port for running in a
+ * server context
+ */
+void network_bind_ip();
+
+/**
+ * Connect to any port for running
+ * in a client context
+ */
+void network_connect_ip(const char* addr);
+
+void network_close_connection();
 
 void network_out_of_band_print(netsrc_t sock, netadr_t adr, const char* format, ... );
 
