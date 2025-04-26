@@ -43,9 +43,13 @@ if (DEV_BUILD)
 endif()
 
 # 3RD PARTY LIBRARIES
+find_package(PkgConfig REQUIRED)
 find_package(OpenGL)
 find_package(GLEW REQUIRED)
 find_package(SDL2 CONFIG REQUIRED)
+pkg_check_modules(libprotobuf-c REQUIRED IMPORTED_TARGET libprotobuf-c)
+
+include_directories(${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/include)
 
 # COMMON COMPLIER FLAGS, DEFINES
 set(CMAKE_C_STANDARD 11)
@@ -56,6 +60,9 @@ add_compile_options(
 )
 
 # INTERNAL LIBRARIES
+# PROTOBUF MSGS
+add_subdirectory(gen)
+
 # NETWORK LIBRARY TARGET
 add_subdirectory(network)
 
