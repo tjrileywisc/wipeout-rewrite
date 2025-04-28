@@ -104,7 +104,7 @@ int main(int, char **)
         }
 
         // TODO: how do we know _IF_ we received a packet?
-        while (network_get_loop_packet(CLIENT, &evFrom, &buf))
+        while (network_get_packet())
         {
             packet_event(evFrom, &buf);
         }

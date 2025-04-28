@@ -20,6 +20,8 @@
 #include <sys/ioctl.h>
 #include <unistd.h>
 
+#include <ServerInfo.pb-c.h>
+
 #define INVALID_SOCKET -1
 #define SERVER_PORT "8000"
 
@@ -169,12 +171,12 @@ int network_ip_socket(char *ip_addr, int port)
     return new_socket;
 }
 
-bool network_has_ip_socket()
+bool network_has_ip_socket(void)
 {
     return ip_socket;
 }
 
-void network_bind_ip()
+void network_bind_ip(void)
 {
 
 #if defined(WIN32)
@@ -269,6 +271,34 @@ void network_out_of_band_print(netsrc_t sock, netadr_t adr, const char *format, 
     network_send_packet(sock, strlen(str), str, adr);
 }
 
+bool network_get_packet()
+{
+    int MAXBUFLEN = 100;
+    char buf[MAXBUFLEN];
+    struct sockaddr_storage their_addr;
+    socklen_t addr_len = sizeof their_addr;
+    int numbytes = 0;
+
+    char s[INET_ADDRSTRLEN];
+
+    if ((numbytes = recvfrom(ip_socket, buf, MAXBUFLEN-1 , 0,
+        (struct sockaddr *)&their_addr, &addr_len)) == -1) {
+        perror("recvfrom");
+        exit(1);
+    }
+
+    struct sockaddr* addr = &((struct sockaddr_in*)&their_addr)->sin_addr;
+
+    printf("listener: got packet from %s\n",
+        inet_ntop(their_addr.ss_family,
+            addr,
+            s, sizeof s));
+    printf("listener: packet is %d bytes long\n", numbytes);
+    buf[numbytes] = '\0';
+    printf("listener: packet contains \"%s\"\n", buf);
+    return true;
+}
+
 void network_send_packet(netsrc_t sock, int length, const void *data, netadr_t dest_net)
 {
     system_send_packet(length, data, dest_net);
@@ -326,6 +356,31 @@ void network_send_loop_packet(netsrc_t sock, int length, const void *data, netad
 
     memcpy(loop->msgs[i].data, data, length);
     loop->msgs[i].datalen = length;
+}
+
+void network_send_command(const char *command, netadr_t dest)
+{
+    if(strcmp(command, "server_info") == 0) {
+        Wipeout__ServerInfo* msg;
+        wipeout__server_info__init(msg);
+        network_send_packet(ip_socket, strlen(command), "server_info", dest);
+
+    }
+}
+
+void network_process_command(const char* command) 
+{
+    if(strcmp(command, "server_info") == 0) {
+        Wipeout__ServerInfo* msg;
+        wipeout__server_info__init(msg);
+        msg->name = "my server";
+        msg->port = 8000;
+
+        unsigned char* out = (unsigned char*)malloc(wipeout__server_info__get_packed_size(msg));
+        if(out) {
+            wipeout__server_info__pack(msg, out);
+        }
+    }
 }
 
 int network_sleep(int msec)
