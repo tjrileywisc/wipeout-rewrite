@@ -8,12 +8,14 @@
     "configurePresets": [
         {
             "name": "default",
+            "hidden": true,
             "generator": "Ninja",
             "binaryDir": "${sourceDir}/build",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release",
-                "CMAKE_TOOLCHAIN_FILE": "vcpkg/scripts/buildsystems/vcpkg.cmake",
-                "DEV_BUILD": "ON"
+                "CMAKE_C_COMPILER": "clang-cl",
+                "CMAKE_CXX_COMPILER": "clang-cl",
+                "CMAKE_TOOLCHAIN_FILE": "vcpkg/scripts/buildsystems/vcpkg.cmake"
             }
         },
         {
@@ -21,8 +23,6 @@
             "inherits": "default",
             "description": "Configuration for clang-cl on Windows using vcpkg",
             "cacheVariables": {
-                "CMAKE_C_COMPILER": "clang-cl",
-                "CMAKE_CXX_COMPILER": "clang-cl"
             }
         }
     ],
