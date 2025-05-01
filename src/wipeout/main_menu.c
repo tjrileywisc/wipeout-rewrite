@@ -54,11 +54,11 @@ static void draw_model(Object *model, vec2_t offset, vec3_t pos, float rotation)
 // -----------------------------------------------------------------------------
 // Main Menu
 
-static void button_start_game(menu_t *menu, int data) {
+static void button_start_game(menu_t *menu, int) {
 	page_race_class_init(menu);
 }
 
-static void button_options(menu_t *menu, int data) {
+static void button_options(menu_t *menu, int) {
 	page_options_init(menu);
 }
 
@@ -71,11 +71,11 @@ static void button_quit_confirm(menu_t *menu, int data) {
 	}
 }
 
-static void button_quit(menu_t *menu, int data) {
+static void button_quit(menu_t *menu, int) {
 	menu_confirm(menu, "ARE YOU SURE YOU", "WANT TO QUIT", "YES", "NO", button_quit_confirm);
 }
 
-static void page_main_draw(menu_t *menu, int data) {
+static void page_main_draw(menu_t*, int data) {
 	switch (data) {
 		case 0: draw_model(g.ships[0].model, vec2(0, -0.1), vec3(0, 0, -700), system_cycle_time()); break;
 		case 1: draw_model(models.misc.options, vec2(0, -0.2), vec3(0, 0, -700), system_cycle_time()); break;
@@ -102,10 +102,8 @@ static void page_main_init(menu_t *menu) {
 // -----------------------------------------------------------------------------
 // Network
 
-static void page_network_draw(menu_t *menu, int data) {
+static void page_network_draw(menu_t *menu, int) {
 	menu_page_t *page = &menu->pages[menu->index];
-
-	int col_width = 100;
 
 	int name_col = page->items_pos.x + page->block_width - 200;
 	int server_ip_col = page->items_pos.x + page->block_width - 100;
@@ -151,7 +149,7 @@ static void page_network_draw(menu_t *menu, int data) {
 	// }
 }
 
-static void page_network_query(menu_t *menu, int data) {
+static void page_network_query(menu_t*, int) {
 	if(!network_has_ip_socket()) {
 		return;
 	}
@@ -160,7 +158,7 @@ static void page_network_query(menu_t *menu, int data) {
 	string_to_addr("localhost", &dest);
 	dest.port = htons(8000);
 
-	network_send_packet(CLIENT, 5, "hello", dest);
+	network_send_packet(CLIENT, 6, "status", dest);
 }
 
 static void page_network_init(menu_t *menu) {
@@ -183,23 +181,23 @@ static void page_network_init(menu_t *menu) {
 // -----------------------------------------------------------------------------
 // Options
 
-static void button_controls(menu_t *menu, int data) {
+static void button_controls(menu_t *menu, int) {
 	page_options_controls_init(menu);
 }
 
-static void button_video(menu_t *menu, int data) {
+static void button_video(menu_t *menu, int) {
 	page_options_video_init(menu);
 }
 
-static void button_audio(menu_t *menu, int data) {
+static void button_audio(menu_t *menu, int) {
 	page_options_audio_init(menu);
 }
 
-static void button_highscores(menu_t *menu, int data) {
+static void button_highscores(menu_t *menu, int) {
 	page_options_highscores_init(menu);
 }
 
-static void page_options_draw(menu_t *menu, int data) {
+static void page_options_draw(menu_t*, int data) {
 	switch (data) {
 		case 0: draw_model(models.controller, vec2(0, -0.1), vec3(0, 0, -6000), system_cycle_time()); break;
 		case 1: draw_model(models.rescue, vec2(0, -0.2), vec3(0, 0, -700), system_cycle_time()); break; // TODO: needs better model
@@ -225,11 +223,10 @@ static void page_options_init(menu_t *menu) {
 // -----------------------------------------------------------------------------
 // Options Controls
 
-static const char *button_names[NUM_GAME_ACTIONS][2] = {};
 static int control_current_action;
 static float await_input_deadline;
 
-void button_capture(void *user, button_t button, int32_t ascii_char) {
+void button_capture(void *user, button_t button, int32_t) {
 	if (button == INPUT_INVALID) {
 		return;
 	}
@@ -256,7 +253,7 @@ void button_capture(void *user, button_t button, int32_t ascii_char) {
 	menu_pop(menu);
 }
 
-static void page_options_control_set_draw(menu_t *menu, int data) {
+static void page_options_control_set_draw(menu_t *menu, int) {
 	float remaining = await_input_deadline - platform_now();
 
 	menu_page_t *page = &menu->pages[menu->index];
@@ -275,7 +272,7 @@ static void page_options_controls_set_init(menu_t *menu, int data) {
 	control_current_action = data;
 	await_input_deadline = platform_now() + 3;
 
-	menu_page_t *page = menu_push(menu, "AWAITING INPUT", page_options_control_set_draw);
+	menu_push(menu, "AWAITING INPUT", page_options_control_set_draw);
 	input_capture(button_capture, menu);
 }
 
@@ -345,34 +342,34 @@ static void page_options_controls_init(menu_t *menu) {
 // -----------------------------------------------------------------------------
 // Options Video
 
-static void toggle_fullscreen(menu_t *menu, int data) {
+static void toggle_fullscreen(menu_t*, int data) {
 	save.fullscreen = data;
 	save.is_dirty = true;
 	platform_set_fullscreen(save.fullscreen);
 }
 
-static void toggle_internal_roll(menu_t *menu, int data) {
+static void toggle_internal_roll(menu_t*, int data) {
 	save.internal_roll = (float)data * 0.1;
 	save.is_dirty = true;
 }
 
-static void toggle_show_fps(menu_t *menu, int data) {
+static void toggle_show_fps(menu_t*, int data) {
 	save.show_fps = data;
 	save.is_dirty = true;
 }
 
-static void toggle_ui_scale(menu_t *menu, int data) {
+static void toggle_ui_scale(menu_t*, int data) {
 	save.ui_scale = data;
 	save.is_dirty = true;
 }
 
-static void toggle_res(menu_t *menu, int data) {
+static void toggle_res(menu_t*, int data) {
 	render_set_resolution(data);
 	save.screen_res = data;
 	save.is_dirty = true;
 }
 
-static void toggle_post(menu_t *menu, int data) {
+static void toggle_post(menu_t*, int data) {
 	render_set_post_effect(data);
 	save.post_effect = data;
 	save.is_dirty = true;
@@ -406,12 +403,12 @@ static void page_options_video_init(menu_t *menu) {
 // -----------------------------------------------------------------------------
 // Options Audio
 
-static void toggle_music_volume(menu_t *menu, int data) {
+static void toggle_music_volume(menu_t*, int data) {
 	save.music_volume = (float)data * 0.1;
 	save.is_dirty = true;
 }
 
-static void toggle_sfx_volume(menu_t *menu, int data) {
+static void toggle_sfx_volume(menu_t*, int data) {
 	save.sfx_volume = (float)data * 0.1;	
 	save.is_dirty = true;
 }
@@ -477,7 +474,7 @@ static void page_options_highscores_viewer_input_handler() {
 	}
 }
 
-static void page_options_highscores_viewer_draw(menu_t *menu, int data) {
+static void page_options_highscores_viewer_draw(menu_t*, int) {
 	ui_pos_t anchor = UI_POS_MIDDLE | UI_POS_CENTER;
 
 	vec2i_t pos = vec2i(0, -70);
@@ -519,7 +516,7 @@ static void button_highscores_viewer(menu_t *menu, int data) {
 	page_options_highscores_viewer_init(menu);
 }
 
-static void page_options_highscores_draw(menu_t *menu, int data) {
+static void page_options_highscores_draw(menu_t*, int) {
 	draw_model(models.options.stopwatch, vec2(0, -0.2), vec3(0, 0, -400), system_cycle_time());
 }
 
@@ -586,7 +583,7 @@ static void button_race_type_select(menu_t *menu, int data) {
 	page_team_init(menu);
 }
 
-static void page_race_type_draw(menu_t *menu, int data) {
+static void page_race_type_draw(menu_t*, int data) {
 	switch (data) {
 		case RACE_TYPE_CHAMPIONSHIP: draw_model(models.misc.championship, vec2(0, -0.2), vec3(0, 0, -400), system_cycle_time()); break;
 		case RACE_TYPE_SINGLE: draw_model(models.misc.single_race, vec2(0, -0.2), vec3(0, 0, -400), system_cycle_time()); break;
@@ -616,7 +613,7 @@ static void button_team_select(menu_t *menu, int data) {
 	page_pilot_init(menu);
 }
 
-static void page_team_draw(menu_t *menu, int data) {
+static void page_team_draw(menu_t*, int data) {
 	int team_model_index = (data + 3) % 4; // models in the prm are shifted by -1
 	draw_model(models.teams[team_model_index], vec2(0, -0.2), vec3(0, 0, -10000), system_cycle_time());
 	draw_model(g.ships[def.teams[data].pilots[0]].model, vec2(0, -0.3), vec3(-700, -800, -1300), system_cycle_time()*1.1);
@@ -655,7 +652,7 @@ static void button_pilot_select(menu_t *menu, int data) {
 	}
 }
 
-static void page_pilot_draw(menu_t *menu, int data) {
+static void page_pilot_draw(menu_t*, int data) {
 	draw_model(models.pilots[def.pilots[data].logo_model], vec2(0, -0.2), vec3(0, 0, -10000), system_cycle_time());
 }
 
@@ -675,12 +672,12 @@ static void page_pilot_init(menu_t *menu) {
 // -----------------------------------------------------------------------------
 // Circut
 
-static void button_circut_select(menu_t *menu, int data) {
+static void button_circut_select(menu_t*, int data) {
 	g.circut = data;
 	game_set_scene(GAME_SCENE_RACE);
 }
 
-static void page_circut_draw(menu_t *menu, int data) {
+static void page_circut_draw(menu_t*, int data) {
 	vec2i_t pos = vec2i(0, -25);
 	vec2i_t size = vec2i(128, 74);
 	vec2i_t scaled_size = ui_scaled(size);

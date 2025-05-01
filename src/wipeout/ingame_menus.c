@@ -27,7 +27,7 @@ void ingame_menus_load(void) {
 // -----------------------------------------------------------------------------
 // Pause Menu
 
-static void button_continue(menu_t *menu, int data) {
+static void button_continue(menu_t*, int) {
 	race_unpause();
 }
 
@@ -40,7 +40,7 @@ static void button_restart_confirm(menu_t *menu, int data) {
 	}
 }
 
-static void button_restart_or_quit(menu_t *menu, int data) {
+static void button_restart_or_quit(menu_t*, int data) {
 	if (data) {
 		race_restart();
 	}
@@ -49,7 +49,7 @@ static void button_restart_or_quit(menu_t *menu, int data) {
 	}
 }
 
-static void button_restart(menu_t *menu, int data) {
+static void button_restart(menu_t *menu, int) {
 	menu_confirm(menu, "ARE YOU SURE YOU", "WANT TO RESTART", "YES", "NO", button_restart_confirm);
 }
 
@@ -62,22 +62,22 @@ static void button_quit_confirm(menu_t *menu, int data) {
 	}
 }
 
-static void button_quit(menu_t *menu, int data) {
+static void button_quit(menu_t *menu, int) {
 	menu_confirm(menu, "ARE YOU SURE YOU", "WANT TO QUIT", "YES", "NO", button_quit_confirm);
 }
 
 
-static void button_music_track(menu_t *menu, int data) {
+static void button_music_track(menu_t*, int data) {
 	sfx_music_play(data);
 	sfx_music_mode(SFX_MUSIC_LOOP);
 }
 
-static void button_music_random(menu_t *menu, int data) {
+static void button_music_random(menu_t*, int) {
 	sfx_music_play(rand_int(0, len(def.music)));
 	sfx_music_mode(SFX_MUSIC_RANDOM);
 }
 
-static void button_music(menu_t *menu, int data) {
+static void button_music(menu_t *menu, int) {
 	menu_page_t *page = menu_push(menu, "MUSIC", NULL);
 
 	for (unsigned int i = 0; i < len(def.music); i++) {
@@ -116,7 +116,7 @@ menu_t *game_over_menu_init(void) {
 // -----------------------------------------------------------------------------
 // Race Stats
 
-static void button_qualify_confirm(menu_t *menu, int data) {
+static void button_qualify_confirm(menu_t*, int data) {
 	if (data) {
 		race_restart();
 	}
@@ -125,7 +125,7 @@ static void button_qualify_confirm(menu_t *menu, int data) {
 	}
 }
 
-static void button_race_stats_continue(menu_t *menu, int data) {
+static void button_race_stats_continue(menu_t *menu, int) {
 	if (g.race_type == RACE_TYPE_CHAMPIONSHIP) {
 		if (g.race_position <= QUALIFYING_RANK) {
 			page_race_points_init(menu);
@@ -145,7 +145,7 @@ static void button_race_stats_continue(menu_t *menu, int data) {
 	}
 }
 
-static void page_race_stats_draw(menu_t *menu, int data) {
+static void page_race_stats_draw(menu_t *menu, int) {
 	menu_page_t *page = &menu->pages[menu->index];
 	vec2i_t pos = page->title_pos;
 	pos.x -= 140;
@@ -213,7 +213,7 @@ menu_t *race_stats_menu_init(void) {
 // -----------------------------------------------------------------------------
 // Race Table
 
-static void button_race_points_continue(menu_t *menu, int data) {
+static void button_race_points_continue(menu_t *menu, int) {
 	if (g.race_type == RACE_TYPE_CHAMPIONSHIP) {
 		page_championship_points_init(menu);
 	}
@@ -225,7 +225,7 @@ static void button_race_points_continue(menu_t *menu, int data) {
 	}
 }
 
-static void page_race_points_draw(menu_t *menu, int data) {
+static void page_race_points_draw(menu_t *menu, int) {
 	menu_page_t *page = &menu->pages[menu->index];
 	vec2i_t pos = page->title_pos;
 	pos.x -= 140;
@@ -258,7 +258,7 @@ static void page_race_points_init(menu_t *menu) {
 // -----------------------------------------------------------------------------
 // Championship Table
 
-static void button_championship_points_continue(menu_t *menu, int data) {
+static void button_championship_points_continue(menu_t *menu, int) {
 	if (g.is_new_race_record) {
 		page_hall_of_fame_init(menu);
 	}
@@ -270,7 +270,7 @@ static void button_championship_points_continue(menu_t *menu, int data) {
 	}
 }
 
-static void page_championship_points_draw(menu_t *menu, int data) {
+static void page_championship_points_draw(menu_t *menu, int) {
 	menu_page_t *page = &menu->pages[menu->index];
 	vec2i_t pos = page->title_pos;
 	pos.x -= 140;
@@ -311,7 +311,7 @@ static const char *hs_charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 static int hs_char_index = 0;
 static bool hs_entry_complete = false;
 
-static void hall_of_fame_draw_name_entry(menu_t *menu, ui_pos_t anchor, vec2i_t pos) {
+static void hall_of_fame_draw_name_entry(menu_t*, ui_pos_t anchor, vec2i_t pos) {
 	int entry_len = strlen(hs_new_entry.name);
 	int entry_width = ui_text_width(hs_new_entry.name, UI_SIZE_16);
 
@@ -373,7 +373,7 @@ static void hall_of_fame_draw_name_entry(menu_t *menu, ui_pos_t anchor, vec2i_t 
 	ui_draw_text(hs_new_entry.name, ui_scaled_pos(anchor, pos), UI_SIZE_16, UI_COLOR_ACCENT);
 }
 
-static void page_hall_of_fame_draw(menu_t *menu, int data) {
+static void page_hall_of_fame_draw(menu_t *menu, int) {
 	// FIXME: doing this all in the draw() function leads to all kinds of
 	// complications
 
@@ -385,7 +385,6 @@ static void page_hall_of_fame_draw(menu_t *menu, int data) {
 		save.is_dirty = true;
 		
 		// Insert new highscore entry into the save struct
-		highscores_entry_t temp_entry = hs->entries[0];
 		for (int i = 0; i < NUM_HIGHSCORES; i++) {
 			if (hs_new_entry.time < hs->entries[i].time) {
 				for (int j = NUM_HIGHSCORES - 2; j >= i; j--) {
@@ -451,7 +450,7 @@ static char * const *text_scroll_lines;
 static int text_scroll_lines_len;
 static double text_scroll_start_time;
 
-static void text_scroll_menu_draw(menu_t *menu, int data) {
+static void text_scroll_menu_draw(menu_t*, int) {
 	double time = system_time() - text_scroll_start_time;
 	int scale = ui_get_scale();
 	int speed = 32;

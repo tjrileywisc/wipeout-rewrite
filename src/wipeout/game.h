@@ -199,7 +199,7 @@ typedef struct {
 	int race_type;
 	int highscore_tab;
 	int team;
-	int pilot;
+	unsigned short pilot;
 	int circut;
 	bool is_attract_mode;
 	bool show_credits;
