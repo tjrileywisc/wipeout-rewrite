@@ -283,8 +283,13 @@ bool network_get_packet()
 
     if ((numbytes = recvfrom(ip_socket, buf, MAXBUFLEN-1 , 0,
         (struct sockaddr *)&their_addr, &addr_len)) == -1) {
-        perror("recvfrom");
-        exit(1);
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            // No data available right now, not a fatal error
+            return false;
+        } else {
+            perror("recvfrom");
+            exit(1);
+        }
     }
 
     struct sockaddr* addr = &((struct sockaddr_in*)&their_addr)->sin_addr;

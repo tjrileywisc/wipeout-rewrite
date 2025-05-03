@@ -97,9 +97,8 @@ int main(int, char **)
 
     while (!should_quit)
     {
-        int ret = network_sleep(100);
-
-        if(ret == 0) {
+        if(network_sleep(100) <= 0) {
+            // no network activity, continue
             continue;
         }
 
