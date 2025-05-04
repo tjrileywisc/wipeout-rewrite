@@ -1,10 +1,16 @@
 
 #include "network.h"
 
+#include "addr_conversions.h"
+#include "msg.h"
+
+// Declare the missing function
+
 #include <errno.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #if defined(WIN32)
 #define WIN32_LEAN_AND_MEAN
@@ -30,6 +36,14 @@
 #if defined(WIN32)
 static WSADATA winsockdata;
 #endif
+
+typedef struct {
+    const char* command;
+    struct sockaddr_storage dest_addr;
+} msg_queue_item_t;
+
+msg_queue_item_t msg_queue[10];
+int msg_queue_size = 0;
 
 int ip_socket;
 
@@ -253,23 +267,26 @@ void network_close_connection()
     }
 }
 
-void network_out_of_band_print(netsrc_t sock, netadr_t adr, const char *format, ...)
-{
-    va_list argptr;
-    char str[1024];
+static void network_add_msg_queue_item(const char *buf, int numbytes, const struct sockaddr_storage *their_addr) {
+    msg_queue_item_t *item = (msg_queue_item_t *)malloc(sizeof(msg_queue_item_t));
+    if (!item) {
+        perror("Failed to allocate memory for message queue item");
+        return;
+    }
 
-    // header
-    str[0] = -1;
-    str[1] = -1;
-    str[2] = -1;
-    str[3] = -1;
+    item->command = strdup(buf);
+    if (!item->command) {
+        perror("Failed to allocate memory for command string");
+        free(item);
+        return;
+    }
 
-    va_start(argptr, format);
-    vsprintf(str + 4, format, argptr);
-    va_end(argptr);
-
-    network_send_packet(sock, strlen(str), str, adr);
+    memcpy(&item->dest_addr, their_addr, sizeof(struct sockaddr_storage));
+    msg_queue[msg_queue_size++] = *item;
+    free(item->command);
+    free(item);
 }
+
 
 bool network_get_packet()
 {
@@ -301,6 +318,9 @@ bool network_get_packet()
     printf("listener: packet is %d bytes long\n", numbytes);
     buf[numbytes] = '\0';
     printf("listener: packet contains \"%s\"\n", buf);
+
+    network_add_msg_queue_item(buf, numbytes, &their_addr);
+
     return true;
 }
 
@@ -309,74 +329,17 @@ void network_send_packet(netsrc_t sock, int length, const void *data, netadr_t d
     system_send_packet(length, data, dest_net);
 }
 
-// there needs to be enough loopback messages to hold a complete
-// gamestate of maximum size
-#define MAX_LOOPBACK 16
-#define MAX_PACKETLEN 1024
-
-typedef struct
-{
-    byte data[MAX_PACKETLEN];
-    int datalen;
-} loopmsg_t;
-
-typedef struct
-{
-    loopmsg_t msgs[MAX_LOOPBACK];
-    int get, send;
-} loopback_t;
-
-// one for client, one for server
-loopback_t loopbacks[2];
-
-bool network_get_loop_packet(netsrc_t sock, netadr_t *net_from, msg_t *net_message)
-{
-    loopback_t *loop = &loopbacks[sock];
-
-    if (loop->send - loop->get > MAX_LOOPBACK)
-    {
-        loop->get = loop->send - MAX_LOOPBACK;
-    }
-
-    if (loop->get >= loop->send) {
-        return false;
-    }
-
-    int i = loop->get & (MAX_LOOPBACK - 1);
-    loop->get++;
-
-    memcpy(net_message->data, loop->msgs[i].data, loop->msgs[i].datalen);
-    net_message->cursize = loop->msgs[i].datalen;
-    memset(net_from, 0, sizeof(*net_from));
-
-    return true;
-}
-
-void network_send_loop_packet(netsrc_t sock, int length, const void *data, netadr_t to)
-{
-    loopback_t *loop = &loopbacks[sock ^ 1];
-
-    int i = loop->send & (MAX_LOOPBACK - 1);
-    loop->send++;
-
-    memcpy(loop->msgs[i].data, data, length);
-    loop->msgs[i].datalen = length;
-}
-
 void network_send_command(const char *command, netadr_t dest)
 {
     if(strcmp(command, "server_info") == 0) {
-        Wipeout__ServerInfo* msg;
-        wipeout__server_info__init(msg);
         network_send_packet(ip_socket, strlen(command), "server_info", dest);
-
     }
 }
 
 void network_process_command(const char* command) 
 {
     if(strcmp(command, "server_info") == 0) {
-        Wipeout__ServerInfo* msg;
+        Wipeout__ServerInfo* msg = NULL;
         wipeout__server_info__init(msg);
         msg->name = "my server";
         msg->port = 8000;

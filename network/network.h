@@ -1,6 +1,5 @@
 
-#ifndef NETWORK_H
-#define NETWORK_H
+#pragma once
 
 #include "network_types.h"
 
@@ -26,10 +25,6 @@ bool network_get_packet();
 
 void network_send_packet(netsrc_t sock, int length, const void* data, netadr_t dest_net);
 
-bool network_get_loop_packet(netsrc_t sock, netadr_t *net_from, msg_t *net_message);
-
-void network_send_loop_packet(netsrc_t sock, int length, const void *data, netadr_t to);
-
 /**
  * Send a command to the server or to a client
  */
@@ -44,5 +39,3 @@ void network_process_command(const char* command);
  * @return 0 if network is not available, or 1 if so
  */
 int network_sleep(int msec);
-
-#endif

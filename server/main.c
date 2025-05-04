@@ -41,7 +41,7 @@ static void server_anonymous_packet(netadr_t from, msg_t *msg)
     }
     else if (strcmp(tokens, "connect") == 0)
     {
-        server_connect_client(from);
+        //server_connect_client(from);
     }
     else if (strcmp(tokens, "command") == 0)
     {
@@ -55,25 +55,7 @@ static void server_anonymous_packet(netadr_t from, msg_t *msg)
 
 static void packet_event(netadr_t from, msg_t *msg)
 {
-
-    // is it from an anonymous client (i.e. one not connected to us)
-    // starts with 0xffff_ffff
-    if (msg->cursize >= PACKET_HDR_SIZE && *(int *)msg->data == -1)
-    {
-        server_anonymous_packet(from, msg);
-        return;
-    }
-
-    // the header is different lengths for reliable and unreliable messages
-    int headerBytes = msg->readcount;
-
-    // track the last message received so it can be returned in
-    // client messages, allowing the server to detect a dropped
-    // gamestate
-    // clc.serverMessageSequence = LittleLong( *(int *)msg->data );
-
-    // clc.lastPacketTime = cls.realtime;
-    server_parse_msg(msg);
+    //server_parse_msg(msg_get_last_msg());
 }
 
 static void server_init()
