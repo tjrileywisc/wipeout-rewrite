@@ -19,8 +19,6 @@ void network_connect_ip(const char* addr);
 
 void network_close_connection(void);
 
-void network_out_of_band_print(netsrc_t sock, netadr_t adr, const char* format, ... );
-
 bool network_get_packet();
 
 void network_send_packet(netsrc_t sock, int length, const void* data, netadr_t dest_net);
