@@ -19,45 +19,6 @@ typedef struct
 
 server_t server;
 
-// command callbacks
-static void server_status()
-{
-}
-
-static void server_anonymous_packet(netadr_t from, msg_t *msg)
-{
-
-    if (strncmp("connect", &msg->data[PACKET_HDR_SIZE], strlen("connect") != 0))
-    {
-        // a more complex message
-    }
-
-    char *s = msg_read_string_line(msg);
-    char *tokens = strtok(s, " ");
-
-    if (strcmp(tokens, "getstatus") == 0)
-    {
-        server_status();
-    }
-    else if (strcmp(tokens, "connect") == 0)
-    {
-        //server_connect_client(from);
-    }
-    else if (strcmp(tokens, "command") == 0)
-    {
-        // perform a command given the message
-    }
-    else
-    {
-        printf("this packet is bad...\n");
-    }
-}
-
-static void packet_event(netadr_t from, msg_t *msg)
-{
-    //server_parse_msg(msg_get_last_msg());
-}
-
 static void server_init()
 {
     server.name = "master blaster";
@@ -66,29 +27,19 @@ static void server_init()
 
 int main(int, char **)
 {
-
     printf("welcome to the server!\n");
 
     server_init();
-
-    bool should_quit = false;
-    netadr_t evFrom;
-    msg_t buf;
-
     network_bind_ip();
 
-    while (!should_quit)
+    while (true)
     {
         if(network_sleep(100) <= 0) {
             // no network activity, continue
             continue;
         }
 
-        // TODO: how do we know _IF_ we received a packet?
-        while (network_get_packet())
-        {
-            packet_event(evFrom, &buf);
-        }
+        network_get_packet();
     }
 
     return 0;
