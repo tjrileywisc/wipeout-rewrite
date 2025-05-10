@@ -47,6 +47,7 @@ find_package(PkgConfig REQUIRED)
 find_package(OpenGL)
 find_package(GLEW REQUIRED)
 find_package(SDL2 CONFIG REQUIRED)
+find_package(cmocka REQUIRED)
 pkg_check_modules(libprotobuf-c REQUIRED IMPORTED_TARGET libprotobuf-c)
 
 include_directories(${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/include)
@@ -57,6 +58,14 @@ add_compile_options(
     $<$<CXX_COMPILER_ID:MSVC>:/W4>
     $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall>
     $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wextra>
+)
+
+add_compile_options(
+	--coverage
+)
+
+add_link_options(
+	--coverage
 )
 
 # INTERNAL LIBRARIES
@@ -223,5 +232,8 @@ if("${PLATFORM}" STREQUAL SDL2)
 elseif("${PLATFORM}" STREQUAL SOKOL)
 	target_sources(wipeout PRIVATE src/platform_sokol.c)
 endif()
+
+# UNIT TESTS TARGET
+add_subdirectory(tests)
 
 install(TARGETS wipeout)
