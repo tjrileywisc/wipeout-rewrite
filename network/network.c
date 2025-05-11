@@ -37,15 +37,12 @@
 static WSADATA winsockdata;
 #endif
 
-typedef struct {
-    const char* command;
-    struct sockaddr_storage dest_addr;
-} msg_queue_item_t;
+
 
 msg_queue_item_t msg_queue[10];
 int msg_queue_size = 0;
 
-int ip_socket;
+int ip_socket = 0;
 
 const char *network_get_last_error()
 {
@@ -190,6 +187,11 @@ bool network_has_ip_socket(void)
     return ip_socket;
 }
 
+void network_set_ip_socket(int sockfd)
+{
+    ip_socket = sockfd;
+}
+
 void network_bind_ip(void)
 {
 
@@ -287,6 +289,30 @@ static void network_add_msg_queue_item(const char *buf, int numbytes, const stru
     free(item);
 }
 
+int network_get_msg_queue_size() {
+    return msg_queue_size;
+}
+
+void network_clear_msg_queue() {
+    for (int i = 0; i < msg_queue_size; i++) {
+        free(msg_queue[i].command);
+    }
+    msg_queue_size = 0;
+}
+
+bool network_get_msg_queue_item(msg_queue_item_t *item) {
+    if (msg_queue_size == 0) {
+        return false;
+    }
+
+    *item = msg_queue[0];
+    free(msg_queue[0].command);
+    memmove(&msg_queue[0], &msg_queue[1], (msg_queue_size - 1) * sizeof(msg_queue_item_t));
+    msg_queue_size--;
+
+    return true;
+}
+
 
 bool network_get_packet()
 {
@@ -311,13 +337,13 @@ bool network_get_packet()
 
     struct sockaddr* addr = &((struct sockaddr_in*)&their_addr)->sin_addr;
 
-    printf("listener: got packet from %s\n",
-        inet_ntop(their_addr.ss_family,
-            addr,
-            s, sizeof s));
-    printf("listener: packet is %d bytes long\n", numbytes);
+    //printf("listener: got packet from %s\n",
+    // inet_ntop(their_addr.ss_family,
+    //         addr,
+    //         s, sizeof s));
+    //printf("listener: packet is %d bytes long\n", numbytes);
     buf[numbytes] = '\0';
-    printf("listener: packet contains \"%s\"\n", buf);
+    //printf("listener: packet contains \"%s\"\n", buf);
 
     network_add_msg_queue_item(buf, numbytes, &their_addr);
 

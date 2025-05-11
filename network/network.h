@@ -2,8 +2,17 @@
 #pragma once
 
 #include "network_types.h"
+#include <sys/socket.h>
+
+
+typedef struct {
+    const char* command;
+    struct sockaddr_storage dest_addr;
+} msg_queue_item_t;
 
 bool network_has_ip_socket(void);
+
+void network_set_ip_socket(int sockfd);
 
 /**
  * Bind to a port for running in a
@@ -30,6 +39,9 @@ void network_send_command(const char* command, netadr_t dest);
 
 void network_process_command(const char* command);
 
+int network_get_msg_queue_size(void);
+
+bool network_get_msg_queue_item(msg_queue_item_t *item);
 /**
  * sleep for a duration, or until we have socket activity
  * 

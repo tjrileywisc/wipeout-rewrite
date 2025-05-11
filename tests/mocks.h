@@ -1,0 +1,32 @@
+
+#pragma once
+
+#include <stdarg.h>
+#include <stddef.h>
+#include <setjmp.h>
+#include <cmocka.h>
+#include <string.h>
+#include <sys/socket.h>
+#include <unistd.h>
+
+ssize_t __wrap_recvfrom(int sockfd, void *buf, size_t len, int flags,
+                        struct sockaddr *src_addr, socklen_t *addrlen) {
+    check_expected(sockfd);
+    check_expected(len);
+    check_expected(flags);
+
+    // TODO: something wrong with the memcpy call here, need
+    // one more argument
+    // Optionally check or set addr and addrlen if relevant
+    if (src_addr != NULL && addrlen != NULL) {
+        memcpy(src_addr, mock_ptr_type(struct sockaddr *), sizeof(struct sockaddr));
+        *addrlen = mock_type(socklen_t);
+    }
+
+    // Optionally simulate data in the buffer
+    const char *data = mock_ptr_type(char *);
+    size_t data_len = strlen(data); // or however long you need
+    memcpy(buf, data, data_len < len ? data_len : len);
+
+    return (ssize_t)mock_type(int); // number of bytes to return
+}

@@ -10,7 +10,7 @@ gamecontrollerdb.txt
 # build artifacts
 /build/
 coverage-report/
-coverage.info
+*.info
 
 /wipegame
 
