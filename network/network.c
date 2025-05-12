@@ -192,6 +192,10 @@ void network_set_ip_socket(int sockfd)
     ip_socket = sockfd;
 }
 
+int network_get_ip_socket(void) { 
+    return ip_socket; 
+}
+
 void network_bind_ip(void)
 {
 

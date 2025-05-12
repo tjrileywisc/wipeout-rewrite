@@ -14,6 +14,8 @@ bool network_has_ip_socket(void);
 
 void network_set_ip_socket(int sockfd);
 
+int network_get_ip_socket(void);
+
 /**
  * @brief Bind to a port for running in a
  * server context
