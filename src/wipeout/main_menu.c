@@ -158,7 +158,8 @@ static void page_network_query(menu_t*, int) {
 	string_to_addr("localhost", &dest);
 	dest.port = htons(8000);
 
-	network_send_packet(CLIENT, 6, "status", dest);
+	const char* data = "status";
+	network_send_packet(CLIENT, strlen(data), data, dest);
 }
 
 static void page_network_init(menu_t *menu) {
