@@ -1,15 +1,8 @@
 
-#ifndef CLIENT_H
-#define CLIENT_H
-
-
+#pragma once
 // concerning syncing of clients to the game state
 
-
 /**
- * Parse messages received from a client,
- * and kick off any commands as appopriate
+ * @brief Processes queued messages from clients
  */
-void server_parse_msg(const char* cmd);
-
-#endif
+void server_process_queue();

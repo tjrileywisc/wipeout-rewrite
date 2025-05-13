@@ -1,4 +1,5 @@
 #include <network.h>
+#include <client.h>
 
 #include <stdarg.h>
 #include <stddef.h>
@@ -6,20 +7,36 @@
 #include <setjmp.h>
 #include <cmocka.h>
 
+#include <string.h>
 #include <sys/socket.h>
+#include <netinet/in.h>
 #include <unistd.h>
- 
-/* A test case that does nothing and succeeds. */
-void test_server(void **state) {
-    (void) state; /* unused */
-}
 
-void enqueues_client_msg(void **state) {
-    (void) state;
+void empties_queue_after_process(void**) {
 
-    //will_return(server_get_queue, true);
+    network_clear_msg_queue();
+    const char *mock_data = "hello";
+    struct sockaddr_in mock_addr = {0};
+    socklen_t mock_addr_len = sizeof(mock_addr);
 
-    //server_get_queue();
+    expect_value(__wrap_recvfrom, sockfd, 3);
+    expect_value(__wrap_recvfrom, len, 99);
+    expect_value(__wrap_recvfrom, flags, 0);
+    will_return(__wrap_recvfrom, &mock_addr);        // for src_addr
+    will_return(__wrap_recvfrom, mock_addr_len);     // for addrlen
+    will_return(__wrap_recvfrom, mock_data);         // for buf content
+    will_return(__wrap_recvfrom, strlen(mock_data)); // return value
 
-    //will_return(server_get_queue, true);
+    network_set_ip_socket(3); // Set the socket descriptor
+
+    network_get_packet();
+
+    int queue_size = network_get_msg_queue_size();
+    assert_int_equal(queue_size, 1);
+    
+    // should run a step to check if we have work to do
+    server_process_queue();
+
+    queue_size = network_get_msg_queue_size();
+    assert_int_equal(queue_size, 0);
 }

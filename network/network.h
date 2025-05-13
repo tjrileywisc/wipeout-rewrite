@@ -41,6 +41,14 @@ void network_send_command(const char* command, netadr_t dest);
 
 void network_process_command(const char* command);
 
+/**
+ * @brief clears the current message queue
+ */
+void network_clear_msg_queue(void);
+
+/**
+ * @brief gets the size of the message queue
+ */
 int network_get_msg_queue_size(void);
 
 /**

@@ -2,6 +2,7 @@
 #include "client.h"
 
 #include <network_types.h>
+#include <addr_conversions.h>
 
 #include <msg.h>
 #include <network.h>
@@ -9,6 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <threads.h>
+#include <arpa/inet.h>
 
 #include <ServerInfo.pb-c.h>
 
@@ -71,7 +73,12 @@ static void server_status() {
 	wipeout__server_info__pack(&msg, buffer);
 }
 
-void server_parse_msg(const char *cmd) {
+/**
+ * Parse messages received from a client,
+ * and kick off any commands as appopriate
+ */
+static void server_parse_msg(msg_queue_item_t* item) {
+	char *cmd = item->command;
     if (strcmp(cmd, "connect") == 0) {
         // handle connect
     } else if (strcmp(cmd, "disconnect") == 0) {
@@ -79,9 +86,15 @@ void server_parse_msg(const char *cmd) {
     } else if (strcmp(cmd, "status") == 0) {
         // handle status
     } else if (strcmp(cmd, "hello") == 0) {
-        printf("Hello from client!\n");
-        // handle hello (just echo back the client's address)
-    } else {
-        printf("Unknown command: %s\n", cmd);
+	} else {
+        fprintf(stderr, "Unknown command: %s\n", cmd);
     }
+}
+
+void server_process_queue() {
+	msg_queue_item_t item;
+	while (network_get_msg_queue_item(&item)) {
+		server_parse_msg(&item);
+		network_popleft_msg_queue();
+	}
 }

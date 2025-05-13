@@ -302,15 +302,20 @@ void network_clear_msg_queue() {
     msg_queue_size = 0;
 }
 
+void network_popleft_msg_queue() {
+    if (msg_queue_size > 0) {
+        free(msg_queue[0].command);
+        memmove(&msg_queue[0], &msg_queue[1], (msg_queue_size - 1) * sizeof(msg_queue_item_t));
+        msg_queue_size--;
+    }
+}
+
 bool network_get_msg_queue_item(msg_queue_item_t *item) {
     if (msg_queue_size == 0) {
         return false;
     }
 
     *item = msg_queue[0];
-    free(msg_queue[0].command);
-    memmove(&msg_queue[0], &msg_queue[1], (msg_queue_size - 1) * sizeof(msg_queue_item_t));
-    msg_queue_size--;
 
     return true;
 }
