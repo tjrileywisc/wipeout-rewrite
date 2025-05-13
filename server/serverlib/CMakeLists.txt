@@ -10,3 +10,5 @@ target_include_directories(serverlib PUBLIC
 target_link_libraries(serverlib PRIVATE
     network
 )
+
+target_link_options(serverlib PRIVATE --coverage)

@@ -60,14 +60,6 @@ add_compile_options(
     $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wextra>
 )
 
-add_compile_options(
-	--coverage
-)
-
-add_link_options(
-	--coverage
-)
-
 # INTERNAL LIBRARIES
 # PROTOBUF MSGS
 add_subdirectory(gen)

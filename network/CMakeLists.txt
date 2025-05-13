@@ -12,4 +12,6 @@ endif()
 
 target_link_libraries(network PUBLIC ${OS_LIBS} protos)
 
+target_link_options(network PRIVATE --coverage)
+
 target_include_directories(network PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
