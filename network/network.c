@@ -289,8 +289,6 @@ static void network_add_msg_queue_item(const char *buf, int numbytes, const stru
 
     memcpy(&item->dest_addr, their_addr, sizeof(struct sockaddr_storage));
     msg_queue[msg_queue_size++] = *item;
-    free(item->command);
-    free(item);
 }
 
 int network_get_msg_queue_size() {
