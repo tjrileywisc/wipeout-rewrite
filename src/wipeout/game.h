@@ -247,6 +247,7 @@ typedef struct {
 	bool fullscreen;
 	int screen_res;
 	int post_effect;
+	int network_interface;
 
 	uint32_t has_rapier_class;
 	uint32_t has_bonus_circuts;

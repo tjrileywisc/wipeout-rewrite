@@ -13,6 +13,7 @@
 #include <arpa/inet.h>
 #include <network.h>
 #include <addr_conversions.h>
+#include <threads.h>
 
 static void page_main_init(menu_t *menu);
 static void page_options_init(menu_t *menu);
@@ -30,6 +31,9 @@ static void page_options_highscores_init(menu_t *menu);
 static uint16_t background;
 static texture_list_t track_images;
 static menu_t *main_menu;
+
+bool network_stop_discovery = false;
+thrd_t network_discovery_thread;
 
 static struct {
 	Object *race_classes[2];
@@ -122,45 +126,47 @@ static void page_network_draw(menu_t *menu, int) {
 	line_y += 20;
 
 	// TODO a list of servers
-
-	// for (int action = 0; action < NUM_GAME_ACTIONS; action++) {
-	// 	rgba_t text_color = UI_COLOR_DEFAULT;
-	// 	if (action == data) {
-	// 		text_color = UI_COLOR_ACCENT;
-	// 	}
-
-	// 	if (save.buttons[action][0] != INPUT_INVALID) {
-	// 		const char *name = input_button_to_name(save.buttons[action][0]);
-	// 		if (!name) {
-	// 			name = "UNKNWN";
-	// 		}
-	// 		vec2i_t pos = vec2i(left - ui_text_width(name, UI_SIZE_8), line_y);
-	// 		ui_draw_text(name, ui_scaled_pos(page->items_anchor, pos), UI_SIZE_8, text_color);
-	// 	}
-	// 	if (save.buttons[action][1] != INPUT_INVALID) {
-	// 		const char *name = input_button_to_name(save.buttons[action][1]);
-	// 		if (!name) {
-	// 			name = "UNKNWN";
-	// 		}
-	// 		vec2i_t pos = vec2i(right - ui_text_width(name, UI_SIZE_8), line_y);
-	// 		ui_draw_text(name, ui_scaled_pos(page->items_anchor, pos), UI_SIZE_8, text_color);
-	// 	}
-	// 	line_y += 12;
-	// }
 }
 
-static void page_network_query(menu_t*, int) {
-	if(!network_has_ip_socket()) {
-		return;
+/**
+ * @brief Run network discovery to find servers
+ */
+static int page_network_query(void*) {
+
+	if(network_stop_discovery) {
+		return 0;
 	}
+
+	if(!network_has_ip_socket()) {
+		return 0;
+	}
+
+	// TODO: should spend 30 seconds trying to find servers
+	// on the current interface (LAN + localhost, or internet)
 
 	netadr_t dest;
 	string_to_addr("localhost", &dest);
 	dest.port = htons(8000);
 
-	const char* data = "status";
+	const char* data = "hello";
 	network_send_packet(CLIENT, strlen(data), data, dest);
+
+	if(network_sleep(1000) > 0) {
+		network_get_packet();
+	}
+
+	return 0;
 }
+
+static void toggle_network_interface(menu_t*, int data) {
+	save.network_interface = data;
+	save.is_dirty = true;
+
+	// TODO
+	// additionally, should restart the network discovery thread
+}
+
+const char* opts_network_interfaces[] = { "LAN", "INTERNET" };
 
 static void page_network_init(menu_t *menu) {
 	menu_page_t *page = menu_push(menu, "NETWORK", page_network_draw);
@@ -171,11 +177,16 @@ static void page_network_init(menu_t *menu) {
 	page->block_width = 320;
 	page->items_anchor = UI_POS_MIDDLE | UI_POS_CENTER;
 
-	// TODO: this should be populated by some query
-	menu_page_add_button(page, 0, "SERVER 1", page_network_query);
-	menu_page_add_button(page, 1, "SERVER 2", page_network_query);
-	menu_page_add_button(page, 2, "SERVER 3", page_network_query);
-	menu_page_add_button(page, 3, "SERVER 4", page_network_query);
+	menu_page_add_toggle(page, save.network_interface, "NETWORK INTERFACE", opts_network_interfaces, len(opts_network_interfaces), toggle_network_interface);
+
+	thrd_create(&network_discovery_thread, (thrd_start_t)page_network_query, NULL);
+	thrd_detach(&network_discovery_thread);
+
+	// TODO: this should be populated by some query as soon as we init this page
+	menu_page_add_button(page, 0, "SERVER 1", NULL);
+	menu_page_add_button(page, 1, "SERVER 2", NULL);
+	menu_page_add_button(page, 2, "SERVER 3", NULL);
+	menu_page_add_button(page, 3, "SERVER 4", NULL);
 }
 
 
