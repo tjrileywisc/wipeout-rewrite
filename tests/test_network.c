@@ -3,6 +3,7 @@
 
 #include <network.h>
 
+#include <errno.h>
 #include <netinet/in.h>
 #include <stdarg.h>
 #include <stddef.h>
@@ -37,8 +38,8 @@ void test_network_get_packet(void **state) {
     assert_int_equal(queue_size, 1);
 }
 
-void test_network_get_packet_no_data(void **state) {
-    (void) state;
+void test_network_get_packet_no_data(void**) {
+    network_clear_msg_queue();
 
     const char *mock_data = "Hello, World!";
     struct sockaddr_in mock_addr = {0};
@@ -53,11 +54,8 @@ void test_network_get_packet_no_data(void **state) {
     will_return(__wrap_recvfrom, -1); // return value
 
     network_set_ip_socket(3); // Set the socket descriptor
-
+    errno = EAGAIN; // Simulate no data available
     bool result = network_get_packet();
-
-    // TODO: this is unreachable unless we set the errno to EAGAIN
-    // Check the result
     assert_false(result);
 
     // check message queue, should still be empty

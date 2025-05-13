@@ -13,7 +13,7 @@ int main(void) {
     const struct CMUnitTest tests[] = {
         // network library tests
         cmocka_unit_test(test_network_get_packet),
-        //cmocka_unit_test(test_network_get_packet_no_data),
+        cmocka_unit_test(test_network_get_packet_no_data),
 
         // dedicated server tests
         cmocka_unit_test(empties_queue_after_process)

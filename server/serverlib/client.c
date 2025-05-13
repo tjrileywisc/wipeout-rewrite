@@ -86,6 +86,15 @@ static void server_parse_msg(msg_queue_item_t* item) {
     } else if (strcmp(cmd, "status") == 0) {
         // handle status
     } else if (strcmp(cmd, "hello") == 0) {
+		// handle hello (just echo back the client's address)
+		char addr[INET_ADDRSTRLEN];
+		inet_ntop(AF_INET, &((struct sockaddr_in*)&item->dest_addr)->sin_addr, addr, sizeof(addr));
+		char *buf = malloc(100);
+		sprintf(buf, "Hello from %s\n", addr);
+		netadr_t net_addr;
+		sockadr_to_netadr((struct sockaddr_in*)&item->dest_addr, &net_addr);
+		network_send_packet(network_get_ip_socket(), strlen(buf), buf, net_addr);
+		free(buf);
 	} else {
         fprintf(stderr, "Unknown command: %s\n", cmd);
     }
