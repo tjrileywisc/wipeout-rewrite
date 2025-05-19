@@ -25,6 +25,7 @@
 #include <sys/socket.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
+#include <ifaddrs.h>
 
 #include <ServerInfo.pb-c.h>
 
@@ -398,4 +399,26 @@ int network_sleep(int msec)
     timeout.tv_sec = msec / 1000;
     timeout.tv_usec = (msec % 1000) * 1000;
     return select(ip_socket + 1, &fdset, NULL, NULL, &timeout);
+}
+
+void network_get_local_subnet(char *subnet, size_t len) {
+    struct ifaddrs *ifap, *ifa;
+    struct sockaddr_in *sa;
+    char addr[INET_ADDRSTRLEN];
+
+    getifaddrs(&ifap);
+    for (ifa = ifap; ifa; ifa = ifa->ifa_next) {
+        if (ifa->ifa_addr == NULL || ifa->ifa_addr->sa_family != AF_INET) {
+            continue;
+        }
+
+        sa = (struct sockaddr_in *)ifa->ifa_addr;
+        inet_ntop(AF_INET, &sa->sin_addr, addr, sizeof(addr));
+
+        // don't bother with the loopback interface
+        if (strcmp(ifa->ifa_name, "lo") != 0) {
+            strncpy(subnet, addr, len);
+            break;
+        }
+    }
 }

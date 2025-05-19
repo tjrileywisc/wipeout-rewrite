@@ -67,3 +67,11 @@ bool network_get_msg_queue_item(msg_queue_item_t *item);
  * @return 0 if network is not available, or 1 if so
  */
 int network_sleep(int msec);
+
+/**
+ * @brief get the local subnet for this network participant
+ * 
+ * @param[in,out] subnet the subnet address
+ * @param len the length of the subnet address
+ */
+void network_get_local_subnet(char* subnet, size_t len);
