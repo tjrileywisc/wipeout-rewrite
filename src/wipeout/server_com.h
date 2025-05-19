@@ -1,0 +1,11 @@
+
+#pragma once
+
+/*
+client communication to server(s),
+including server discovery
+*/
+
+void client_init();
+
+void server_com_network_discovery();

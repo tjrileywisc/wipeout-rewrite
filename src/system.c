@@ -1,6 +1,6 @@
 #include "system.h"
 
-#include "wipeout/client.h"
+#include "wipeout/server_com.h"
 #include "input.h"
 #include "render.h"
 #include "platform.h"

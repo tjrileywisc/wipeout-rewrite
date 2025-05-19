@@ -73,7 +73,7 @@ add_subdirectory(server)
 # MAIN GAME TARGET
 set(common_src
 	src/wipeout/camera.c
-	src/wipeout/client.c
+	src/wipeout/server_com.c
 	src/wipeout/droid.c
 	src/wipeout/game.c
 	src/wipeout/hud.c
