@@ -62,3 +62,10 @@ void test_network_get_packet_no_data(void**) {
     int queue_size = network_get_msg_queue_size();
     assert_int_equal(queue_size, 0);
 }
+
+void test_network_get_local_subnet(void **) {
+    char subnet[INET_ADDRSTRLEN];
+    network_get_local_subnet(subnet, INET_ADDRSTRLEN);
+
+    assert_non_null(subnet);
+}
