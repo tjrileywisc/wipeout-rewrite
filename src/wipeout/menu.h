@@ -51,6 +51,7 @@ struct menu_page_t {
 struct menu_t {
 	menu_page_t pages[MENU_PAGES_MAX];
 	int index;
+	void (*on_exit_callback)();
 };
 
 

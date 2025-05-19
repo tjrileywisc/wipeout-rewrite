@@ -51,6 +51,10 @@ void menu_pop(menu_t *menu) {
 	if (menu->index == 0) {
 		return;
 	}
+	if(menu->on_exit_callback) {
+		menu->on_exit_callback();
+	}
+
 	menu->index--;
 }
 
