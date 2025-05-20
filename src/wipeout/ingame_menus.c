@@ -78,7 +78,7 @@ static void button_music_random(menu_t*, int) {
 }
 
 static void button_music(menu_t *menu, int) {
-	menu_page_t *page = menu_push(menu, "MUSIC", NULL);
+	menu_page_t *page = menu_push(menu, "MUSIC", NULL, NULL, NULL);
 
 	for (unsigned int i = 0; i < len(def.music); i++) {
 		menu_page_add_button(page, i, def.music[i].name, button_music_track);
@@ -90,7 +90,7 @@ menu_t *pause_menu_init(void) {
 	sfx_play(SFX_MENU_SELECT);
 	menu_reset(ingame_menu);
 
-	menu_page_t *page = menu_push(ingame_menu, "PAUSED", NULL);
+	menu_page_t *page = menu_push(ingame_menu, "PAUSED", NULL, NULL, NULL);
 	menu_page_add_button(page, 0, "CONTINUE", button_continue);
 	menu_page_add_button(page, 0, "RESTART", button_restart);
 	menu_page_add_button(page, 0, "QUIT", button_quit);
@@ -107,7 +107,7 @@ menu_t *game_over_menu_init(void) {
 	sfx_play(SFX_MENU_SELECT);
 	menu_reset(ingame_menu);
 
-	menu_page_t *page = menu_push(ingame_menu, "GAME OVER", NULL);
+	menu_page_t *page = menu_push(ingame_menu, "GAME OVER", NULL, NULL, NULL);
 	menu_page_add_button(page, 1, "", button_quit_confirm);
 	return ingame_menu;
 }
@@ -201,7 +201,7 @@ menu_t *race_stats_menu_init(void) {
 	else {
 		title = "FAILED TO QUALIFY";
 	}
-	menu_page_t *page = menu_push(ingame_menu, title, page_race_stats_draw);
+	menu_page_t *page = menu_push(ingame_menu, title, page_race_stats_draw, NULL, NULL);
 	flags_add(page->layout_flags, MENU_FIXED);
 	page->title_anchor = UI_POS_MIDDLE | UI_POS_CENTER;
 	page->title_pos = vec2i(0, -100);
@@ -247,7 +247,7 @@ static void page_race_points_draw(menu_t *menu, int) {
 }
 
 static void page_race_points_init(menu_t *menu) {
-	menu_page_t *page = menu_push(menu, "RACE POINTS", page_race_points_draw);
+	menu_page_t *page = menu_push(menu, "RACE POINTS", page_race_points_draw, NULL, NULL);
 	flags_add(page->layout_flags, MENU_FIXED);
 	page->title_anchor = UI_POS_MIDDLE | UI_POS_CENTER;
 	page->title_pos = vec2i(0, -100);
@@ -292,7 +292,7 @@ static void page_championship_points_draw(menu_t *menu, int) {
 }
 
 static void page_championship_points_init(menu_t *menu) {
-	menu_page_t *page = menu_push(menu, "CHAMPIONSHIP TABLE", page_championship_points_draw);
+	menu_page_t *page = menu_push(menu, "CHAMPIONSHIP TABLE", page_championship_points_draw, NULL, NULL);
 	flags_add(page->layout_flags, MENU_FIXED);
 	page->title_anchor = UI_POS_MIDDLE | UI_POS_CENTER;
 	page->title_pos = vec2i(0, -100);
@@ -430,7 +430,7 @@ static void page_hall_of_fame_draw(menu_t *menu, int) {
 
 static void page_hall_of_fame_init(menu_t *menu) {
 	menu_reset(menu); // Can't go back!
-	menu_page_t *page = menu_push(menu, "HALL OF FAME", page_hall_of_fame_draw);
+	menu_page_t *page = menu_push(menu, "HALL OF FAME", page_hall_of_fame_draw, NULL, NULL);
 	flags_add(page->layout_flags, MENU_FIXED);
 	page->title_anchor = UI_POS_MIDDLE | UI_POS_CENTER;
 	page->title_pos = vec2i(0, -100);
@@ -479,7 +479,7 @@ menu_t *text_scroll_menu_init(char * const *lines, int len) {
 
 	menu_reset(ingame_menu);
 
-	menu_page_t *page = menu_push(ingame_menu, "", text_scroll_menu_draw);
+	menu_page_t *page = menu_push(ingame_menu, "", text_scroll_menu_draw, NULL, NULL);
 	menu_page_add_button(page, 1, "", button_quit_confirm);
 	return ingame_menu;
 }

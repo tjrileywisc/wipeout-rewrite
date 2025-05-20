@@ -8,4 +8,6 @@ including server discovery
 
 void client_init();
 
-void server_com_network_discovery();
+void server_com_init_network_discovery();
+
+void server_com_halt_network_discovery();

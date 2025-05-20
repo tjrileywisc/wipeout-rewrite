@@ -38,6 +38,8 @@ struct menu_page_t {
 	char *title, *subtitle;
 	menu_page_layout_t layout_flags;
 	void (*draw_func)(menu_t *, int);
+	void (*init_func)();
+	void (*exit_func)();
 	menu_entry_t entries[MENU_ENTRIES_MAX];
 	int entries_len;
 	int index;
@@ -51,12 +53,11 @@ struct menu_page_t {
 struct menu_t {
 	menu_page_t pages[MENU_PAGES_MAX];
 	int index;
-	void (*on_exit_callback)();
 };
 
 
 void menu_reset(menu_t *menu);
-menu_page_t *menu_push(menu_t *menu, char *title, void(*draw_func)(menu_t *, int));
+menu_page_t *menu_push(menu_t *menu, char *title, void(*draw_func)(menu_t *, int), void(*init_func)(), void(*exit_func)());
 menu_page_t *menu_confirm(menu_t *menu, char *title, char *subtitle, char *yes, char *no, void(*confirm_func)(menu_t *, int));
 void menu_pop(menu_t *menu);
 void menu_page_add_button(menu_page_t *page, int data, char *text, void(*select_func)(menu_t *, int));

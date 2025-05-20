@@ -16,7 +16,7 @@ void menu_reset(menu_t *menu) {
 	menu->index = -1;
 }
 
-menu_page_t *menu_push(menu_t *menu, char *title, void(*draw_func)(menu_t *, int)) {
+menu_page_t *menu_push(menu_t *menu, char *title, void(*draw_func)(menu_t *, int), void(*init_func)(), void(*exit_func)()) {
 	error_if(menu->index >= MENU_PAGES_MAX-1, "MENU_PAGES_MAX exceeded");
 	menu_page_t *page = &menu->pages[++menu->index];
 	page->layout_flags = MENU_VERTICAL | MENU_ALIGN_CENTER;
@@ -24,10 +24,17 @@ menu_page_t *menu_push(menu_t *menu, char *title, void(*draw_func)(menu_t *, int
 	page->title = title;
 	page->subtitle = NULL;
 	page->draw_func = draw_func;
+	page->init_func = init_func;
+	page->exit_func = exit_func;
 	page->entries_len = 0;
 	page->index = 0;
 	page->title_anchor = UI_POS_MIDDLE | UI_POS_CENTER;
 	page->items_anchor = UI_POS_MIDDLE | UI_POS_CENTER;
+
+	if(page->init_func) {
+		page->init_func();
+	}
+
 	return page;
 }
 
@@ -51,8 +58,9 @@ void menu_pop(menu_t *menu) {
 	if (menu->index == 0) {
 		return;
 	}
-	if(menu->on_exit_callback) {
-		menu->on_exit_callback();
+
+	if(menu->pages[menu->index].exit_func) {
+		menu->pages[menu->index].exit_func();
 	}
 
 	menu->index--;

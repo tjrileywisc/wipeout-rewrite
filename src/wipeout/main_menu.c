@@ -8,12 +8,12 @@
 #include "main_menu.h"
 #include "game.h"
 #include "image.h"
+#include "server_com.h"
 #include "ui.h"
 
 #include <arpa/inet.h>
 #include <network.h>
 #include <addr_conversions.h>
-#include <threads.h>
 
 static void page_main_init(menu_t *menu);
 static void page_options_init(menu_t *menu);
@@ -31,9 +31,6 @@ static void page_options_highscores_init(menu_t *menu);
 static uint16_t background;
 static texture_list_t track_images;
 static menu_t *main_menu;
-
-bool network_stop_discovery = false;
-thrd_t network_discovery_thread;
 
 static struct {
 	Object *race_classes[2];
@@ -88,7 +85,7 @@ static void page_main_draw(menu_t*, int data) {
 }
 
 static void page_main_init(menu_t *menu) {
-	menu_page_t *page = menu_push(menu, "OPTIONS", page_main_draw);
+	menu_page_t *page = menu_push(menu, "OPTIONS", page_main_draw, NULL, NULL);
 	flags_add(page->layout_flags, MENU_FIXED);
 	page->title_pos = vec2i(0, 30);
 	page->title_anchor = UI_POS_TOP | UI_POS_CENTER;
@@ -128,48 +125,18 @@ static void page_network_draw(menu_t *menu, int) {
 	// TODO a list of servers
 }
 
-/**
- * @brief Run network discovery to find servers
- */
-static int page_network_query(void*) {
-
-	if(network_stop_discovery) {
-		return 0;
-	}
-
-	if(!network_has_ip_socket()) {
-		return 0;
-	}
-
-	// TODO: should spend 30 seconds trying to find servers
-	// on the current interface (LAN + localhost, or internet)
-
-	netadr_t dest;
-	string_to_addr("localhost", &dest);
-	dest.port = htons(8000);
-
-	const char* data = "hello";
-	network_send_packet(CLIENT, strlen(data), data, dest);
-
-	if(network_sleep(1000) > 0) {
-		network_get_packet();
-	}
-
-	return 0;
-}
-
 static void toggle_network_interface(menu_t*, int data) {
 	save.network_interface = data;
 	save.is_dirty = true;
 
 	// TODO
 	// additionally, should restart the network discovery thread
+	server_com_init_network_discovery();
 }
 
-const char* opts_network_interfaces[] = { "LAN", "INTERNET" };
-
 static void page_network_init(menu_t *menu) {
-	menu_page_t *page = menu_push(menu, "NETWORK", page_network_draw);
+	menu_page_t *page = menu_push(menu, "NETWORK", page_network_draw, server_com_init_network_discovery, server_com_halt_network_discovery);
+
 	flags_set(page->layout_flags, MENU_VERTICAL | MENU_FIXED);
 	page->title_pos = vec2i(-160, -100);
 	page->title_anchor = UI_POS_MIDDLE | UI_POS_CENTER;
@@ -177,10 +144,9 @@ static void page_network_init(menu_t *menu) {
 	page->block_width = 320;
 	page->items_anchor = UI_POS_MIDDLE | UI_POS_CENTER;
 
-	menu_page_add_toggle(page, save.network_interface, "NETWORK INTERFACE", opts_network_interfaces, len(opts_network_interfaces), toggle_network_interface);
+	static const char *opts_network_interfaces[] = { "LAN", "INTERNET" };
 
-	thrd_create(&network_discovery_thread, (thrd_start_t)page_network_query, NULL);
-	thrd_detach(&network_discovery_thread);
+	menu_page_add_toggle(page, save.network_interface, "NETWORK INTERFACE", opts_network_interfaces, len(opts_network_interfaces), toggle_network_interface);
 
 	// TODO: this should be populated by some query as soon as we init this page
 	menu_page_add_button(page, 0, "SERVER 1", NULL);
@@ -219,7 +185,7 @@ static void page_options_draw(menu_t*, int data) {
 }
 
 static void page_options_init(menu_t *menu) {
-	menu_page_t *page = menu_push(menu, "OPTIONS", page_options_draw);
+	menu_page_t *page = menu_push(menu, "OPTIONS", page_options_draw, NULL, NULL);
 	flags_add(page->layout_flags, MENU_FIXED);
 	page->title_pos = vec2i(0, 30);
 	page->title_anchor = UI_POS_TOP | UI_POS_CENTER;
@@ -284,7 +250,7 @@ static void page_options_controls_set_init(menu_t *menu, int data) {
 	control_current_action = data;
 	await_input_deadline = platform_now() + 3;
 
-	menu_push(menu, "AWAITING INPUT", page_options_control_set_draw);
+	menu_push(menu, "AWAITING INPUT", page_options_control_set_draw, NULL, NULL);
 	input_capture(button_capture, menu);
 }
 
@@ -330,7 +296,7 @@ static void page_options_control_draw(menu_t *menu, int data) {
 }
 
 static void page_options_controls_init(menu_t *menu) {
-	menu_page_t *page = menu_push(menu, "CONTROLS", page_options_control_draw);
+	menu_page_t *page = menu_push(menu, "CONTROLS", page_options_control_draw, NULL, NULL);
 	flags_set(page->layout_flags, MENU_VERTICAL | MENU_FIXED);
 	page->title_pos = vec2i(-160, -100);
 	page->title_anchor = UI_POS_MIDDLE | UI_POS_CENTER;
@@ -394,7 +360,7 @@ static const char *opts_res[] = {"NATIVE", "240P", "480P"};
 static const char *opts_post[] = {"NONE", "CRT EFFECT"};
 
 static void page_options_video_init(menu_t *menu) {
-	menu_page_t *page = menu_push(menu, "VIDEO OPTIONS", NULL);
+	menu_page_t *page = menu_push(menu, "VIDEO OPTIONS", NULL, NULL, NULL);
 	flags_set(page->layout_flags, MENU_VERTICAL | MENU_FIXED);
 	page->title_pos = vec2i(-160, -100);
 	page->title_anchor = UI_POS_MIDDLE | UI_POS_CENTER;
@@ -428,7 +394,7 @@ static void toggle_sfx_volume(menu_t*, int data) {
 static const char *opts_volume[] = {"0", "10", "20", "30", "40", "50", "60", "70", "80", "90", "100"};
 
 static void page_options_audio_init(menu_t *menu) {
-	menu_page_t *page = menu_push(menu, "AUDIO OPTIONS", NULL);
+	menu_page_t *page = menu_push(menu, "AUDIO OPTIONS", NULL, NULL, NULL);
 
 	flags_set(page->layout_flags, MENU_VERTICAL | MENU_FIXED);
 	page->title_pos = vec2i(-160, -100);
@@ -512,10 +478,10 @@ static void page_options_highscores_viewer_draw(menu_t*, int) {
 static void page_options_highscores_viewer_init(menu_t *menu) {
 	menu_page_t *page;
 	if (options_highscores_tab == HIGHSCORE_TAB_TIME_TRIAL) {
-		page = menu_push(menu, "BEST TIME TRIAL TIMES", page_options_highscores_viewer_draw);
+		page = menu_push(menu, "BEST TIME TRIAL TIMES", page_options_highscores_viewer_draw, NULL, NULL);
 	}
 	else /*options_highscores_tab == HIGHSCORE_TAB_RACE)*/ {
-		page = menu_push(menu, "BEST RACE TIMES", page_options_highscores_viewer_draw);
+		page = menu_push(menu, "BEST RACE TIMES", page_options_highscores_viewer_draw, NULL, NULL);
 	}
 
 	flags_add(page->layout_flags, MENU_FIXED);
@@ -533,7 +499,7 @@ static void page_options_highscores_draw(menu_t*, int) {
 }
 
 static void page_options_highscores_init(menu_t *menu) {
-	menu_page_t *page = menu_push(menu, "VIEW BEST TIMES", page_options_highscores_draw);
+	menu_page_t *page = menu_push(menu, "VIEW BEST TIMES", page_options_highscores_draw, NULL, NULL);
 
 	flags_add(page->layout_flags, MENU_FIXED);
 	page->title_pos = vec2i(0, 30);
@@ -578,7 +544,7 @@ static void page_race_class_draw(menu_t *menu, int data) {
 }
 
 static void page_race_class_init(menu_t *menu) {
-	menu_page_t *page = menu_push(menu, "SELECT RACING CLASS", page_race_class_draw);
+	menu_page_t *page = menu_push(menu, "SELECT RACING CLASS", page_race_class_draw, NULL, NULL);
 	for (unsigned int i = 0; i < len(def.race_classes); i++) {
 		menu_page_add_button(page, i, def.race_classes[i].name, button_race_class_select);
 	}
@@ -604,7 +570,7 @@ static void page_race_type_draw(menu_t*, int data) {
 }
 
 static void page_race_type_init(menu_t *menu) {
-	menu_page_t *page = menu_push(menu, "SELECT RACE TYPE", page_race_type_draw);
+	menu_page_t *page = menu_push(menu, "SELECT RACE TYPE", page_race_type_draw, NULL, NULL);
 	flags_add(page->layout_flags, MENU_FIXED);
 	page->title_pos = vec2i(0, 30);
 	page->title_anchor = UI_POS_TOP | UI_POS_CENTER;
@@ -633,7 +599,7 @@ static void page_team_draw(menu_t*, int data) {
 }
 
 static void page_team_init(menu_t *menu) {
-	menu_page_t *page = menu_push(menu, "SELECT YOUR TEAM", page_team_draw);
+	menu_page_t *page = menu_push(menu, "SELECT YOUR TEAM", page_team_draw, NULL, NULL);
 	flags_add(page->layout_flags, MENU_FIXED);
 	page->title_pos = vec2i(0, 30);
 	page->title_anchor = UI_POS_TOP | UI_POS_CENTER;
@@ -669,7 +635,7 @@ static void page_pilot_draw(menu_t*, int data) {
 }
 
 static void page_pilot_init(menu_t *menu) {
-	menu_page_t *page = menu_push(menu, "CHOOSE YOUR PILOT", page_pilot_draw);
+	menu_page_t *page = menu_push(menu, "CHOOSE YOUR PILOT", page_pilot_draw, NULL, NULL);
 	flags_add(page->layout_flags, MENU_FIXED);
 	page->title_pos = vec2i(0, 30);
 	page->title_anchor = UI_POS_TOP | UI_POS_CENTER;
@@ -698,7 +664,7 @@ static void page_circut_draw(menu_t*, int data) {
 }
 
 static void page_circut_init(menu_t *menu) {
-	menu_page_t *page = menu_push(menu, "SELECT RACING CIRCUT", page_circut_draw);
+	menu_page_t *page = menu_push(menu, "SELECT RACING CIRCUT", page_circut_draw, NULL, NULL);
 	flags_add(page->layout_flags, MENU_FIXED);
 	page->title_pos = vec2i(0, 30);
 	page->title_anchor = UI_POS_TOP | UI_POS_CENTER;
