@@ -37,6 +37,8 @@ cmake_dependent_option(MINIMAL_BUNDLE "Do not include music/movies for web build
 option(PATH_ASSETS "Path to where the game assets should be located.")
 option(PATH_USERDATA "Path to where user data (e.g. game saves) should be located.")
 option(DEV_BUILD "Set asset/userdata paths to the source directory for testing" OFF)
+option(USE_ASAN "Enable AddressSanitizer" OFF)
+
 if (DEV_BUILD)
 	set(PATH_ASSETS "${CMAKE_SOURCE_DIR}/")
 	set(PATH_USERDATA "${CMAKE_SOURCE_DIR}/")
@@ -59,6 +61,11 @@ add_compile_options(
     $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall>
     $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wextra>
 )
+
+if(USE_ASAN)
+	add_compile_options(-fsanitize=address)
+	add_link_options(-fsanitize=address)
+endif()
 
 # INTERNAL LIBRARIES
 # PROTOBUF MSGS
