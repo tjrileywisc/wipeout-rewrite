@@ -74,4 +74,4 @@ int network_sleep(int msec);
  * @param[in,out] subnet the subnet address
  * @param len the length of the subnet address
  */
-void network_get_local_subnet(char* subnet, size_t len);
+void network_get_my_ip(char* subnet, size_t len);

@@ -401,7 +401,7 @@ int network_sleep(int msec)
     return select(ip_socket + 1, &fdset, NULL, NULL, &timeout);
 }
 
-void network_get_local_subnet(char *subnet, size_t len) {
+void network_get_my_ip(char *subnet, size_t len) {
     struct ifaddrs *ifap, *ifa;
     struct sockaddr_in *sa;
     char addr[INET_ADDRSTRLEN];
