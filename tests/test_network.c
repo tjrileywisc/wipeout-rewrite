@@ -64,8 +64,9 @@ void test_network_get_packet_no_data(void**) {
 }
 
 void test_network_get_local_subnet(void **) {
-    char subnet[INET_ADDRSTRLEN];
-    network_get_local_subnet(subnet, INET_ADDRSTRLEN);
+    char my_ip[INET_ADDRSTRLEN];
+    network_get_my_ip(my_ip, INET_ADDRSTRLEN);
 
-    assert_non_null(subnet);
+    assert_non_null(my_ip);
+    assert_string_not_equal(my_ip, "127.0.0.1");
 }
