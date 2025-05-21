@@ -208,20 +208,15 @@ void network_bind_ip(void)
     }
 #endif
 
-    char *address = "localhost";
-    int port = 8000;
+    char address[INET_ADDRSTRLEN];
+    network_get_my_ip(address, INET_ADDRSTRLEN);
 
-    // make several attempts to grab an open port
-    for (int i = 0; i < 10; i++)
+    ip_socket = network_ip_socket(address, WIPEOUT_PORT);
+
+    if (ip_socket)
     {
-        port += i;
-        ip_socket = network_ip_socket(address, port);
-
-        if (ip_socket)
-        {
-            printf("established connection at %s:%d\n", address, port);
-            return;
-        }
+        printf("established connection at %s:%d\n", address, WIPEOUT_PORT);
+        return;
     }
     perror("could not establish network connection... quitting.\n");
 }

@@ -2,8 +2,10 @@
 #pragma once
 
 #include "network_types.h"
+
 #include <sys/socket.h>
 
+static int WIPEOUT_PORT = 8000;
 
 typedef struct {
     const char* command;
