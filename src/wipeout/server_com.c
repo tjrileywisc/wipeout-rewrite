@@ -5,6 +5,8 @@
 #include <network.h>
 
 #include <arpa/inet.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <stdatomic.h>
 #include <threads.h>
@@ -14,16 +16,18 @@ atomic_bool network_discovery_on = false;
 thrd_t network_discovery_thread;
 
 void client_init() {
-    network_connect_ip("localhost");
-}
 
+    char my_ip[INET_ADDRSTRLEN];
+    network_get_my_ip(my_ip, INET_ADDRSTRLEN);
+    network_connect_ip(my_ip);
+}
 
 /**
  * @brief Run network discovery to find servers
  */
 static int page_network_query(void*) {
 
-	if(network_discovery_on) {
+	if(!network_discovery_on) {
 		return 0;
 	}
 
@@ -48,32 +52,65 @@ static int page_network_query(void*) {
 	return 0;
 }
 
-void server_com_network_discovery() {
+/**
+ * @brief Run network discovery to find servers
+ */
+static int server_com_network_discovery() {
 
-    /*
+    if(!network_discovery_on) {
+		return 0;
+	}
+
+	if(!network_has_ip_socket()) {
+		return 0;
+	}
+
     int sockfd = network_get_ip_socket();
 
     // Enable broadcast option
     int broadcastEnable = 1;
-    setsockopt(sockfd, SOL_SOCKET, SO_BROADCAST, &broadcastEnable, sizeof(broadcastEnable));
+    if(setsockopt(sockfd, SOL_SOCKET, SO_BROADCAST, &broadcastEnable, sizeof(broadcastEnable)) != 0) {
+        perror("[-] Error setting socket to broadcast");
+        return 0;
+    }
 
     // Set receive timeout
     struct timeval timeout;
     timeout.tv_sec = 30;
     timeout.tv_usec = 0;
-    setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+    if(setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) != 0) {
+        perror("[-] Error setting socket timeout");
+        return 0;
+    }
 
+    struct sockaddr_in broadcast_addr;
     memset(&broadcast_addr, 0, sizeof(broadcast_addr));
     broadcast_addr.sin_family = AF_INET;
     broadcast_addr.sin_port = htons(8000);
-    inet_pton(AF_INET, BROADCAST_IP, &broadcast_addr.sin_addr);
+    char my_ip[INET_ADDRSTRLEN];
+    network_get_my_ip(my_ip, INET_ADDRSTRLEN);
 
-    const char *message = "discovery_ping";
+    char broadcast_ip[INET_ADDRSTRLEN];
+    char* last_dot = strrchr(my_ip, '.');
+    if (last_dot != NULL) {
+        strncpy(broadcast_ip, my_ip, last_dot - my_ip);
+        broadcast_ip[last_dot - my_ip] = '\0';
+        strcat(broadcast_ip, ".255");
+    } else {
+        fprintf(stderr, "[-] Invalid ip format.\n");
+        return 0;
+    }
+
+    inet_pton(AF_INET, broadcast_ip, &broadcast_addr.sin_addr);
+
+    const char *message = "hello";
     sendto(sockfd, message, strlen(message), 0,
            (struct sockaddr *)&broadcast_addr, sizeof(broadcast_addr));
 
     printf("[*] Broadcast packet sent. Waiting for replies...\n");
 
+    static int BUF_SIZE = 10;
+    char buffer[BUF_SIZE];
     while (1) {
         struct sockaddr_in sender;
         socklen_t sender_len = sizeof(sender);
@@ -89,12 +126,13 @@ void server_com_network_discovery() {
         printf("[+] Response from %s:%d: %s\n",
                inet_ntoa(sender.sin_addr), ntohs(sender.sin_port), buffer);
     }
-    */
+
+    return 1;
 }
 
 void server_com_init_network_discovery() {
     network_discovery_on = true;
-    thrd_create(&network_discovery_thread, (thrd_start_t)page_network_query, NULL);
+    thrd_create(&network_discovery_thread, (thrd_start_t)server_com_network_discovery, NULL);
     thrd_detach(network_discovery_thread);
 }
 
