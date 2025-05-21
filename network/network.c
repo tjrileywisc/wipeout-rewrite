@@ -345,13 +345,13 @@ bool network_get_packet()
 
     struct sockaddr* addr = &((struct sockaddr_in*)&their_addr)->sin_addr;
 
-    //printf("listener: got packet from %s\n",
-    // inet_ntop(their_addr.ss_family,
-    //         addr,
-    //         s, sizeof s));
-    //printf("listener: packet is %d bytes long\n", numbytes);
+    printf("listener: got packet from %s\n",
+    inet_ntop(their_addr.ss_family,
+            addr,
+            s, sizeof s));
+    printf("listener: packet is %d bytes long\n", numbytes);
     buf[numbytes] = '\0';
-    //printf("listener: packet contains \"%s\"\n", buf);
+    printf("listener: packet contains \"%s\"\n", buf);
 
     network_add_msg_queue_item(buf, numbytes, &their_addr);
 
