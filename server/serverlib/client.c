@@ -100,7 +100,6 @@ static void server_parse_msg(msg_queue_item_t* item) {
 		netadr_t net_addr;
 		sockadr_to_netadr((struct sockaddr_in*)&item->dest_addr, &net_addr);
 		network_send_packet(network_get_ip_socket(), strlen(buf), buf, net_addr);
-		free(buf);
 	} else {
         fprintf(stderr, "Unknown command: %s\n", cmd);
     }

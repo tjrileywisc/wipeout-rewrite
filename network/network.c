@@ -4,8 +4,6 @@
 #include "addr_conversions.h"
 #include "msg.h"
 
-// Declare the missing function
-
 #include <errno.h>
 #include <stdarg.h>
 #include <stdlib.h>
@@ -26,6 +24,7 @@
 #include <sys/socket.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
+#include <ifaddrs.h>
 
 #define INVALID_SOCKET -1
 #endif
