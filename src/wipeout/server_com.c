@@ -46,7 +46,7 @@ static int page_network_query(void*) {
 
 	netadr_t dest;
 	string_to_addr("localhost", &dest);
-	dest.port = htons(8000);
+	dest.port = htons(WIPEOUT_PORT);
 
 	const char* data = "hello";
 	network_send_packet(CLIENT, strlen(data), data, dest);
@@ -92,7 +92,7 @@ static int server_com_network_discovery() {
     struct sockaddr_in broadcast_addr;
     memset(&broadcast_addr, 0, sizeof(broadcast_addr));
     broadcast_addr.sin_family = AF_INET;
-    broadcast_addr.sin_port = htons(8000);
+    broadcast_addr.sin_port = htons(WIPEOUT_PORT);
     char my_ip[INET_ADDRSTRLEN];
     network_get_my_ip(my_ip, INET_ADDRSTRLEN);
 
