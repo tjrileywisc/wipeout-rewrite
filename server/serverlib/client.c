@@ -10,7 +10,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <threads.h>
+
+#if defined(WIN32)
+#include <ws2ipdef.h>
+#include <WS2tcpip.h>
+#else
 #include <arpa/inet.h>
+#endif
 
 #include <ServerInfo.pb-c.h>
 
@@ -89,7 +95,7 @@ static void server_parse_msg(msg_queue_item_t* item) {
 		// handle hello (just echo back the client's address)
 		char addr[INET_ADDRSTRLEN];
 		inet_ntop(AF_INET, &((struct sockaddr_in*)&item->dest_addr)->sin_addr, addr, sizeof(addr));
-		char *buf = malloc(100);
+		char buf[100];
 		sprintf(buf, "Hello from %s\n", addr);
 		netadr_t net_addr;
 		sockadr_to_netadr((struct sockaddr_in*)&item->dest_addr, &net_addr);

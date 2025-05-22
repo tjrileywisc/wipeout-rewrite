@@ -4,7 +4,13 @@
 #include <addr_conversions.h>
 #include <network.h>
 
+#if defined(WIN32)
+#include <ws2ipdef.h>
+#include <WS2tcpip.h>
+#else
 #include <arpa/inet.h>
+#endif
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

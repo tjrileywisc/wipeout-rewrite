@@ -8,31 +8,32 @@
 
 #include <errno.h>
 #include <stdarg.h>
+#include <stdlib.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 
 #if defined(WIN32)
 #define WIN32_LEAN_AND_MEAN
+#include <iphlpapi.h>
 #include <winsock2.h>
-#include <Windows.h>
+#include <ws2tcpip.h>
 #else
 #include <arpa/inet.h>
-#include <errno.h>
 #include <netdb.h>
 #include <netinet/in.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
-#include <ifaddrs.h>
+
+#define INVALID_SOCKET -1
+#endif
 
 #include <ServerInfo.pb-c.h>
 
-#define INVALID_SOCKET -1
 #define SERVER_PORT "8000"
 
-#endif
 
 #if defined(WIN32)
 static WSADATA winsockdata;
@@ -401,6 +402,13 @@ void network_get_my_ip(char *subnet, size_t len) {
     struct sockaddr_in *sa;
     char addr[INET_ADDRSTRLEN];
 
+#if defined(WIN32)
+    DWORD ret_val = GetAdaptersAddresses(AF_INET, 0, NULL, &ifap, &len);
+    if(ret_val != NO_ERROR) {
+        printf("GetAdaptersAddresses failed: %d\n", ret_val);
+        return;
+    }
+#else
     getifaddrs(&ifap);
     for (ifa = ifap; ifa; ifa = ifa->ifa_next) {
         if (ifa->ifa_addr == NULL || ifa->ifa_addr->sa_family != AF_INET) {
@@ -416,4 +424,5 @@ void network_get_my_ip(char *subnet, size_t len) {
             break;
         }
     }
+#endif
 }

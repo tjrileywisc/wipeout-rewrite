@@ -3,7 +3,12 @@
 
 #include "network_types.h"
 
+#if defined(WIN32)
+#include <WinSock2.h>
+#include <win_defines.h>
+#else
 #include <sys/socket.h>
+#endif
 
 static int WIPEOUT_PORT = 8000;
 
@@ -52,6 +57,11 @@ void network_clear_msg_queue(void);
  * @brief gets the size of the message queue
  */
 int network_get_msg_queue_size(void);
+
+/**
+ * @brief pop out the first message queue item
+ */
+void network_popleft_msg_queue(void);
 
 /**
  * @brief get the first message queue item

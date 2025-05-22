@@ -6,8 +6,14 @@
 #include <setjmp.h>
 #include <cmocka.h>
 #include <string.h>
+
+#if defined(WIN32)
+#include <WinSock2.h>
+#include <win_defines.h>
+#else
 #include <sys/socket.h>
 #include <unistd.h>
+#endif
 
 ssize_t __wrap_recvfrom(int sockfd, void *buf, size_t len, int flags,
                         struct sockaddr *src_addr, socklen_t *addrlen) {

@@ -4,7 +4,12 @@
 #include <network.h>
 
 #include <errno.h>
+#if defined(WIN32)
+#include <ws2ipdef.h>
+#else
 #include <netinet/in.h>
+#include <arpa/inet.h>
+#endif
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdint.h>

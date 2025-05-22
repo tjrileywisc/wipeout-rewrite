@@ -7,7 +7,7 @@ add_library(network
 
 set(OS_LIBS "")
 if(WIN32)
-    set(OS_LIBS "Ws2_32.lib;${OS_LIBS}")
+    set(OS_LIBS "Ws2_32.lib;Iphlpapi.lib;${OS_LIBS}")
 endif()
 
 target_link_libraries(network PUBLIC ${OS_LIBS} protos)

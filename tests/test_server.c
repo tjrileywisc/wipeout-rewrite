@@ -8,9 +8,14 @@
 #include <cmocka.h>
 
 #include <string.h>
+
+#if defined(WIN32)
+#include <WinSock2.h>
+#else
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <unistd.h>
+#endif
 
 void empties_queue_after_process(void**) {
 

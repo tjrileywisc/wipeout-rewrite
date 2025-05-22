@@ -7,9 +7,10 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
+#if defined(WIN32)
+#else
 #include <unistd.h>
-
-#define PACKET_HDR_SIZE 4
+#endif
 
 typedef struct
 {
@@ -17,7 +18,7 @@ typedef struct
     int num_clients;
 } server_t;
 
-server_t server;
+static server_t server;
 
 static void server_init()
 {
