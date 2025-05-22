@@ -11,14 +11,6 @@
 #include "server_com.h"
 #include "ui.h"
 
-#if defined (WIN32)
-#include <winsock2.h>
-#else
-	#include <arpa/inet.h>
-#endif
-#include <network.h>
-#include <addr_conversions.h>
-
 static void page_main_init(menu_t *menu);
 static void page_options_init(menu_t *menu);
 static void page_race_class_init(menu_t *menu);
