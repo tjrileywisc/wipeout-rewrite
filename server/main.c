@@ -26,7 +26,7 @@ static void server_init()
     server.num_clients = 0;
 }
 
-int main(int, char **)
+int main(int argc, char** argv)
 {
     printf("welcome to the server!\n");
 

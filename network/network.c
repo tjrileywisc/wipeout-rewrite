@@ -397,31 +397,24 @@ int network_sleep(int msec)
 }
 
 void network_get_my_ip(char *subnet, size_t len) {
-    struct ifaddrs *ifap, *ifa;
-    struct sockaddr_in *sa;
-    char addr[INET_ADDRSTRLEN];
 
-#if defined(WIN32)
-    DWORD ret_val = GetAdaptersAddresses(AF_INET, 0, NULL, &ifap, &len);
-    if(ret_val != NO_ERROR) {
-        printf("GetAdaptersAddresses failed: %d\n", ret_val);
-        return;
-    }
-#else
-    getifaddrs(&ifap);
-    for (ifa = ifap; ifa; ifa = ifa->ifa_next) {
-        if (ifa->ifa_addr == NULL || ifa->ifa_addr->sa_family != AF_INET) {
-            continue;
-        }
+    struct sockaddr_in dest = {0};
+    dest.sin_family = AF_INET;
+    dest.sin_port = htons(53); // DNS
+    inet_pton(AF_INET, "8.8.8.8", &dest.sin_addr);
 
-        sa = (struct sockaddr_in *)ifa->ifa_addr;
-        inet_ntop(AF_INET, &sa->sin_addr, addr, sizeof(addr));
+    int sock = socket(AF_INET, SOCK_DGRAM, 0);
+    connect(sock, (struct sockaddr *)&dest, sizeof(dest));
 
-        // don't bother with the loopback interface
-        if (strcmp(ifa->ifa_name, "lo") != 0) {
-            strncpy(subnet, addr, len);
-            break;
-        }
-    }
-#endif
+    struct sockaddr_in local;
+    len = sizeof(local);
+    getsockname(sock, (struct sockaddr *)&local, &len);
+
+    strncpy(subnet, inet_ntoa(local.sin_addr), len);
+
+    #if defined(WIN32)
+        closesocket(sock);
+    #else
+            close(sock);
+    #endif
 }
