@@ -33,10 +33,10 @@ typedef struct {
 /**
  * @brief Processes queued messages from clients
  */
-static void server_response_thread() {}
+static void server_response_thread(void) {}
 
 
-static void server_connect_client() {
+static void server_connect_client(void) {
     // handle client connection
     client_t *client = malloc(sizeof(client_t));
     if (!client) {
@@ -49,7 +49,7 @@ static void server_connect_client() {
 	// TODO: tell client they are connected
 }
 
-static void server_disconnect_client() {
+static void server_disconnect_client(void) {
 	// handle client disconnection
 	client_t *client = malloc(sizeof(client_t));
 	if (!client) {
@@ -63,7 +63,7 @@ static void server_disconnect_client() {
 	// no need to tell them we are removing them
 }
 
-static void server_status() {
+static void server_status(void) {
 	// handle server status
 	Wipeout__ServerInfo msg;
 	wipeout__server_info__init(&msg);
@@ -105,7 +105,7 @@ static void server_parse_msg(msg_queue_item_t* item) {
     }
 }
 
-void server_process_queue() {
+void server_process_queue(void) {
 	msg_queue_item_t item;
 	while (network_get_msg_queue_item(&item)) {
 		server_parse_msg(&item);

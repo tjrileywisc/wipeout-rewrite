@@ -5,4 +5,4 @@
 /**
  * @brief Processes queued messages from clients
  */
-void server_process_queue();
+void server_process_queue(void);

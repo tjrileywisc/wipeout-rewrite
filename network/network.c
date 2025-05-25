@@ -257,7 +257,7 @@ void network_connect_ip(const char* addr)
     freeaddrinfo(servinfo);
 }
 
-void network_close_connection()
+void network_close_connection(void)
 {
     // TODO: how to confirm it's an open socket?
     if(ip_socket > 0) {
