@@ -69,16 +69,9 @@ static int server_com_network_discovery() {
 		return 0;
 	}
 
-	if(!network_has_bound_ip_socket()) {
-		return 0;
-	}
-
-    int sockfd = network_get_bound_ip_socket();
-
-    // Enable broadcast option
-    int broadcastEnable = 1;
-    if(setsockopt(sockfd, SOL_SOCKET, SO_BROADCAST, &broadcastEnable, sizeof(broadcastEnable)) != 0) {
-        perror("[-] Error setting socket to broadcast");
+    int sockfd = network_get_socket();
+    if (sockfd == INVALID_SOCKET) {
+        perror("[-] Error creating socket");
         return 0;
     }
 
