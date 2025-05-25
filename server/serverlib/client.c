@@ -99,7 +99,7 @@ static void server_parse_msg(msg_queue_item_t* item) {
 		sprintf(buf, "Hello from %s\n", addr);
 		netadr_t net_addr;
 		sockadr_to_netadr((struct sockaddr_in*)&item->dest_addr, &net_addr);
-		network_send_packet(network_get_ip_socket(), strlen(buf), buf, net_addr);
+		network_send_packet(network_get_bound_ip_socket(), strlen(buf), buf, net_addr);
 	} else {
         fprintf(stderr, "Unknown command: %s\n", cmd);
     }

@@ -17,11 +17,38 @@ typedef struct {
     struct sockaddr_storage dest_addr;
 } msg_queue_item_t;
 
-bool network_has_ip_socket(void);
+/**
+ * @brief Check if the current socket is valid and bound
+ * 
+ * @return true if the socket is valid and bound
+ */
+bool network_has_bound_ip_socket(void);
 
-void network_set_ip_socket(int sockfd);
+/**
+ * @brief Set a bound ip socket; really
+ * should only be used for testing
+ * 
+ * @param sockfd 
+ */
+void network_set_bound_ip_socket(int sockfd);
 
-int network_get_ip_socket(void);
+/**
+ * @brief Get the currently bound ip socket;
+ * callers should check if the socket is valid first
+ * 
+ * @return the socket fd
+ */
+int network_get_bound_ip_socket(void);
+
+/**
+ * @brief Gets a socket for network communication;
+ * this UDP socket is not yet bound to an address, and
+ * is non-blocking and broadcastable. If a socket
+ * could not be created, -1 is returned.
+ * 
+ * @return int 
+ */
+int network_get_socket(void);
 
 /**
  * @brief Bind to a port for running in a
@@ -37,7 +64,7 @@ void network_connect_ip(const char* addr);
 
 void network_close_connection(void);
 
-bool network_get_packet();
+bool network_get_packet(void);
 
 void network_send_packet(netsrc_t sock, int length, const void* data, netadr_t dest_net);
 

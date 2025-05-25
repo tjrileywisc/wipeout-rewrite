@@ -37,7 +37,7 @@ static int page_network_query(void*) {
 		return 0;
 	}
 
-	if(!network_has_ip_socket()) {
+	if(!network_has_bound_ip_socket()) {
 		return 0;
 	}
 
@@ -67,11 +67,11 @@ static int server_com_network_discovery() {
 		return 0;
 	}
 
-	if(!network_has_ip_socket()) {
+	if(!network_has_bound_ip_socket()) {
 		return 0;
 	}
 
-    int sockfd = network_get_ip_socket();
+    int sockfd = network_get_bound_ip_socket();
 
     // Enable broadcast option
     int broadcastEnable = 1;

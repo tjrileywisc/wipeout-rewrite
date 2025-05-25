@@ -32,7 +32,7 @@ void empties_queue_after_process(void**) {
     will_return(__wrap_recvfrom, mock_data);         // for buf content
     will_return(__wrap_recvfrom, strlen(mock_data)); // return value
 
-    network_set_ip_socket(3); // Set the socket descriptor
+    network_set_bound_ip_socket(3); // Set the socket descriptor
 
     network_get_packet();
 

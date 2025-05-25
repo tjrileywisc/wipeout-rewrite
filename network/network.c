@@ -33,19 +33,17 @@
 
 #define SERVER_PORT "8000"
 
-
 #if defined(WIN32)
 static WSADATA winsockdata;
+bool winsock_initialized = false;
 #endif
-
-
 
 msg_queue_item_t msg_queue[10];
 int msg_queue_size = 0;
 
-int ip_socket = 0;
+int ip_socket = INVALID_SOCKET;
 
-const char *network_get_last_error()
+const char *network_get_last_error(void)
 {
 #if defined(WIN32)
     DWORD code = WSAGetLastError();
@@ -126,16 +124,58 @@ static bool system_get_packet(netadr_t *net_from, msg_t *net_msg)
     return true;
 }
 
-// attempt to open network connection
-int network_ip_socket(char *ip_addr, int port)
-{
+int network_get_socket(void) {
 
 #if defined(WIN32)
-    SOCKET new_socket;
-#else
-    int new_socket;
+    if(!winsock_initialized) {
+        if ((WSAStartup(MAKEWORD(2, 2), &winsockdata) != 0)) {
+            printf("unable to init windows socket: %s\n", network_get_last_error());
+            return INVALID_SOCKET;
+        }
+        winsock_initialized = true;
+    }
 #endif
 
+
+#if defined(WIN32)
+    SOCKET new_socket = INVALID_SOCKET;
+#else
+    int new_socket = INVALID_SOCKET;
+#endif
+
+    bool _true = true;
+    int i = 1;
+
+    if ((new_socket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) ==
+        INVALID_SOCKET) {
+        printf("unable to open socket: %s\n", network_get_last_error());
+        return INVALID_SOCKET;
+    }
+
+    // TODO: should close the socket if it fails
+#if defined(WIN32)
+    if (ioctlsocket(new_socket, FIONBIO, &_true) == -1) {
+#else
+    if (ioctl(new_socket, FIONBIO, &_true) == -1) {
+#endif
+        printf("can't make socket non-blocking: %s\n",
+               network_get_last_error());
+        return INVALID_SOCKET;
+    }
+
+    if (setsockopt(new_socket, SOL_SOCKET, SO_BROADCAST, (char *)&i,
+                   sizeof(i)) == -1) {
+        printf("can't make socket broadcastable: %s\n",
+               network_get_last_error());
+        return INVALID_SOCKET;
+    }
+
+    return new_socket;
+}
+
+// attempt to open network connection
+bool network_bind_ip_socket(int socket, char *ip_addr, int port)
+{
     struct sockaddr_in address;
 
     string_to_socket_addr(ip_addr, (struct sockaddr *)&address);
@@ -143,82 +183,55 @@ int network_ip_socket(char *ip_addr, int port)
     address.sin_port = htons((short)port);
     address.sin_family = AF_INET;
 
-    bool _true = true;
-    int i = 1;
-
-    if ((new_socket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == INVALID_SOCKET)
-    {
-        printf("unable to open socket: %s\n", network_get_last_error());
-        return 0;
-    }
-
-#if defined(WIN32)
-    if (ioctlsocket(new_socket, FIONBIO, &_true) == -1)
-    {
-#else
-    if (ioctl(new_socket, FIONBIO, &_true) == -1)
-    {
-#endif
-        printf("can't make socket non-blocking: %s\n", network_get_last_error());
-        return 0;
-    }
-
-    if (setsockopt(new_socket, SOL_SOCKET, SO_BROADCAST, (char *)&i, sizeof(i)) == -1)
-    {
-        printf("can't make socket broadcastable: %s\n", network_get_last_error());
-        return 0;
-    }
-
-    if (bind(new_socket, (void *)&address, sizeof(address)) == -1)
+    if (bind(socket, (void *)&address, sizeof(address)) == -1)
     {
         printf("couldn't bind address and port: %s\n", network_get_last_error());
-#if defined(WIN32)
-        closesocket(new_socket);
-#else
-        close(new_socket);
-#endif
-        return 0;
+        return false;
     }
 
-    return new_socket;
+    return true;
 }
 
-bool network_has_ip_socket(void)
+bool network_has_bound_ip_socket(void)
 {
     return ip_socket;
 }
 
-void network_set_ip_socket(int sockfd)
+void network_set_bound_ip_socket(int sockfd)
 {
     ip_socket = sockfd;
 }
 
-int network_get_ip_socket(void) { 
+int network_get_bound_ip_socket(void) { 
     return ip_socket; 
 }
 
 void network_bind_ip(void)
 {
-
-#if defined(WIN32)
-    if ((WSAStartup(MAKEWORD(1, 1), &winsockdata)))
-    {
-        printf("unable to init windows socket: %s\n", network_get_last_error());
-        return;
-    }
-#endif
-
     char address[INET_ADDRSTRLEN];
     network_get_my_ip(address, INET_ADDRSTRLEN);
 
-    ip_socket = network_ip_socket(address, WIPEOUT_PORT);
+    int sockfd = network_get_socket();
+    if (sockfd == INVALID_SOCKET)
+    {
+        perror("could not create socket... quitting.\n");
+        return;
+    }
 
-    if (ip_socket)
+    bool res = network_bind_ip_socket(sockfd, address, WIPEOUT_PORT);
+
+    if (res)
     {
         printf("established connection at %s:%d\n", address, WIPEOUT_PORT);
         return;
     }
     perror("could not establish network connection... quitting.\n");
+
+#if defined(WIN32)
+    closesocket(sockfd);
+#else
+    close(sockfd);
+#endif
 }
 
 void network_connect_ip(const char* addr)
@@ -403,7 +416,12 @@ void network_get_my_ip(char *subnet, size_t len) {
     dest.sin_port = htons(53); // DNS
     inet_pton(AF_INET, "8.8.8.8", &dest.sin_addr);
 
-    int sock = socket(AF_INET, SOCK_DGRAM, 0);
+    int sock = network_get_socket();
+    if(sock == -1) {
+        perror("[-] Error creating socket");
+        return;
+    }
+
     connect(sock, (struct sockaddr *)&dest, sizeof(dest));
 
     struct sockaddr_in local;
@@ -415,6 +433,6 @@ void network_get_my_ip(char *subnet, size_t len) {
     #if defined(WIN32)
         closesocket(sock);
     #else
-            close(sock);
+        close(sock);
     #endif
 }

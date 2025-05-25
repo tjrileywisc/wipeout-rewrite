@@ -31,7 +31,7 @@ void test_network_get_packet(void **state) {
     will_return(__wrap_recvfrom, mock_data);         // for buf content
     will_return(__wrap_recvfrom, strlen(mock_data)); // return value
 
-    network_set_ip_socket(3); // Set the socket descriptor
+    network_set_bound_ip_socket(3); // Set the socket descriptor
 
     bool result = network_get_packet();
 
@@ -58,7 +58,7 @@ void test_network_get_packet_no_data(void**) {
     will_return(__wrap_recvfrom, mock_data);         // for buf content
     will_return(__wrap_recvfrom, -1); // return value
 
-    network_set_ip_socket(3); // Set the socket descriptor
+    network_set_bound_ip_socket(3); // Set the socket descriptor
     errno = EAGAIN; // Simulate no data available
     bool result = network_get_packet();
     assert_false(result);
@@ -74,4 +74,9 @@ void test_network_get_local_subnet(void **) {
 
     assert_non_null(my_ip);
     assert_string_not_equal(my_ip, "127.0.0.1");
+
+    // this utility shouldn't change or set the bound socket
+    // for this client
+    int sockfd = network_get_bound_ip_socket();
+    assert_int_equal(sockfd, INVALID_SOCKET);
 }
