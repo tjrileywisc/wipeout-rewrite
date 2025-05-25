@@ -1,7 +1,7 @@
 
-#include "mocks.h"
 
 #include <network.h>
+#include <network_wrapper.h>
 
 #include <errno.h>
 #if defined(WIN32)
@@ -16,20 +16,20 @@
 #include <setjmp.h>
 #include <cmocka.h>
 
-void test_network_get_packet(void **state) {
-    (void) state;
+void test_network_get_packet(void** state) {
+    (void)state; // unused
 
     const char *mock_data = "Hello, World!";
     struct sockaddr_in mock_addr = {0};
     socklen_t mock_addr_len = sizeof(mock_addr);
 
-    expect_value(__wrap_recvfrom, sockfd, 3);
-    expect_value(__wrap_recvfrom, len, 99);
-    expect_value(__wrap_recvfrom, flags, 0);
-    will_return(__wrap_recvfrom, &mock_addr);        // for src_addr
-    will_return(__wrap_recvfrom, mock_addr_len);     // for addrlen
-    will_return(__wrap_recvfrom, mock_data);         // for buf content
-    will_return(__wrap_recvfrom, strlen(mock_data)); // return value
+    expect_value(wrap_recvfrom, sockfd, 3);
+    expect_value(wrap_recvfrom, len, 99);
+    expect_value(wrap_recvfrom, flags, 0);
+    will_return(wrap_recvfrom, &mock_addr);        // for src_addr
+    will_return(wrap_recvfrom, mock_addr_len);     // for addrlen
+    will_return(wrap_recvfrom, mock_data);         // for buf content
+    will_return(wrap_recvfrom, strlen(mock_data)); // return value
 
     network_set_bound_ip_socket(3); // Set the socket descriptor
 
@@ -50,13 +50,13 @@ void test_network_get_packet_no_data(void**) {
     struct sockaddr_in mock_addr = {0};
     socklen_t mock_addr_len = sizeof(mock_addr);
 
-    expect_value(__wrap_recvfrom, sockfd, 3);
-    expect_value(__wrap_recvfrom, len, 99);
-    expect_value(__wrap_recvfrom, flags, 0);
-    will_return(__wrap_recvfrom, &mock_addr);        // for src_addr
-    will_return(__wrap_recvfrom, mock_addr_len);     // for addrlen
-    will_return(__wrap_recvfrom, mock_data);         // for buf content
-    will_return(__wrap_recvfrom, -1); // return value
+    expect_value(wrap_recvfrom, sockfd, 3);
+    expect_value(wrap_recvfrom, len, 99);
+    expect_value(wrap_recvfrom, flags, 0);
+    will_return(wrap_recvfrom, &mock_addr);        // for src_addr
+    will_return(wrap_recvfrom, mock_addr_len);     // for addrlen
+    will_return(wrap_recvfrom, mock_data);         // for buf content
+    will_return(wrap_recvfrom, -1); // return value
 
     network_set_bound_ip_socket(3); // Set the socket descriptor
     errno = EAGAIN; // Simulate no data available
@@ -68,7 +68,9 @@ void test_network_get_packet_no_data(void**) {
     assert_int_equal(queue_size, 0);
 }
 
-void test_network_get_local_subnet(void **) {
+void test_network_get_local_subnet(void** state) {
+    (void)state; // unused
+
     char my_ip[INET_ADDRSTRLEN];
     network_get_my_ip(my_ip, INET_ADDRSTRLEN);
 

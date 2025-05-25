@@ -3,6 +3,7 @@ add_library(network
     addr_conversions.c
     msg.c
     network.c
+    network_wrapper.c
 )
 
 set(OS_LIBS "")

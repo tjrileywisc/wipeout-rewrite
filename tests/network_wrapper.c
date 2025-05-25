@@ -1,5 +1,5 @@
 
-#pragma once
+#include <network_wrapper.h>
 
 #include <stdarg.h>
 #include <stddef.h>
@@ -15,7 +15,7 @@
 #include <unistd.h>
 #endif
 
-ssize_t __wrap_recvfrom(int sockfd, void *buf, size_t len, int flags,
+ssize_t wrap_recvfrom(int sockfd, void *buf, size_t len, int flags,
                         struct sockaddr *src_addr, socklen_t *addrlen) {
     check_expected(sockfd);
     check_expected(len);

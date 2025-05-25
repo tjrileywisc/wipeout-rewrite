@@ -24,13 +24,13 @@ void empties_queue_after_process(void**) {
     struct sockaddr_in mock_addr = {0};
     socklen_t mock_addr_len = sizeof(mock_addr);
 
-    expect_value(__wrap_recvfrom, sockfd, 3);
-    expect_value(__wrap_recvfrom, len, 99);
-    expect_value(__wrap_recvfrom, flags, 0);
-    will_return(__wrap_recvfrom, &mock_addr);        // for src_addr
-    will_return(__wrap_recvfrom, mock_addr_len);     // for addrlen
-    will_return(__wrap_recvfrom, mock_data);         // for buf content
-    will_return(__wrap_recvfrom, strlen(mock_data)); // return value
+    expect_value(wrap_recvfrom, sockfd, 3);
+    expect_value(wrap_recvfrom, len, 99);
+    expect_value(wrap_recvfrom, flags, 0);
+    will_return(wrap_recvfrom, &mock_addr);        // for src_addr
+    will_return(wrap_recvfrom, mock_addr_len);     // for addrlen
+    will_return(wrap_recvfrom, mock_data);         // for buf content
+    will_return(wrap_recvfrom, strlen(mock_data)); // return value
 
     network_set_bound_ip_socket(3); // Set the socket descriptor
 

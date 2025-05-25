@@ -1,5 +1,6 @@
 
 #include "network.h"
+#include "network_wrapper.h"
 
 #include "addr_conversions.h"
 #include "msg.h"
@@ -12,10 +13,9 @@
 #include <stdlib.h>
 
 #if defined(WIN32)
-#define WIN32_LEAN_AND_MEAN
 #include <iphlpapi.h>
-#include <winsock2.h>
-#include <ws2tcpip.h>
+#include <WinSock2.h>
+#include <WS2tcpip.h>
 #else
 #include <arpa/inet.h>
 #include <netdb.h>
@@ -35,18 +35,18 @@
 
 #if defined(WIN32)
 static WSADATA winsockdata;
-bool winsock_initialized = false;
+static bool winsock_initialized = false;
 #endif
 
-msg_queue_item_t msg_queue[10];
-int msg_queue_size = 0;
+static msg_queue_item_t msg_queue[10];
+static int msg_queue_size = 0;
 
-int ip_socket = INVALID_SOCKET;
+static int ip_socket = INVALID_SOCKET;
 
-const char *network_get_last_error(void)
+static const char *network_get_last_error(void)
 {
 #if defined(WIN32)
-    DWORD code = WSAGetLastError();
+    int code = WSAGetLastError();
 
     char *errorMsg = NULL;
 
@@ -98,7 +98,7 @@ static bool system_get_packet(netadr_t *net_from, msg_t *net_msg)
         return false;
 
     int fromlen = sizeof(from);
-    int ret = recvfrom(ip_socket, net_msg->data, net_msg->maxsize, 0, (struct sockaddr *)&from, &fromlen);
+    int ret = wrap_recvfrom(ip_socket, net_msg->data, net_msg->maxsize, 0, (struct sockaddr *)&from, &fromlen);
 
     sockadr_to_netadr(&from, net_from);
     net_msg->readcount = 0;
@@ -340,7 +340,7 @@ bool network_get_packet()
 
     char s[INET_ADDRSTRLEN];
 
-    if ((numbytes = recvfrom(ip_socket, buf, MAXBUFLEN-1 , 0,
+    if ((numbytes = wrap_recvfrom(ip_socket, buf, MAXBUFLEN-1 , 0,
         (struct sockaddr *)&their_addr, &addr_len)) == -1) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
             // No data available right now, not a fatal error

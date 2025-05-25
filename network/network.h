@@ -28,7 +28,7 @@ bool network_has_bound_ip_socket(void);
  * @brief Set a bound ip socket; really
  * should only be used for testing
  * 
- * @param sockfd 
+ * @param sockfd the socket fd
  */
 void network_set_bound_ip_socket(int sockfd);
 

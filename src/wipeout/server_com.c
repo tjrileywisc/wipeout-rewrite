@@ -1,6 +1,8 @@
 
 #include "server_com.h"
 
+#include "network_wrapper.h"
+
 #include <addr_conversions.h>
 #include <network.h>
 
@@ -120,7 +122,7 @@ static int server_com_network_discovery() {
     while (1) {
         struct sockaddr_in sender;
         socklen_t sender_len = sizeof(sender);
-        ssize_t n = recvfrom(sockfd, buffer, BUF_SIZE - 1, 0,
+        ssize_t n = wrap_recvfrom(sockfd, buffer, BUF_SIZE - 1, 0,
                              (struct sockaddr *)&sender, &sender_len);
 
         if (n < 0) {
