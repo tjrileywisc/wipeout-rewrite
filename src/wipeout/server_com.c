@@ -112,7 +112,7 @@ static int server_com_network_discovery() {
     inet_pton(AF_INET, broadcast_ip, &broadcast_addr.sin_addr);
 
     const char *message = "hello";
-    sendto(sockfd, message, strlen(message), 0,
+    wrap_sendto(sockfd, message, strlen(message), 0,
            (struct sockaddr *)&broadcast_addr, sizeof(broadcast_addr));
 
     printf("[*] Broadcast packet sent. Waiting for replies...\n");

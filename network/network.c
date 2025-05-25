@@ -81,7 +81,7 @@ static void system_send_packet(int length, const void *data, netadr_t dest_net)
 
     netadr_to_sockadr(&dest_net, &dest_addr);
 
-    int ret = sendto(net_socket, data, length, 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
+    int ret = wrap_sendto(net_socket, data, length, 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
 
     if (ret == -1)
     {

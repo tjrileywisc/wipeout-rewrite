@@ -21,8 +21,6 @@ ssize_t wrap_recvfrom(int sockfd, void *buf, size_t len, int flags,
     check_expected(len);
     check_expected(flags);
 
-    // TODO: something wrong with the memcpy call here, need
-    // one more argument
     // Optionally check or set addr and addrlen if relevant
     if (src_addr != NULL && addrlen != NULL) {
         memcpy(src_addr, mock_ptr_type(struct sockaddr *), sizeof(struct sockaddr));
@@ -35,4 +33,18 @@ ssize_t wrap_recvfrom(int sockfd, void *buf, size_t len, int flags,
     memcpy(buf, data, data_len < len ? data_len : len);
 
     return (ssize_t)mock_type(int); // number of bytes to return
+}
+
+ssize_t wrap_sendto(int sockfd, const void *buf, size_t len, int flags,
+                    const struct sockaddr *dest_addr, socklen_t addrlen) {
+    check_expected(sockfd);
+    check_expected(len);
+    check_expected(flags);
+
+    // Optionally check or set dest_addr and addrlen if relevant
+    if (dest_addr != NULL && addrlen > 0) {
+        memcpy((void *)dest_addr, mock_ptr_type(struct sockaddr *), sizeof(struct sockaddr));
+    }
+
+    return (ssize_t)mock_type(int); // number of bytes sent
 }

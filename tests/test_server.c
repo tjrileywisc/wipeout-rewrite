@@ -32,6 +32,13 @@ void empties_queue_after_process(void**) {
     will_return(wrap_recvfrom, mock_data);         // for buf content
     will_return(wrap_recvfrom, strlen(mock_data)); // return value
 
+    expect_value(wrap_sendto, sockfd, 3);
+    expect_value(wrap_sendto, len, strlen(mock_data));
+    expect_value(wrap_sendto, flags, 0);
+    will_return(wrap_sendto, &mock_addr);        // for dest_addr
+    will_return(wrap_sendto, mock_addr_len);     // for addrlen
+    will_return(wrap_sendto, strlen(mock_data)); // return value
+
     network_set_bound_ip_socket(3); // Set the socket descriptor
 
     network_get_packet();
