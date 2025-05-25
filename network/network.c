@@ -26,7 +26,6 @@
 #include <unistd.h>
 #include <ifaddrs.h>
 
-#define INVALID_SOCKET -1
 #endif
 
 #include <ServerInfo.pb-c.h>

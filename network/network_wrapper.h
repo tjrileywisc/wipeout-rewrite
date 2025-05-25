@@ -4,6 +4,7 @@
 #include <WinSock2.h>
 #include "win_defines.h"
 #else
+#include <sys/socket.h>
 #endif
 
 ssize_t wrap_recvfrom(int sockfd, void *buf, size_t len, int flags,

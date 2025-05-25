@@ -8,6 +8,7 @@
 #include <win_defines.h>
 #else
 #include <sys/socket.h>
+#define INVALID_SOCKET -1
 #endif
 
 static int WIPEOUT_PORT = 8000;
