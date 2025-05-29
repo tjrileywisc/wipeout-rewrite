@@ -23,7 +23,7 @@ atomic_bool network_discovery_on = false;
 
 thrd_t network_discovery_thread;
 
-void client_init() {
+void server_com_client_init() {
 
     char my_ip[INET_ADDRSTRLEN];
     network_get_my_ip(my_ip, INET_ADDRSTRLEN);

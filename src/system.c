@@ -19,7 +19,7 @@ void system_init(void) {
 	time_real = platform_now();
 	input_init();
 	render_init(platform_screen_size());
-	client_init();
+	server_com_client_init();
 	game_init();
 }
 

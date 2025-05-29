@@ -6,7 +6,7 @@ client communication to server(s),
 including server discovery
 */
 
-void client_init();
+void server_com_client_init();
 
 void server_com_init_network_discovery();
 
