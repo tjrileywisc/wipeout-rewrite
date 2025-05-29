@@ -185,7 +185,7 @@ bool network_bind_ip_socket(int sockfd, char *ip_addr)
 
     getaddrinfo(NULL, SERVER_PORT, &hints, &res);
 
-    if (bind(socket, res->ai_addr, res->ai_addrlen) == -1)
+    if (bind(sockfd, res->ai_addr, res->ai_addrlen) == -1)
     {
         printf("couldn't bind address and port: %s\n", network_get_last_error());
         return false;
