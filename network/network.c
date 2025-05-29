@@ -173,20 +173,25 @@ int network_get_socket(void) {
 }
 
 // attempt to open network connection
-bool network_bind_ip_socket(int socket, char *ip_addr, int port)
+bool network_bind_ip_socket(int socket, char *ip_addr)
 {
-    struct sockaddr_in address;
+    struct addrinfo hints;
+    struct addrinfo* res;
 
-    string_to_socket_addr(ip_addr, (struct sockaddr *)&address);
+    memset(&hints, 0, sizeof hints);
+    hints.ai_family = AF_INET;
+    hints.ai_family = SOCK_DGRAM;
+    hints.ai_flags = AI_PASSIVE;
 
-    address.sin_port = htons((short)port);
-    address.sin_family = AF_INET;
+    getaddrinfo(NULL, SERVER_PORT, &hints, &res);
 
-    if (bind(socket, (void *)&address, sizeof(address)) == -1)
+    if (bind(socket, res->ai_addr, res->ai_addrlen) == -1)
     {
         printf("couldn't bind address and port: %s\n", network_get_last_error());
         return false;
     }
+
+    strncpy(ip_addr, inet_ntoa(((struct sockaddr_in*)res->ai_addr)->sin_addr), INET_ADDRSTRLEN);
 
     return true;
 }
@@ -218,7 +223,6 @@ void network_close_socket(int sockfd) {
 
 void network_bind_ip(void) {
     char address[INET_ADDRSTRLEN];
-    network_get_my_ip(address, INET_ADDRSTRLEN);
 
     int sockfd = network_get_socket();
     if (sockfd == INVALID_SOCKET)
@@ -227,7 +231,7 @@ void network_bind_ip(void) {
         return;
     }
 
-    bool res = network_bind_ip_socket(sockfd, address, WIPEOUT_PORT);
+    bool res = network_bind_ip_socket(sockfd, address);
 
     if (res)
     {
