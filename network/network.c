@@ -173,14 +173,14 @@ int network_get_socket(void) {
 }
 
 // attempt to open network connection
-bool network_bind_ip_socket(int socket, char *ip_addr)
+bool network_bind_ip_socket(int sockfd, char *ip_addr)
 {
     struct addrinfo hints;
     struct addrinfo* res;
 
     memset(&hints, 0, sizeof hints);
     hints.ai_family = AF_INET;
-    hints.ai_family = SOCK_DGRAM;
+    hints.ai_socktype = SOCK_DGRAM;
     hints.ai_flags = AI_PASSIVE;
 
     getaddrinfo(NULL, SERVER_PORT, &hints, &res);
