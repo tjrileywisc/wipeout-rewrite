@@ -205,8 +205,18 @@ int network_get_bound_ip_socket(void) {
     return ip_socket; 
 }
 
-void network_bind_ip(void)
-{
+void network_close_socket(int sockfd) {
+    if(sockfd == INVALID_SOCKET) {
+        return;
+    }
+#if defined(WIN32)
+    closesocket(sockfd);
+#else
+    close(sockfd);
+#endif
+}
+
+void network_bind_ip(void) {
     char address[INET_ADDRSTRLEN];
     network_get_my_ip(address, INET_ADDRSTRLEN);
 
@@ -226,11 +236,7 @@ void network_bind_ip(void)
     }
     perror("could not establish network connection... quitting.\n");
 
-#if defined(WIN32)
-    closesocket(sockfd);
-#else
-    close(sockfd);
-#endif
+    network_close_socket(sockfd);
 }
 
 void network_connect_ip(const char* addr)
@@ -251,34 +257,30 @@ void network_connect_ip(const char* addr)
 
     // loop through all the results and connect to the first we can
     for(struct addrinfo* p = servinfo; p != NULL; p = p->ai_next) {
-        if ((ip_socket = socket(p->ai_family, p->ai_socktype,
+
+        int sockfd = INVALID_SOCKET;
+        // TODO: should use network_get_socket() here,
+        // since it's cross platform
+        if ((sockfd = socket(p->ai_family, p->ai_socktype,
                 p->ai_protocol)) == -1) {
             perror("client: socket");
             continue;
         }
 
+        // TODO:
+        // bind or connect?
         if (connect(ip_socket, p->ai_addr, p->ai_addrlen) == -1) {
-            //close(ip_socket);
+            network_close_socket(sockfd);
             perror("client: connect");
             continue;
         }
+
+        ip_socket = sockfd;
 
         break;
     }
 
     freeaddrinfo(servinfo);
-}
-
-void network_close_connection(void)
-{
-    // TODO: how to confirm it's an open socket?
-    if(ip_socket > 0) {
-#if defined(WIN32)
-        closesocket(ip_socket);
-#else
-        close(ip_socket);
-#endif
-    }
 }
 
 static void network_add_msg_queue_item(const char *buf, int numbytes, const struct sockaddr_storage *their_addr) {
@@ -415,23 +417,19 @@ void network_get_my_ip(char *subnet, size_t len) {
     dest.sin_port = htons(53); // DNS
     inet_pton(AF_INET, "8.8.8.8", &dest.sin_addr);
 
-    int sock = network_get_socket();
-    if(sock == -1) {
+    int sockfd = network_get_socket();
+    if(sockfd == -1) {
         perror("[-] Error creating socket");
         return;
     }
 
-    connect(sock, (struct sockaddr *)&dest, sizeof(dest));
+    connect(sockfd, (struct sockaddr *)&dest, sizeof(dest));
 
     struct sockaddr_in local;
     len = sizeof(local);
-    getsockname(sock, (struct sockaddr *)&local, &len);
+    getsockname(sockfd, (struct sockaddr *)&local, &len);
 
     strncpy(subnet, inet_ntoa(local.sin_addr), len);
 
-    #if defined(WIN32)
-        closesocket(sock);
-    #else
-        close(sock);
-    #endif
+    network_close_socket(sockfd);
 }

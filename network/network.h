@@ -47,9 +47,16 @@ int network_get_bound_ip_socket(void);
  * is non-blocking and broadcastable. If a socket
  * could not be created, -1 is returned.
  * 
- * @return int 
+ * @return int the socket fd
  */
 int network_get_socket(void);
+
+/**
+ * @brief Close a socket
+ * 
+ * @param sockfd the socket fd
+ */
+void network_close_socket(int sockfd);
 
 /**
  * @brief Bind to a port for running in a
@@ -62,8 +69,6 @@ void network_bind_ip(void);
  * in a client context
  */
 void network_connect_ip(const char* addr);
-
-void network_close_connection(void);
 
 bool network_get_packet(void);
 
