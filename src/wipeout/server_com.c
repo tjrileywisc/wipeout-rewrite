@@ -33,36 +33,6 @@ void server_com_client_init() {
 /**
  * @brief Run network discovery to find servers
  */
-static int page_network_query(void*) {
-
-	if(!network_discovery_on) {
-		return 0;
-	}
-
-	if(!network_has_bound_ip_socket()) {
-		return 0;
-	}
-
-	// TODO: should spend 30 seconds trying to find servers
-	// on the current interface (LAN + localhost, or internet)
-
-	netadr_t dest;
-	string_to_addr("localhost", &dest);
-	dest.port = htons(WIPEOUT_PORT);
-
-	const char* data = "hello";
-	network_send_packet(CLIENT, strlen(data), data, dest);
-
-	if(network_sleep(1000) > 0) {
-		network_get_packet();
-	}
-
-	return 0;
-}
-
-/**
- * @brief Run network discovery to find servers
- */
 static int server_com_network_discovery() {
 
     if(!network_discovery_on) {
