@@ -245,7 +245,7 @@ void network_connect_ip(const char* addr)
     struct addrinfo* servinfo;
     
     memset(&hints, 0, sizeof hints);
-    hints.ai_family = AF_UNSPEC;
+    hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_DGRAM;
 
     int ret;
