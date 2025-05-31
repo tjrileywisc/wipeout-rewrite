@@ -1,6 +1,8 @@
 #include <network.h>
 #include <client.h>
 
+#include "utils.h"
+
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -51,4 +53,7 @@ void empties_queue_after_process(void**) {
 
     queue_size = network_get_msg_queue_size();
     assert_int_equal(queue_size, 0);
+
+    // cleanup
+    network_test_cleanup();
 }

@@ -3,6 +3,8 @@
 #include <network.h>
 #include <network_wrapper.h>
 
+#include "utils.h"
+
 #include <errno.h>
 #if defined(WIN32)
 #include <ws2ipdef.h>
@@ -15,6 +17,7 @@
 #include <stdint.h>
 #include <setjmp.h>
 #include <cmocka.h>
+
 
 void test_network_get_packet(void** state) {
     (void)state; // unused
@@ -41,6 +44,9 @@ void test_network_get_packet(void** state) {
     // check message queue, should have one item
     int queue_size = network_get_msg_queue_size();
     assert_int_equal(queue_size, 1);
+
+    // cleanup
+    network_test_cleanup();
 }
 
 void test_network_get_packet_no_data(void**) {
@@ -66,6 +72,9 @@ void test_network_get_packet_no_data(void**) {
     // check message queue, should still be empty
     int queue_size = network_get_msg_queue_size();
     assert_int_equal(queue_size, 0);
+
+    // cleanup
+    network_test_cleanup();
 }
 
 void test_network_get_local_subnet(void** state) {
@@ -81,4 +90,7 @@ void test_network_get_local_subnet(void** state) {
     // for this client
     int sockfd = network_get_bound_ip_socket();
     assert_int_equal(sockfd, INVALID_SOCKET);
+
+    // cleanup
+    network_test_cleanup();
 }
