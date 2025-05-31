@@ -12,6 +12,8 @@
 #endif
 
 static int WIPEOUT_PORT = 8000;
+static int WIPEOUT_CLIENT_PORT = 8001;
+static int CLIENT_SOCKET_TIMEOUT = 3000; // 3 seconds
 
 typedef struct {
     const char* command;
@@ -42,14 +44,13 @@ void network_set_bound_ip_socket(int sockfd);
 int network_get_bound_ip_socket(void);
 
 /**
- * @brief Gets a socket for network communication;
- * this UDP socket is not yet bound to an address, and
- * is non-blocking and broadcastable. If a socket
- * could not be created, -1 is returned.
+ * @brief Get a client socket for sending and receiving packets
+ * 
+ * Returns -1 (INVALID_SOCKET) if the socket could not be created
  * 
  * @return int the socket fd
  */
-int network_get_socket(void);
+int network_get_client_socket(void);
 
 /**
  * @brief Close a socket

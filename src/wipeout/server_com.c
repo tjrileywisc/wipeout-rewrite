@@ -26,6 +26,9 @@
 atomic_bool network_discovery_on = false;
 
 thrd_t network_discovery_thread;
+thrd_t network_discovery_response_thread;
+
+static int DISCOVERY_TIMEOUT = 30; // seconds
 
 void server_com_client_init() {
 
@@ -35,35 +38,68 @@ void server_com_client_init() {
 }
 
 /**
- * @brief Run network discovery to find servers
+ * @brief since we're connecting over UDP, need to have a thread running
+ * separately to listen for discovery responses so we don't miss any
  */
-static int server_com_network_discovery() {
+static int server_com_discovery_response(void* arg) {
+    (void)arg; // unused
 
-    int BAD_RESULT = 0;
-    int GOOD_RESULT = 1;
+    int sockfd = network_get_client_socket();
 
-    if(!network_discovery_on) {
-		return BAD_RESULT;
-	}
+    struct sockaddr_in from;
+    socklen_t fromlen = sizeof(from);
+    char buffer[1024];
 
-    int sockfd = network_get_socket();
-    if (sockfd == INVALID_SOCKET) {
-        perror("[-] Error creating socket");
-        return BAD_RESULT;
+    time_t start_time = time(NULL);
+
+    while (1) {
+
+        while(!network_discovery_on) {
+            thrd_yield(); // wait until discovery is enabled
+        }
+
+        if(time(NULL) - start_time > DISCOVERY_TIMEOUT) {
+            printf("No responses received in %d seconds, stopping discovery.\n", DISCOVERY_TIMEOUT);
+            network_discovery_on = false; // stop listening
+            continue;
+        }
+
+        ssize_t len = recvfrom(sockfd, buffer, sizeof(buffer)-1, 0,
+                               (struct sockaddr*)&from, &fromlen);
+
+        // TODO: how do we need to handle recvfrom timeouts and errors?
+        // if (len < 0) {
+        //     if (errno == EWOULDBLOCK || errno == EAGAIN) {
+        //         printf("Timeout reached.\n");
+        //         break;
+        //     } else {
+        //         perror("recvfrom");
+        //         break;
+        //     }
+        // }
+
+        if (len > 0) {
+            buffer[len] = '\0';
+            printf("Received from %s: %s\n", inet_ntoa(from.sin_addr), buffer);
+        }
     }
 
-    // Set receive timeout
-    struct timeval timeout;
-    timeout.tv_sec = 3;
-    timeout.tv_usec = 0;
-    setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+    return 1;
+}
+
+/**
+ * @brief Run network discovery to find servers
+ */
+static int server_com_network_discovery(void* arg) {
+    (void)arg; // unused
+
+    int sockfd = network_get_client_socket();
 
     // Send broadcast to all interfaces
     struct ifaddrs *ifaddr = NULL;
     if (getifaddrs(&ifaddr) == -1) {
         perror("getifaddrs");
-        network_close_socket(sockfd);
-        return BAD_RESULT;
+        return 0;
     }
 
     // check multiple interfaces, since we don't know if the user
@@ -96,40 +132,23 @@ static int server_com_network_discovery() {
             (struct sockaddr *)&baddr, sizeof(baddr));
 
         printf("[*] Broadcast packet sent. Waiting for replies...\n");
+        // tell receiver thread to start listening
+        network_discovery_on = true;
     }
 
     freeifaddrs(ifaddr);
 
-    static int BUF_SIZE = 10;
-    char buffer[BUF_SIZE];
-    while (1) {
-        struct sockaddr_in sender;
-        socklen_t sender_len = sizeof(sender);
-        ssize_t n = wrap_recvfrom(sockfd, buffer, BUF_SIZE - 1, 0,
-                            (struct sockaddr *)&sender, &sender_len);
-
-        if (n < 0) {
-            if (errno == EWOULDBLOCK || errno == EAGAIN) {
-                printf("Timeout reached.\n");
-                break;
-            } else {
-                perror("recvfrom");
-                break;
-            }
-        }
-
-        buffer[n] = '\0';
-        printf("[+] Response from %s:%d: %s\n",
-            inet_ntoa(sender.sin_addr), ntohs(sender.sin_port), buffer);
-    }
-
-    network_close_socket(sockfd);
-
-    return GOOD_RESULT;
+    return 1;
 }
 
 void server_com_init_network_discovery() {
-    network_discovery_on = true;
+
+    network_get_client_socket();
+
+    // immediately make us ready to get responses before we start broadcasting
+    thrd_create(&network_discovery_response_thread, (thrd_start_t)server_com_discovery_response, NULL);
+    thrd_detach(network_discovery_response_thread);
+
     thrd_create(&network_discovery_thread, (thrd_start_t)server_com_network_discovery, NULL);
     thrd_detach(network_discovery_thread);
 }
@@ -137,4 +156,5 @@ void server_com_init_network_discovery() {
 void server_com_halt_network_discovery() {
     network_discovery_on = false;
     thrd_join(network_discovery_thread, NULL);
+    thrd_join(network_discovery_response_thread, NULL);
 }

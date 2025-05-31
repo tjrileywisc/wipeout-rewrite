@@ -40,7 +40,7 @@ static bool winsock_initialized = false;
 static msg_queue_item_t msg_queue[10];
 static int msg_queue_size = 0;
 
-static int ip_socket = INVALID_SOCKET;
+static int client_sockfd = INVALID_SOCKET;
 
 static const char *network_get_last_error(void)
 {
@@ -90,11 +90,11 @@ static bool system_get_packet(netadr_t *net_from, msg_t *net_msg)
 {
     struct sockaddr_in from;
 
-    if (!ip_socket)
+    if (!client_sockfd)
         return false;
 
-    int fromlen = sizeof(from);
-    int ret = wrap_recvfrom(ip_socket, net_msg->data, net_msg->maxsize, 0, (struct sockaddr *)&from, &fromlen);
+    unsigned int fromlen = sizeof(from);
+    int ret = wrap_recvfrom(client_sockfd, net_msg->data, net_msg->maxsize, 0, (struct sockaddr *)&from, &fromlen);
 
     sockadr_to_netadr(&from, net_from);
     net_msg->readcount = 0;
@@ -120,7 +120,11 @@ static bool system_get_packet(netadr_t *net_from, msg_t *net_msg)
     return true;
 }
 
-int network_get_socket(void) {
+int network_get_client_socket(void) {
+
+    if(client_sockfd != INVALID_SOCKET) {
+        return client_sockfd;
+    }
 
 #if defined(WIN32)
     if(!winsock_initialized) {
@@ -139,32 +143,59 @@ int network_get_socket(void) {
     int new_socket = INVALID_SOCKET;
 #endif
 
-    bool _true = true;
-    int i = 1;
+    // first, load up address structs with getaddrinfo():
 
-    if ((new_socket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) ==
+    struct addrinfo hints, *res;
+    memset(&hints, 0, sizeof hints);
+    hints.ai_family = AF_INET;  // use IPv4 or IPv6, whichever
+    hints.ai_socktype = SOCK_DGRAM;
+    hints.ai_flags = AI_PASSIVE;     // fill in my IP for me
+
+    getaddrinfo(NULL, "8001", &hints, &res);
+
+    if ((new_socket = socket(res->ai_family, res->ai_socktype, res->ai_protocol)) ==
         INVALID_SOCKET) {
         printf("unable to open socket: %s\n", network_get_last_error());
         return INVALID_SOCKET;
     }
 
-    // TODO: should close the socket if it fails
+    if(bind(new_socket, res->ai_addr, res->ai_addrlen) == -1) {
+        printf("unable to bind socket: %s\n", network_get_last_error());
+        network_close_socket(new_socket);
+        return INVALID_SOCKET;
+    }
+
 #if defined(WIN32)
     if (ioctlsocket(new_socket, FIONBIO, &_true) == -1) {
 #else
+    bool _true = true;
     if (ioctl(new_socket, FIONBIO, &_true) == -1) {
 #endif
         printf("can't make socket non-blocking: %s\n",
                network_get_last_error());
+
+        network_close_socket(new_socket);
         return INVALID_SOCKET;
     }
 
+    int i = 1;
     if (setsockopt(new_socket, SOL_SOCKET, SO_BROADCAST, (char *)&i,
                    sizeof(i)) == -1) {
         printf("can't make socket broadcastable: %s\n",
                network_get_last_error());
+        network_close_socket(new_socket);
         return INVALID_SOCKET;
     }
+
+    
+    // Set receive timeout
+    // TODO: can this fail?
+    struct timeval timeout;
+    timeout.tv_sec = CLIENT_SOCKET_TIMEOUT / 1000; // convert milliseconds to seconds
+    timeout.tv_usec = 0;
+    setsockopt(new_socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+
+    client_sockfd = new_socket;
 
     return new_socket;
 }
@@ -195,16 +226,16 @@ bool network_bind_ip_socket(int sockfd, char *ip_addr)
 
 bool network_has_bound_ip_socket(void)
 {
-    return ip_socket;
+    return client_sockfd;
 }
 
 void network_set_bound_ip_socket(int sockfd)
 {
-    ip_socket = sockfd;
+    client_sockfd = sockfd;
 }
 
 int network_get_bound_ip_socket(void) { 
-    return ip_socket; 
+    return client_sockfd; 
 }
 
 void network_close_socket(int sockfd) {
@@ -221,7 +252,7 @@ void network_close_socket(int sockfd) {
 void network_bind_ip(void) {
     char address[INET_ADDRSTRLEN];
 
-    int sockfd = network_get_socket();
+    int sockfd = network_get_client_socket();
     if (sockfd == INVALID_SOCKET)
     {
         perror("could not create socket... quitting.\n");
@@ -262,7 +293,7 @@ void network_connect_ip(const char* addr)
     for(struct addrinfo* p = servinfo; p != NULL; p = p->ai_next) {
 
         int sockfd = INVALID_SOCKET;
-        // TODO: should use network_get_socket() here,
+        // TODO: should use network_get_client_socket() here,
         // since it's cross platform
         if ((sockfd = socket(p->ai_family, p->ai_socktype,
                 p->ai_protocol)) == -1) {
@@ -272,13 +303,13 @@ void network_connect_ip(const char* addr)
 
         // TODO:
         // bind or connect?
-        if (connect(ip_socket, p->ai_addr, p->ai_addrlen) == -1) {
+        if (connect(client_sockfd, p->ai_addr, p->ai_addrlen) == -1) {
             network_close_socket(sockfd);
             perror("client: connect");
             continue;
         }
 
-        ip_socket = sockfd;
+        client_sockfd = sockfd;
 
         break;
     }
@@ -344,7 +375,7 @@ bool network_get_packet()
 
     char s[INET_ADDRSTRLEN];
 
-    if ((numbytes = wrap_recvfrom(ip_socket, buf, MAXBUFLEN-1 , 0,
+    if ((numbytes = wrap_recvfrom(client_sockfd, buf, MAXBUFLEN-1 , 0,
         (struct sockaddr *)&their_addr, &addr_len)) == -1) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
             // No data available right now, not a fatal error
@@ -402,15 +433,15 @@ int network_sleep(int msec)
     struct timeval timeout;
     fd_set fdset;
 
-    if (!ip_socket) {
+    if (!client_sockfd) {
         return 0;
     }
 
     FD_ZERO(&fdset);
-    FD_SET(ip_socket, &fdset); // network socket
+    FD_SET(client_sockfd, &fdset); // network socket
     timeout.tv_sec = msec / 1000;
     timeout.tv_usec = (msec % 1000) * 1000;
-    return select(ip_socket + 1, &fdset, NULL, NULL, &timeout);
+    return select(client_sockfd + 1, &fdset, NULL, NULL, &timeout);
 }
 
 void network_get_my_ip(char *subnet, size_t len) {
@@ -420,8 +451,8 @@ void network_get_my_ip(char *subnet, size_t len) {
     dest.sin_port = htons(53); // DNS
     inet_pton(AF_INET, "8.8.8.8", &dest.sin_addr);
 
-    int sockfd = network_get_socket();
-    if(sockfd == -1) {
+    int sockfd = network_get_client_socket();
+    if(sockfd == INVALID_SOCKET) {
         perror("[-] Error creating socket");
         return;
     }
