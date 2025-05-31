@@ -236,8 +236,10 @@ void network_bind_ip(void) {
     if (res)
     {
         printf("established connection at %s:%d\n", address, WIPEOUT_PORT);
+        network_set_bound_ip_socket(sockfd);
         return;
     }
+
     perror("could not establish network connection... quitting.\n");
 
     network_close_socket(sockfd);
