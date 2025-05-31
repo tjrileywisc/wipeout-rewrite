@@ -201,7 +201,7 @@ int network_get_client_socket(void) {
 }
 
 // attempt to open network connection
-bool network_bind_ip_socket(int sockfd, char *ip_addr)
+bool network_bind_socket(int sockfd, char *ip_addr)
 {
     struct addrinfo hints;
     struct addrinfo* res;
@@ -259,7 +259,7 @@ void network_bind_ip(void) {
         return;
     }
 
-    bool res = network_bind_ip_socket(sockfd, address);
+    bool res = network_bind_socket(sockfd, address);
 
     if (res)
     {
