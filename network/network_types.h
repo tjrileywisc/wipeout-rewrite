@@ -25,5 +25,5 @@ typedef struct {
 
 typedef enum {
     CLIENT,
-    SERVER
-} netsrc_t;
+    SERVER,
+} network_role_t;
