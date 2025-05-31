@@ -72,7 +72,15 @@ void network_connect_ip(const char* addr);
 
 bool network_get_packet(void);
 
-void network_send_packet(netsrc_t sock, int length, const void* data, netadr_t dest_net);
+/**
+ * @brief Send a packet of data to a specific destination
+ * 
+ * @param sockfd the socket file descriptor
+ * @param length the length of the data to send
+ * @param data the data to send
+ * @param dest_net the destination netadr_t
+ */
+void network_send_packet(int sockfd, int length, const void* data, netadr_t dest_net);
 
 /**
  * @brief Send a command to the server or to a client

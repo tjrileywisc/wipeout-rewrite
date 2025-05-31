@@ -65,23 +65,20 @@ static const char *network_get_last_error(void)
 #endif
 }
 
-
-// perhaps a platform specific interface to send a packet? it's really sent here
-static void system_send_packet(int length, const void *data, netadr_t dest_net)
+static void system_send_packet(int sockfd, int length, const void *data, netadr_t dest_net)
 {
 
-    if (!ip_socket)
+    if(sockfd == INVALID_SOCKET)
     {
-        printf("ip connection hasn't been established...");
+        printf("unable to get socket for sending packet: %s\n", network_get_last_error());
         return;
     }
 
-    int net_socket = ip_socket;
     struct sockaddr_in dest_addr;
 
     netadr_to_sockadr(&dest_net, &dest_addr);
 
-    int ret = wrap_sendto(net_socket, data, length, 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
+    int ret = wrap_sendto(sockfd, data, length, 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
 
     if (ret == -1)
     {
@@ -373,15 +370,15 @@ bool network_get_packet()
     return true;
 }
 
-void network_send_packet(netsrc_t sock, int length, const void *data, netadr_t dest_net)
+void network_send_packet(int sockfd, int length, const void *data, netadr_t dest_net)
 {
-    system_send_packet(length, data, dest_net);
+    system_send_packet(sockfd, length, data, dest_net);
 }
 
 void network_send_command(const char *command, netadr_t dest)
 {
     if(strcmp(command, "server_info") == 0) {
-        network_send_packet(ip_socket, strlen(command), "server_info", dest);
+        network_send_packet(network_get_bound_ip_socket(), strlen(command), "server_info", dest);
     }
 }
 
