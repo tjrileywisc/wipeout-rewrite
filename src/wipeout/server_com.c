@@ -13,6 +13,10 @@
 #include <arpa/inet.h>
 #endif
 
+#include <errno.h>
+#include <net/if.h>
+#include <sys/ioctl.h>
+#include <ifaddrs.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -35,50 +39,66 @@ void server_com_client_init() {
  */
 static int server_com_network_discovery() {
 
+    int BAD_RESULT = 0;
+    int GOOD_RESULT = 1;
+
     if(!network_discovery_on) {
-		return 0;
+		return BAD_RESULT;
 	}
 
     int sockfd = network_get_socket();
     if (sockfd == INVALID_SOCKET) {
         perror("[-] Error creating socket");
-        return 0;
+        return BAD_RESULT;
     }
 
     // Set receive timeout
     struct timeval timeout;
-    timeout.tv_sec = 30;
+    timeout.tv_sec = 3;
     timeout.tv_usec = 0;
-    if(setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) != 0) {
-        perror("[-] Error setting socket timeout");
-        return 0;
+    setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+
+    // Send broadcast to all interfaces
+    struct ifaddrs *ifaddr = NULL;
+    if (getifaddrs(&ifaddr) == -1) {
+        perror("getifaddrs");
+        network_close_socket(sockfd);
+        return BAD_RESULT;
     }
 
-    struct sockaddr_in broadcast_addr;
-    memset(&broadcast_addr, 0, sizeof(broadcast_addr));
-    broadcast_addr.sin_family = AF_INET;
-    broadcast_addr.sin_port = htons(WIPEOUT_PORT);
-    char my_ip[INET_ADDRSTRLEN];
-    network_get_my_ip(my_ip, INET_ADDRSTRLEN);
+    // check multiple interfaces, since we don't know if the user
+    // has ethernet or wifi but they probably call it their LAN
+    struct ifaddrs *ifa;
+    struct ifreq ifr;
+    for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
+        if (!ifa->ifa_addr || ifa->ifa_addr->sa_family != AF_INET)
+            continue;
 
-    char broadcast_ip[INET_ADDRSTRLEN];
-    char* last_dot = strrchr(my_ip, '.');
-    if (last_dot != NULL) {
-        strncpy(broadcast_ip, my_ip, last_dot - my_ip);
-        broadcast_ip[last_dot - my_ip] = '\0';
-        strcat(broadcast_ip, ".255");
-    } else {
-        fprintf(stderr, "[-] Invalid ip format.\n");
-        return 0;
+        // Skip loopback and non-broadcast interfaces
+        if ((ifa->ifa_flags & IFF_LOOPBACK) || !(ifa->ifa_flags & IFF_BROADCAST))
+            continue;
+
+        // Prepare ioctl request
+        memset(&ifr, 0, sizeof(ifr));
+        strncpy(ifr.ifr_name, ifa->ifa_name, IFNAMSIZ - 1);
+
+        if (ioctl(sockfd, SIOCGIFBRDADDR, &ifr) < 0) {
+            perror("ioctl SIOCGIFBRDADDR");
+            continue;
+        }
+
+        struct sockaddr_in baddr;
+        memcpy(&baddr, &ifr.ifr_broadaddr, sizeof(baddr));
+        baddr.sin_port = htons(WIPEOUT_PORT);
+
+        const char *message = "hello";
+        wrap_sendto(sockfd, message, strlen(message), 0,
+            (struct sockaddr *)&baddr, sizeof(baddr));
+
+        printf("[*] Broadcast packet sent. Waiting for replies...\n");
     }
 
-    inet_pton(AF_INET, broadcast_ip, &broadcast_addr.sin_addr);
-
-    const char *message = "hello";
-    wrap_sendto(sockfd, message, strlen(message), 0,
-           (struct sockaddr *)&broadcast_addr, sizeof(broadcast_addr));
-
-    printf("[*] Broadcast packet sent. Waiting for replies...\n");
+    freeifaddrs(ifaddr);
 
     static int BUF_SIZE = 10;
     char buffer[BUF_SIZE];
@@ -86,19 +106,26 @@ static int server_com_network_discovery() {
         struct sockaddr_in sender;
         socklen_t sender_len = sizeof(sender);
         ssize_t n = wrap_recvfrom(sockfd, buffer, BUF_SIZE - 1, 0,
-                             (struct sockaddr *)&sender, &sender_len);
+                            (struct sockaddr *)&sender, &sender_len);
 
         if (n < 0) {
-            printf("[-] Timeout reached. No more responses.\n");
-            break;
+            if (errno == EWOULDBLOCK || errno == EAGAIN) {
+                printf("Timeout reached.\n");
+                break;
+            } else {
+                perror("recvfrom");
+                break;
+            }
         }
 
         buffer[n] = '\0';
         printf("[+] Response from %s:%d: %s\n",
-               inet_ntoa(sender.sin_addr), ntohs(sender.sin_port), buffer);
+            inet_ntoa(sender.sin_addr), ntohs(sender.sin_port), buffer);
     }
 
-    return 1;
+    network_close_socket(sockfd);
+
+    return GOOD_RESULT;
 }
 
 void server_com_init_network_discovery() {
