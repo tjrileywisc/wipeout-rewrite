@@ -188,6 +188,12 @@ int network_get_client_socket(void) {
 
 bool network_bind_socket(int sockfd, char *ip_addr, char* port)
 {
+    if(client_sockfd != INVALID_SOCKET)
+    {
+        printf("socket already bound, cannot bind again\n");
+        return true;
+    }
+
     if(sockfd == INVALID_SOCKET)
     {
         printf("could not create socket: %s\n", network_get_last_error());
@@ -215,7 +221,7 @@ bool network_bind_socket(int sockfd, char *ip_addr, char* port)
     inet_ntop(AF_INET, &(addr->sin_addr), ipstr, sizeof(ipstr));
 
     printf("established connection at %s:%s\n", ipstr, port);
-    //network_set_bound_ip_socket(sockfd);
+    network_set_bound_ip_socket(sockfd);
 
     return true;
 }
@@ -363,8 +369,9 @@ int network_sleep(int msec)
     struct timeval timeout;
     fd_set fdset;
 
-    if (!client_sockfd) {
-        return 0;
+    if(!network_has_bound_ip_socket()) {
+        printf("no socket bound, nothing to wait for\n");
+        return 0; // no socket bound, nothing to wait for
     }
 
     FD_ZERO(&fdset);
