@@ -53,23 +53,22 @@ int network_get_bound_ip_socket(void);
 int network_get_client_socket(void);
 
 /**
- * @brief Close a socket
+ * @brief Close a socket. The socket fd will be set to INVALID_SOCKET
+ * on close.
  * 
- * @param sockfd the socket fd
+ * @param sockfd a pointer to the socket fd
  */
-void network_close_socket(int sockfd);
+void network_close_socket(int* sockfd);
 
 /**
- * @brief Bind to a port for running in a
- * server context
+ * @brief Bind a socket to a specific IP address and port to
+ * listen for incoming packets.
+ * 
+ * @param sockfd the socket file descriptor
+ * @param ip_addr the IP address to bind to
+ * @param port the port to bind to
  */
-void network_bind_ip(void);
-
-/**
- * @brief Connect to any port for running
- * in a client context
- */
-void network_connect_ip(const char* addr);
+bool network_bind_socket(int sockfd, char *ip_addr, char* port);
 
 bool network_get_packet(void);
 

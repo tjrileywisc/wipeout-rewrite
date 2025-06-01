@@ -30,11 +30,10 @@ thrd_t network_discovery_response_thread;
 
 static int DISCOVERY_TIMEOUT = 30; // seconds
 
-void server_com_client_init() {
+static int sockfd = INVALID_SOCKET;
 
-    char my_ip[INET_ADDRSTRLEN];
-    network_get_my_ip(my_ip, INET_ADDRSTRLEN);
-    network_connect_ip(my_ip);
+void server_com_client_init() {
+    // TODO
 }
 
 /**
@@ -43,8 +42,6 @@ void server_com_client_init() {
  */
 static int server_com_discovery_response(void* arg) {
     (void)arg; // unused
-
-    int sockfd = network_get_client_socket();
 
     struct sockaddr_in from;
     socklen_t fromlen = sizeof(from);
@@ -92,8 +89,6 @@ static int server_com_discovery_response(void* arg) {
  */
 static int server_com_network_discovery(void* arg) {
     (void)arg; // unused
-
-    int sockfd = network_get_client_socket();
 
     // Send broadcast to all interfaces
     struct ifaddrs *ifaddr = NULL;
@@ -143,7 +138,20 @@ static int server_com_network_discovery(void* arg) {
 
 void server_com_init_network_discovery() {
 
-    network_get_client_socket();
+    sockfd = network_get_client_socket();
+    if(sockfd == INVALID_SOCKET) {
+        printf("unable to create socket to run network discovery\n");
+        return;
+    }
+
+    char my_ip[INET_ADDRSTRLEN];
+    network_get_my_ip(my_ip, INET_ADDRSTRLEN);
+
+    if(!network_bind_socket(sockfd, my_ip, "8001")) {
+        printf("unable to bind socket for network discovery\n");
+        network_close_socket(&sockfd);
+        return;
+    }
 
     // immediately make us ready to get responses before we start broadcasting
     thrd_create(&network_discovery_response_thread, (thrd_start_t)server_com_discovery_response, NULL);

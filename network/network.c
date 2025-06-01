@@ -90,8 +90,9 @@ static bool system_get_packet(netadr_t *net_from, msg_t *net_msg)
 {
     struct sockaddr_in from;
 
-    if (!client_sockfd)
+    if (client_sockfd == INVALID_SOCKET) {
         return false;
+    }
 
     unsigned int fromlen = sizeof(from);
     int ret = wrap_recvfrom(client_sockfd, net_msg->data, net_msg->maxsize, 0, (struct sockaddr *)&from, &fromlen);
@@ -122,10 +123,6 @@ static bool system_get_packet(netadr_t *net_from, msg_t *net_msg)
 
 int network_get_client_socket(void) {
 
-    if(client_sockfd != INVALID_SOCKET) {
-        return client_sockfd;
-    }
-
 #if defined(WIN32)
     if(!winsock_initialized) {
         if ((WSAStartup(MAKEWORD(2, 2), &winsockdata) != 0)) {
@@ -143,25 +140,17 @@ int network_get_client_socket(void) {
     int new_socket = INVALID_SOCKET;
 #endif
 
-    // first, load up address structs with getaddrinfo():
-
     struct addrinfo hints, *res;
     memset(&hints, 0, sizeof hints);
-    hints.ai_family = AF_INET;  // use IPv4 or IPv6, whichever
+    hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_DGRAM;
     hints.ai_flags = AI_PASSIVE;     // fill in my IP for me
 
-    getaddrinfo(NULL, "8001", &hints, &res);
+    getaddrinfo(NULL, "8000", &hints, &res);
 
     if ((new_socket = socket(res->ai_family, res->ai_socktype, res->ai_protocol)) ==
         INVALID_SOCKET) {
         printf("unable to open socket: %s\n", network_get_last_error());
-        return INVALID_SOCKET;
-    }
-
-    if(bind(new_socket, res->ai_addr, res->ai_addrlen) == -1) {
-        printf("unable to bind socket: %s\n", network_get_last_error());
-        network_close_socket(new_socket);
         return INVALID_SOCKET;
     }
 
@@ -174,7 +163,7 @@ int network_get_client_socket(void) {
         printf("can't make socket non-blocking: %s\n",
                network_get_last_error());
 
-        network_close_socket(new_socket);
+        network_close_socket(&new_socket);
         return INVALID_SOCKET;
     }
 
@@ -183,11 +172,10 @@ int network_get_client_socket(void) {
                    sizeof(i)) == -1) {
         printf("can't make socket broadcastable: %s\n",
                network_get_last_error());
-        network_close_socket(new_socket);
+        network_close_socket(&new_socket);
         return INVALID_SOCKET;
     }
 
-    
     // Set receive timeout
     // TODO: can this fail?
     struct timeval timeout;
@@ -195,14 +183,17 @@ int network_get_client_socket(void) {
     timeout.tv_usec = 0;
     setsockopt(new_socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
 
-    client_sockfd = new_socket;
-
     return new_socket;
 }
 
-// attempt to open network connection
-bool network_bind_socket(int sockfd, char *ip_addr)
+bool network_bind_socket(int sockfd, char *ip_addr, char* port)
 {
+    if(sockfd == INVALID_SOCKET)
+    {
+        printf("could not create socket: %s\n", network_get_last_error());
+        return false;
+    }
+
     struct addrinfo hints;
     struct addrinfo* res;
 
@@ -211,7 +202,7 @@ bool network_bind_socket(int sockfd, char *ip_addr)
     hints.ai_socktype = SOCK_DGRAM;
     hints.ai_flags = AI_PASSIVE;
 
-    getaddrinfo(NULL, SERVER_PORT, &hints, &res);
+    getaddrinfo(NULL, port, &hints, &res);
 
     if (bind(sockfd, res->ai_addr, res->ai_addrlen) == -1)
     {
@@ -219,14 +210,15 @@ bool network_bind_socket(int sockfd, char *ip_addr)
         return false;
     }
 
-    strncpy(ip_addr, inet_ntoa(((struct sockaddr_in*)res->ai_addr)->sin_addr), INET_ADDRSTRLEN);
+    printf("established connection at %s:%s\n", ip_addr, port);
+    //network_set_bound_ip_socket(sockfd);
 
     return true;
 }
 
 bool network_has_bound_ip_socket(void)
 {
-    return client_sockfd;
+    return client_sockfd != INVALID_SOCKET;
 }
 
 void network_set_bound_ip_socket(int sockfd)
@@ -238,83 +230,17 @@ int network_get_bound_ip_socket(void) {
     return client_sockfd; 
 }
 
-void network_close_socket(int sockfd) {
-    if(sockfd == INVALID_SOCKET) {
+void network_close_socket(int* sockfd) {
+    if(*sockfd == INVALID_SOCKET) {
         return;
     }
 #if defined(WIN32)
-    closesocket(sockfd);
+    closesocket(*sockfd);
 #else
-    close(sockfd);
+    close(*sockfd);
 #endif
-}
 
-void network_bind_ip(void) {
-    char address[INET_ADDRSTRLEN];
-
-    int sockfd = network_get_client_socket();
-    if (sockfd == INVALID_SOCKET)
-    {
-        perror("could not create socket... quitting.\n");
-        return;
-    }
-
-    bool res = network_bind_socket(sockfd, address);
-
-    if (res)
-    {
-        printf("established connection at %s:%d\n", address, WIPEOUT_PORT);
-        network_set_bound_ip_socket(sockfd);
-        return;
-    }
-
-    perror("could not establish network connection... quitting.\n");
-
-    network_close_socket(sockfd);
-}
-
-void network_connect_ip(const char* addr)
-{
-    struct addrinfo hints;
-    struct addrinfo* servinfo;
-    
-    memset(&hints, 0, sizeof hints);
-    hints.ai_family = AF_INET;
-    hints.ai_socktype = SOCK_DGRAM;
-
-    int ret;
-
-    if((ret = getaddrinfo(addr, SERVER_PORT, &hints, &servinfo)) != 0) {
-        printf("getaddrinfo error: %s\n", network_get_last_error());
-        return;
-    }
-
-    // loop through all the results and connect to the first we can
-    for(struct addrinfo* p = servinfo; p != NULL; p = p->ai_next) {
-
-        int sockfd = INVALID_SOCKET;
-        // TODO: should use network_get_client_socket() here,
-        // since it's cross platform
-        if ((sockfd = socket(p->ai_family, p->ai_socktype,
-                p->ai_protocol)) == -1) {
-            perror("client: socket");
-            continue;
-        }
-
-        // TODO:
-        // bind or connect?
-        if (connect(client_sockfd, p->ai_addr, p->ai_addrlen) == -1) {
-            network_close_socket(sockfd);
-            perror("client: connect");
-            continue;
-        }
-
-        client_sockfd = sockfd;
-
-        break;
-    }
-
-    freeaddrinfo(servinfo);
+    *sockfd = INVALID_SOCKET;
 }
 
 static void network_add_msg_queue_item(const char *buf, int numbytes, const struct sockaddr_storage *their_addr) {
@@ -453,7 +379,7 @@ void network_get_my_ip(char *subnet, size_t len) {
 
     int sockfd = network_get_client_socket();
     if(sockfd == INVALID_SOCKET) {
-        perror("[-] Error creating socket");
+        perror("could not get ip address, quitting\n");
         return;
     }
 
@@ -465,5 +391,5 @@ void network_get_my_ip(char *subnet, size_t len) {
 
     strncpy(subnet, inet_ntoa(local.sin_addr), len);
 
-    network_close_socket(sockfd);
+    network_close_socket(&sockfd);
 }
