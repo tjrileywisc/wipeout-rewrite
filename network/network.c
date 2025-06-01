@@ -210,7 +210,11 @@ bool network_bind_socket(int sockfd, char *ip_addr, char* port)
         return false;
     }
 
-    printf("established connection at %s:%s\n", ip_addr, port);
+    char ipstr[INET_ADDRSTRLEN];
+    struct sockaddr_in *addr = (struct sockaddr_in *)res->ai_addr;
+    inet_ntop(AF_INET, &(addr->sin_addr), ipstr, sizeof(ipstr));
+
+    printf("established connection at %s:%s\n", ipstr, port);
     //network_set_bound_ip_socket(sockfd);
 
     return true;
