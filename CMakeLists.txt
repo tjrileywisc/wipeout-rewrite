@@ -62,6 +62,11 @@ add_compile_options(
     $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wextra>
 )
 
+if(DEV_BUILD)
+    add_compile_options(--coverage -g -Og)
+    add_link_options(--coverage)
+endif()
+
 if(USE_ASAN)
 	add_compile_options(-fsanitize=address)
 	add_link_options(-fsanitize=address)

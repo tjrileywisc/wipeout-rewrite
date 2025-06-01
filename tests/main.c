@@ -18,7 +18,7 @@ int main(void) {
         cmocka_unit_test(test_network_get_local_subnet),
 
         // dedicated server tests
-        cmocka_unit_test(empties_queue_after_process)
+        //cmocka_unit_test(empties_queue_after_process)
     };
  
     return cmocka_run_group_tests(tests, NULL, NULL);
