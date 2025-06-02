@@ -19,6 +19,45 @@
 #include <unistd.h>
 #endif
 
+void unknown_message_echo(void**) {
+
+    network_clear_msg_queue();
+    const char *mock_data = "unknown";
+    struct sockaddr_in mock_addr = {0};
+    socklen_t mock_addr_len = sizeof(mock_addr);
+
+    expect_value(wrap_recvfrom, sockfd, 3);
+    expect_value(wrap_recvfrom, len, 99);
+    expect_value(wrap_recvfrom, flags, 0);
+    will_return(wrap_recvfrom, &mock_addr);
+    will_return(wrap_recvfrom, mock_addr_len);
+    will_return(wrap_recvfrom, mock_data);
+    will_return(wrap_recvfrom, strlen(mock_data)); // return value
+
+    const char* returned_data = "Unknown command: unknown\n";
+
+    expect_value(wrap_sendto, sockfd, 3);
+    expect_string(wrap_sendto, buf, returned_data);
+    expect_value(wrap_sendto, len, strlen(returned_data));
+    expect_value(wrap_sendto, flags, 0);
+    expect_value(wrap_sendto, dest_addr->sa_family, AF_INET);
+    // TODO
+    // expect_value(wrap_sendto, dest_addr->sa_data, &mock_addr);        // for dest_addr
+
+    will_return(wrap_sendto, strlen(returned_data)); // return value
+
+    network_set_bound_ip_socket(3);
+    network_get_packet();
+
+    int queue_size = network_get_msg_queue_size();
+    assert_int_equal(queue_size, 1);
+
+    server_process_queue();
+
+    // cleanup
+    network_test_cleanup();
+}
+
 void empties_queue_after_process(void**) {
 
     network_clear_msg_queue();
@@ -29,20 +68,25 @@ void empties_queue_after_process(void**) {
     expect_value(wrap_recvfrom, sockfd, 3);
     expect_value(wrap_recvfrom, len, 99);
     expect_value(wrap_recvfrom, flags, 0);
-    will_return(wrap_recvfrom, &mock_addr);        // for src_addr
-    will_return(wrap_recvfrom, mock_addr_len);     // for addrlen
-    will_return(wrap_recvfrom, mock_data);         // for buf content
+    will_return(wrap_recvfrom, &mock_addr);
+    will_return(wrap_recvfrom, mock_addr_len);
+    will_return(wrap_recvfrom, mock_data);
     will_return(wrap_recvfrom, strlen(mock_data)); // return value
 
+
+    const char* returned_data = "Hello from 0.0.0.0\n";
+
     expect_value(wrap_sendto, sockfd, 3);
-    expect_value(wrap_sendto, len, strlen(mock_data));
+    expect_string(wrap_sendto, buf, returned_data);
+    expect_value(wrap_sendto, len, strlen(returned_data));
     expect_value(wrap_sendto, flags, 0);
-    will_return(wrap_sendto, &mock_addr);        // for dest_addr
-    will_return(wrap_sendto, mock_addr_len);     // for addrlen
-    will_return(wrap_sendto, strlen(mock_data)); // return value
+    expect_value(wrap_sendto, dest_addr->sa_family, AF_INET);
+    // TODO
+    // expect_value(wrap_sendto, dest_addr->sa_data, &mock_addr);        // for dest_addr
 
-    network_set_bound_ip_socket(3); // Set the socket descriptor
+    will_return(wrap_sendto, strlen(returned_data)); // return value
 
+    network_set_bound_ip_socket(3);
     network_get_packet();
 
     int queue_size = network_get_msg_queue_size();

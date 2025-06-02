@@ -40,10 +40,13 @@ ssize_t wrap_sendto(int sockfd, const void *buf, size_t len, int flags,
     check_expected(sockfd);
     check_expected(len);
     check_expected(flags);
+    check_expected(buf);
 
     // Optionally check or set dest_addr and addrlen if relevant
     if (dest_addr != NULL && addrlen > 0) {
-        memcpy((void *)dest_addr, mock_ptr_type(struct sockaddr *), sizeof(struct sockaddr));
+        // TODO
+        //check_expected(dest_addr->sa_data);
+        check_expected(dest_addr->sa_family);
     }
 
     return (ssize_t)mock_type(int); // number of bytes sent
