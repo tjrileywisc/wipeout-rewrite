@@ -18,6 +18,24 @@
 #include <setjmp.h>
 #include <cmocka.h>
 
+void network_close_socket_sets_socket_invalid(void** state) {
+    (void)state; // unused
+
+    int sockfd = 3; // Example socket descriptor
+    network_set_bound_ip_socket(sockfd);
+
+    // Ensure the socket is set
+    assert_int_equal(network_get_bound_ip_socket(), sockfd);
+
+    // Close the socket
+    network_close_socket(&sockfd);
+
+    // Check that the socket is now INVALID_SOCKET
+    assert_int_equal(sockfd, INVALID_SOCKET);
+
+    // cleanup
+    network_test_cleanup();
+}
 
 void test_network_get_packet(void** state) {
     (void)state; // unused
