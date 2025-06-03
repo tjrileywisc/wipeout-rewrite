@@ -15,6 +15,9 @@
 #include <unistd.h>
 #endif
 
+// protobufs
+#include <ServerInfo.pb-c.h>
+
 ssize_t wrap_recvfrom(int sockfd, void *buf, size_t len, int flags,
                         struct sockaddr *src_addr, socklen_t *addrlen) {
     check_expected(sockfd);
@@ -41,6 +44,25 @@ ssize_t wrap_sendto(int sockfd, const void *buf, size_t len, int flags,
     check_expected(len);
     check_expected(flags);
     check_expected(buf);
+
+    // Get message type for this test
+    const char *msg_type = mock_type(const char *);
+
+    if (strcmp(msg_type, "STATUS") == 0) {
+        Wipeout__ServerInfo *msg = wipeout__server_info__unpack(NULL, len, buf);
+        assert_non_null(msg);
+        const char *expected_name = mock_type(const char *);
+        int expected_port = mock_type(int);
+
+        assert_string_equal(msg->name, expected_name);
+        assert_int_equal(msg->port, expected_port);
+        wipeout__server_info__free_unpacked(msg, NULL);
+    } else if (strcmp(msg_type, "STRING") == 0) {
+        // const char *expected = mock_type(const char *);
+        // assert_memory_equal(buf, expected, len);
+    } else {
+        fail_msg("Unknown message type in wrap_sendto");
+    }
 
     // Optionally check or set dest_addr and addrlen if relevant
     if (dest_addr != NULL && addrlen > 0) {

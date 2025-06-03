@@ -63,20 +63,23 @@ static void server_disconnect_client(void) {
 	// no need to tell them we are removing them
 }
 
-static void server_status(void) {
-	// handle server status
-	Wipeout__ServerInfo msg;
-	wipeout__server_info__init(&msg);
-	msg.name = "my server";
-	msg.port = 8000;
+static void server_status(netadr_t *net_addr) {
 
-	size_t len = wipeout__server_info__get_packed_size(&msg);
-	uint8_t *buffer = malloc(len);
-	if (!buffer) {
-		fprintf(stderr, "Failed to allocate buffer for server info\n");
-		return;
-	}
-	wipeout__server_info__pack(&msg, buffer);
+    Wipeout__ServerInfo msg = WIPEOUT__SERVER_INFO__INIT;
+
+    msg.name = "my server";
+    msg.port = 8000;
+
+    size_t len = wipeout__server_info__get_packed_size(&msg);
+    uint8_t *buffer = malloc(len);
+    if (!buffer) {
+        fprintf(stderr, "Failed to allocate buffer for server info\n");
+        return;
+    }
+    wipeout__server_info__pack(&msg, buffer);
+    network_send_packet(network_get_bound_ip_socket(), len, buffer, *net_addr);
+
+    return;
 }
 
 /**
@@ -84,7 +87,7 @@ static void server_status(void) {
  * and kick off any commands as appopriate
  */
 static void server_parse_msg(msg_queue_item_t *item) {
-    char *cmd = item->command;
+    const char *cmd = item->command;
     char addr[INET_ADDRSTRLEN];
     inet_ntop(AF_INET, &((struct sockaddr_in *)&item->dest_addr)->sin_addr,
               addr, sizeof(addr));
@@ -99,6 +102,17 @@ static void server_parse_msg(msg_queue_item_t *item) {
         // handle disconnect
     } else if (strcmp(cmd, "status") == 0) {
         // handle status
+        server_status(&net_addr);
+
+        return;
+    } else if (strcmp(cmd, "quit") == 0) {
+        // handle quit
+        server_disconnect_client();
+        sprintf(buf, "Client %s disconnected\n", addr);
+    } else if (strcmp(cmd, "connect") == 0) {
+        // handle connect
+        server_connect_client();
+        sprintf(buf, "Client %s connected\n", addr);
     } else if (strcmp(cmd, "hello") == 0) {
         // handle hello (just echo back the client's address)
         sprintf(buf, "Hello from %s\n", addr);
