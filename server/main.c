@@ -54,6 +54,7 @@ int main(int argc, char** argv)
         }
 
         network_get_packet();
+        server_process_queue();
     }
 
     return 0;

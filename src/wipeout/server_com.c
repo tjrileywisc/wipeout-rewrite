@@ -5,6 +5,7 @@
 
 #include <addr_conversions.h>
 #include <network.h>
+#include <ServerInfo.pb-c.h>
 
 #if defined(WIN32)
 #include <ws2ipdef.h>
@@ -76,8 +77,15 @@ static int server_com_discovery_response(void* arg) {
         // }
 
         if (len > 0) {
+            Wipeout__ServerInfo* msg = wipeout__server_info__unpack(NULL, len, (const uint8_t*)buffer);
+            if(msg == NULL) {
+                fprintf(stderr, "Failed to unpack server info message\n");
+                continue;
+            }
+            // TODO:
+            // translate protobuf message to something we can use
             buffer[len] = '\0';
-            printf("Received from %s: %s\n", inet_ntoa(from.sin_addr), buffer);
+            printf("Found server %s @ %s:%d\n", msg->name, inet_ntoa(from.sin_addr), msg->port);
         }
     }
 
@@ -122,7 +130,7 @@ static int server_com_network_discovery(void* arg) {
         memcpy(&baddr, &ifr.ifr_broadaddr, sizeof(baddr));
         baddr.sin_port = htons(WIPEOUT_PORT);
 
-        const char *message = "hello";
+        const char *message = "status";
         wrap_sendto(sockfd, message, strlen(message), 0,
             (struct sockaddr *)&baddr, sizeof(baddr));
 
