@@ -132,6 +132,7 @@ static void toggle_network_interface(menu_t*, int data) {
 
 static void page_network_init(menu_t *menu) {
 	menu_page_t *page = menu_push(menu, "NETWORK", page_network_draw, server_com_init_network_discovery, server_com_halt_network_discovery);
+	server_com_set_menu_page(page);
 
 	flags_set(page->layout_flags, MENU_VERTICAL | MENU_FIXED);
 	page->title_pos = vec2i(-160, -100);
@@ -145,10 +146,11 @@ static void page_network_init(menu_t *menu) {
 	menu_page_add_toggle(page, save.network_interface, "NETWORK INTERFACE", opts_network_interfaces, len(opts_network_interfaces), toggle_network_interface);
 
 	// TODO: this should be populated by some query as soon as we init this page
-	menu_page_add_button(page, 0, "SERVER 1", NULL);
-	menu_page_add_button(page, 1, "SERVER 2", NULL);
-	menu_page_add_button(page, 2, "SERVER 3", NULL);
-	menu_page_add_button(page, 3, "SERVER 4", NULL);
+
+	// menu_page_add_button(page, 0, "SERVER 1", NULL);
+	// menu_page_add_button(page, 1, "SERVER 2", NULL);
+	// menu_page_add_button(page, 2, "SERVER 3", NULL);
+	// menu_page_add_button(page, 3, "SERVER 4", NULL);
 }
 
 

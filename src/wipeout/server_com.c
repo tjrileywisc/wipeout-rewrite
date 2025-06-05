@@ -1,6 +1,7 @@
 
 #include "server_com.h"
 
+#include "menu.h"
 #include "network_wrapper.h"
 
 #include <addr_conversions.h>
@@ -33,8 +34,30 @@ static int DISCOVERY_TIMEOUT = 30; // seconds
 
 static int sockfd = INVALID_SOCKET;
 
+static server_info_t* servers = NULL; // dynamically allocated array of server_info_t
+static unsigned int n_servers = 0;
+
+static menu_page_t* server_menu_page = NULL; // menu for server discovery
+
 void server_com_client_init() {
     // TODO
+}
+
+static void server_com_update_servers() {
+
+    /*
+    TODO: how do we update the server menu page?
+    */
+    if(!server_menu_page) {
+        printf("No server menu page set, cannot update servers.\n");
+        return;
+    }
+
+    server_info_t server = servers[n_servers];
+    char name[32];
+    snprintf(name, sizeof(name), "%s", server.name);
+    menu_page_add_button(server_menu_page, n_servers, name, NULL); // TODO: add a function to connect to this server
+    printf("Server %d: %s\n", n_servers, name);
 }
 
 /**
@@ -47,6 +70,9 @@ static int server_com_discovery_response(void* arg) {
     struct sockaddr_in from;
     socklen_t fromlen = sizeof(from);
     char buffer[1024];
+
+    servers = realloc(servers, 0); // start with an empty list
+    n_servers = 0;
 
     time_t start_time = time(NULL);
 
@@ -86,6 +112,13 @@ static int server_com_discovery_response(void* arg) {
             // translate protobuf message to something we can use
             buffer[len] = '\0';
             printf("Found server %s @ %s:%d\n", msg->name, inet_ntoa(from.sin_addr), msg->port);
+
+            servers = realloc(servers, sizeof(server_info_t) * (n_servers + 1));
+            servers[n_servers] = (server_info_t) {
+                .name = msg->name
+            };
+            server_com_update_servers(); // update the menu with the new server
+            n_servers++;
         }
     }
 
@@ -173,4 +206,16 @@ void server_com_halt_network_discovery() {
     network_discovery_on = false;
     thrd_join(network_discovery_thread, NULL);
     thrd_join(network_discovery_response_thread, NULL);
+}
+
+// server_info_t *server_com_get_servers() { 
+//     return servers; 
+// }
+
+// unsigned int server_com_get_n_servers() { 
+//     return n_servers; 
+// }
+
+void server_com_set_menu_page(menu_page_t *page) {
+    server_menu_page = page;
 }
