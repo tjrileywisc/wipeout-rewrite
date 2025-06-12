@@ -30,8 +30,6 @@
 
 #include <ServerInfo.pb-c.h>
 
-#define SERVER_PORT "8000"
-
 #if defined(WIN32)
 static WSADATA winsockdata;
 static bool winsock_initialized = false;
@@ -121,15 +119,33 @@ static bool system_get_packet(netadr_t *net_from, msg_t *net_msg)
     return true;
 }
 
+#if defined(WIN32)
+bool system_init_winsock(void) {
+    if (!winsock_initialized) {
+        if ((WSAStartup(MAKEWORD(2, 2), &winsockdata) != 0)) {
+            printf("unable to init windows socket: %s\n",
+                   network_get_last_error());
+            return false;
+        }
+        winsock_initialized = true;
+    }
+
+    return true;
+}
+
+void system_cleanup_winsock(void) {
+    if (winsock_initialized) {
+        WSACleanup();
+        winsock_initialized = false;
+    }
+}
+#endif
+
 int network_get_client_socket(void) {
 
 #if defined(WIN32)
-    if(!winsock_initialized) {
-        if ((WSAStartup(MAKEWORD(2, 2), &winsockdata) != 0)) {
-            printf("unable to init windows socket: %s\n", network_get_last_error());
-            return INVALID_SOCKET;
-        }
-        winsock_initialized = true;
+    if(!system_init_winsock()) {
+        return INVALID_SOCKET;
     }
 #endif
 
@@ -392,4 +408,81 @@ void network_get_my_ip(char *subnet, size_t len) {
     strncpy(subnet, inet_ntoa(local.sin_addr), len);
 
     network_close_socket(&sockfd);
+}
+
+/**
+ * @brief Get broadcast addresses for LAN
+ * 
+ * @return broadcast_list_t 
+ */
+broadcast_list_t network_get_broadcast_addresses(void) {
+    broadcast_list_t result = {0};
+    size_t capacity = 8;
+
+#if defined(WIN32)
+    DWORD size = 0;
+    GetAdaptersAddresses(AF_INET, GAA_FLAG_INCLUDE_PREFIX, NULL, NULL, &size);
+    IP_ADAPTER_ADDRESSES* adapters = (IP_ADAPTER_ADDRESSES*)malloc(size);
+    if (!adapters || GetAdaptersAddresses(AF_INET, GAA_FLAG_INCLUDE_PREFIX, NULL, adapters, &size) != NO_ERROR) {
+        free(adapters);
+        return result;
+    }
+
+    result.list = (broadcast_addr_t*)malloc(sizeof(broadcast_addr_t) * capacity);
+
+    for (IP_ADAPTER_ADDRESSES* adapter = adapters; adapter; adapter = adapter->Next) {
+        if (adapter->IfType != IF_TYPE_ETHERNET_CSMACD && adapter->IfType != IF_TYPE_IEEE80211)
+            continue;
+
+        for (IP_ADAPTER_UNICAST_ADDRESS* ua = adapter->FirstUnicastAddress; ua; ua = ua->Next) {
+            SOCKADDR_IN* sa = (SOCKADDR_IN*)ua->Address.lpSockaddr;
+            uint32_t ip = ntohl(sa->sin_addr.S_un.S_addr);
+            uint32_t mask = (0xFFFFFFFF << (32 - ua->OnLinkPrefixLength)) & 0xFFFFFFFF;
+            uint32_t bcast = (ip & mask) | (~mask);
+            
+            if (result.count >= capacity) {
+                capacity *= 2;
+                result.list = realloc(result.list, sizeof(broadcast_addr_t) * capacity);
+            }
+
+            result.list[result.count++].broadcast.s_addr = htonl(bcast);
+        }
+    }
+
+    free(adapters);
+#else
+    struct ifaddrs* ifaddr = NULL;
+    if (getifaddrs(&ifaddr) == -1) {
+        return result;
+    }
+
+    result.list = (broadcast_addr_t*)malloc(sizeof(broadcast_addr_t) * capacity);
+
+    for (struct ifaddrs* ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
+        if (!ifa->ifa_addr || ifa->ifa_addr->sa_family != AF_INET)
+            continue;
+
+        if ((ifa->ifa_flags & IFF_LOOPBACK) || !(ifa->ifa_flags & IFF_BROADCAST))
+            continue;
+
+        struct ifreq ifr;
+        memset(&ifr, 0, sizeof(ifr));
+        strncpy(ifr.ifr_name, ifa->ifa_name, IFNAMSIZ - 1);
+
+        if (ioctl(sockfd, SIOCGIFBRDADDR, &ifr) < 0)
+            continue;
+
+        struct sockaddr_in* baddr = (struct sockaddr_in*)&ifr.ifr_broadaddr;
+        if (result.count >= capacity) {
+            capacity *= 2;
+            result.list = realloc(result.list, sizeof(broadcast_addr_t) * capacity);
+        }
+
+        result.list[result.count++].broadcast = baddr->sin_addr;
+    }
+
+    freeifaddrs(ifaddr);
+#endif
+
+    return result;
 }

@@ -13,12 +13,12 @@
 #include <WS2tcpip.h>
 #else
 #include <arpa/inet.h>
+#include <net/if.h>
+#include <sys/ioctl.h>
+#include <ifaddrs.h> // Needed for getifaddrs
 #endif
 
 #include <errno.h>
-#include <net/if.h>
-#include <sys/ioctl.h>
-#include <ifaddrs.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -138,50 +138,34 @@ static int server_com_discovery_response(void* arg) {
  * @brief Run network discovery to find servers
  */
 static int server_com_network_discovery(void* arg) {
-    (void)arg; // unused
+    (void)arg;
 
-    // Send broadcast to all interfaces
-    struct ifaddrs *ifaddr = NULL;
-    if (getifaddrs(&ifaddr) == -1) {
-        perror("getifaddrs");
+#ifdef _WIN32
+    if(!system_init_winsock()) {
+        printf("Failed to initialize Winsock for network discovery.\n");
         return 0;
     }
+#endif
 
-    // check multiple interfaces, since we don't know if the user
-    // has ethernet or wifi but they probably call it their LAN
-    struct ifaddrs *ifa;
-    struct ifreq ifr;
-    for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
-        if (!ifa->ifa_addr || ifa->ifa_addr->sa_family != AF_INET)
-            continue;
+    const char* message = "status";
+    broadcast_list_t broadcasts = network_get_broadcast_addresses();
 
-        // Skip loopback and non-broadcast interfaces
-        if ((ifa->ifa_flags & IFF_LOOPBACK) || !(ifa->ifa_flags & IFF_BROADCAST))
-            continue;
+    for (size_t i = 0; i < broadcasts.count; ++i) {
+        struct sockaddr_in addr = {
+            .sin_family = AF_INET,
+            .sin_port = htons(WIPEOUT_PORT),
+            .sin_addr = broadcasts.list[i].broadcast,
+        };
 
-        // Prepare ioctl request
-        memset(&ifr, 0, sizeof(ifr));
-        strncpy(ifr.ifr_name, ifa->ifa_name, IFNAMSIZ - 1);
-
-        if (ioctl(sockfd, SIOCGIFBRDADDR, &ifr) < 0) {
-            perror("ioctl SIOCGIFBRDADDR");
-            continue;
-        }
-
-        struct sockaddr_in baddr;
-        memcpy(&baddr, &ifr.ifr_broadaddr, sizeof(baddr));
-        baddr.sin_port = htons(WIPEOUT_PORT);
-
-        const char *message = "status";
         wrap_sendto(sockfd, message, strlen(message), 0,
-            (struct sockaddr *)&baddr, sizeof(baddr));
+                    (struct sockaddr*)&addr, sizeof(addr));
 
         printf("[*] Broadcast packet sent. Waiting for replies...\n");
         // tell receiver thread to start listening
         network_discovery_on = true;
     }
 
-    freeifaddrs(ifaddr);
+    free(broadcasts.list);
 
     return 1;
 }

@@ -20,6 +20,20 @@ typedef struct {
     struct sockaddr_storage dest_addr;
 } msg_queue_item_t;
 
+#if defined(WIN32)
+/**
+ * @brief Initialize the Winsock library
+ * 
+ * @return true if initialization was successful
+ */
+bool system_init_winsock(void);
+
+/**
+ * @brief Cleanup the Winsock library
+ */
+void system_cleanup_winsock(void);
+#endif
+
 /**
  * @brief Check if the current socket is valid and bound
  * 
@@ -126,3 +140,5 @@ int network_sleep(int msec);
  * @param len the length of the subnet address
  */
 void network_get_my_ip(char* subnet, size_t len);
+
+broadcast_list_t network_get_broadcast_addresses(void);
