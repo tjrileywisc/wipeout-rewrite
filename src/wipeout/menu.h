@@ -60,8 +60,8 @@ void menu_reset(menu_t *menu);
 menu_page_t *menu_push(menu_t *menu, char *title, void(*draw_func)(menu_t *, int), void(*init_func)(), void(*exit_func)());
 menu_page_t *menu_confirm(menu_t *menu, char *title, char *subtitle, char *yes, char *no, void(*confirm_func)(menu_t *, int));
 void menu_pop(menu_t *menu);
-void menu_page_add_button(menu_page_t *page, int data, char *text, void(*select_func)(menu_t *, int));
-void menu_page_add_toggle(menu_page_t *page, int data, char *text, const char **options, int len, void(*select_func)(menu_t *, int));
+void menu_page_add_button(menu_page_t *page, int data, const char *text, void(*select_func)(menu_t *, int));
+void menu_page_add_toggle(menu_page_t *page, int data, const char *text, const char **options, int len, void(*select_func)(menu_t *, int));
 void menu_update(menu_t *menu);
 
 #endif

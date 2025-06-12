@@ -66,20 +66,20 @@ void menu_pop(menu_t *menu) {
 	menu->index--;
 }
 
-void menu_page_add_button(menu_page_t *page, int data, char *text, void(*select_func)(menu_t *, int)) {
+void menu_page_add_button(menu_page_t *page, int data, const char *text, void(*select_func)(menu_t *, int)) {
 	error_if(page->entries_len >= MENU_ENTRIES_MAX-1, "MENU_ENTRIES_MAX exceeded");
 	menu_entry_t *entry = &page->entries[page->entries_len++];
 	entry->data = data;
-	entry->text = text;
+	entry->text = strdup(text);
 	entry->select_func = select_func;
 	entry->type = MENU_ENTRY_BUTTON;
 }
 
-void menu_page_add_toggle(menu_page_t *page, int data, char *text, const char **options, int len, void(*select_func)(menu_t *, int)) {
+void menu_page_add_toggle(menu_page_t *page, int data, const char *text, const char **options, int len, void(*select_func)(menu_t *, int)) {
 	error_if(page->entries_len >= MENU_ENTRIES_MAX-1, "MENU_ENTRIES_MAX exceeded");
 	menu_entry_t *entry = &page->entries[page->entries_len++];
 	entry->data = data;
-	entry->text = text;
+	entry->text = strdup(text);
 	entry->select_func = select_func;
 	entry->type = MENU_ENTRY_TOGGLE;
 	entry->options = options;
