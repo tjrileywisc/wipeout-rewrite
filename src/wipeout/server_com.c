@@ -43,11 +43,18 @@ void server_com_client_init() {
     // TODO
 }
 
-static void server_com_update_servers() {
+static void server_com_client_connect(menu_t*, int index) {
+    server_info_t server = servers[index];
+    printf("Connecting to server: %s\n", server.name);
+}
 
-    /*
-    TODO: how do we update the server menu page?
-    */
+static void server_com_update_servers() {
+    // TODO:
+    // is this function necessary?
+    // we can't update or add a button after
+    // startup, only change the text
+
+
     if(!server_menu_page) {
         printf("No server menu page set, cannot update servers.\n");
         return;
@@ -56,8 +63,9 @@ static void server_com_update_servers() {
     server_info_t server = servers[n_servers];
     char name[32];
     snprintf(name, sizeof(name), "%s", server.name);
-    menu_page_add_button(server_menu_page, n_servers, name, NULL); // TODO: add a function to connect to this server
-    printf("Server %d: %s\n", n_servers, name);
+    menu_entry_t* entry = &server_menu_page->entries[n_servers + 1];
+
+    menu_page_add_button(server_menu_page, n_servers + 1, name, server_com_client_connect);
 }
 
 /**

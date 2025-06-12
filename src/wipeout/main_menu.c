@@ -116,9 +116,22 @@ static void page_network_draw(menu_t *menu, int) {
 
 	vec2i_t col2_pos = vec2i(server_ping_col - ui_text_width("PING", UI_SIZE_8), line_y);
 	ui_draw_text("PING", ui_scaled_pos(page->items_anchor, col2_pos), UI_SIZE_8, UI_COLOR_DEFAULT);
-	line_y += 20;
+	line_y += 40;
 
-	// TODO a list of servers
+	for (unsigned int i = 0; i < server_com_get_n_servers(); i++) {
+		server_info_t *server = &server_com_get_servers()[i];
+
+		// TODO:
+		//pos.x = server_ip_col - ui_text_width(server->ip, UI_SIZE_8);
+		//ui_draw_text(server->ip, ui_scaled_pos(page->items_anchor, pos), UI_SIZE_8, text_color);
+
+		//pos.x = server_ping_col - ui_text_width(server->ping, UI_SIZE_8);
+		//char ping_str[16];
+		//snprintf(ping_str, sizeof(ping_str), "%d ms", server->ping);
+		///ui_draw_text(ping_str, ui_scaled_pos(page->items_anchor, pos), UI_SIZE_8, text_color);
+
+		line_y += 12;
+	}
 }
 
 static void toggle_network_interface(menu_t*, int data) {
@@ -144,13 +157,6 @@ static void page_network_init(menu_t *menu) {
 	static const char *opts_network_interfaces[] = { "LAN", "INTERNET" };
 
 	menu_page_add_toggle(page, save.network_interface, "NETWORK INTERFACE", opts_network_interfaces, len(opts_network_interfaces), toggle_network_interface);
-
-	// TODO: this should be populated by some query as soon as we init this page
-
-	// menu_page_add_button(page, 0, "SERVER 1", NULL);
-	// menu_page_add_button(page, 1, "SERVER 2", NULL);
-	// menu_page_add_button(page, 2, "SERVER 3", NULL);
-	// menu_page_add_button(page, 3, "SERVER 4", NULL);
 }
 
 
