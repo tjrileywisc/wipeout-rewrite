@@ -208,13 +208,13 @@ void server_com_halt_network_discovery() {
     thrd_join(network_discovery_response_thread, NULL);
 }
 
-// server_info_t *server_com_get_servers() { 
-//     return servers; 
-// }
+server_info_t *server_com_get_servers() { 
+    return servers; 
+}
 
-// unsigned int server_com_get_n_servers() { 
-//     return n_servers; 
-// }
+unsigned int server_com_get_n_servers() { 
+    return n_servers; 
+}
 
 void server_com_set_menu_page(menu_page_t *page) {
     server_menu_page = page;

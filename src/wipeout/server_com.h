@@ -16,6 +16,6 @@ void server_com_init_network_discovery();
 
 void server_com_halt_network_discovery();
 
-// server_info_t* server_com_get_servers();
+server_info_t* server_com_get_servers();
 
-// unsigned int server_com_get_n_servers();
+unsigned int server_com_get_n_servers();
