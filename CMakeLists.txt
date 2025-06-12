@@ -62,9 +62,12 @@ add_compile_options(
     $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wextra>
 )
 
-if(DEV_BUILD)
-    add_compile_options(--coverage -g -Og)
-    add_link_options(--coverage)
+if(DEV_BUILD AND NOT WIN32)
+	add_compile_options(-g -Og)
+	if(NOT WIN32)
+		add_compile_options(--coverage)
+		add_link_options(--coverage)
+	endif()
 endif()
 
 if(USE_ASAN)
