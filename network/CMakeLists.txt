@@ -14,8 +14,3 @@ endif()
 target_link_libraries(network PUBLIC ${OS_LIBS} protos)
 
 target_include_directories(network PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-
-if(DEV_BUILD)
-    target_compile_options(network PRIVATE --coverage -g -Og)
-    target_link_options(network PRIVATE --coverage)
-endif()
