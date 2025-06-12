@@ -39,7 +39,7 @@ static unsigned int n_servers = 0;
 
 static menu_page_t* server_menu_page = NULL; // menu for server discovery
 
-void server_com_client_init() {
+void server_com_client_init(void) {
     // TODO
 }
 
@@ -186,7 +186,7 @@ static int server_com_network_discovery(void* arg) {
     return 1;
 }
 
-void server_com_init_network_discovery() {
+void server_com_init_network_discovery(void) {
 
     sockfd = network_get_client_socket();
     if(sockfd == INVALID_SOCKET) {
@@ -211,17 +211,17 @@ void server_com_init_network_discovery() {
     thrd_detach(network_discovery_thread);
 }
 
-void server_com_halt_network_discovery() {
+void server_com_halt_network_discovery(void) {
     network_discovery_on = false;
     thrd_join(network_discovery_thread, NULL);
     thrd_join(network_discovery_response_thread, NULL);
 }
 
-server_info_t *server_com_get_servers() { 
+server_info_t *server_com_get_servers(void) { 
     return servers; 
 }
 
-unsigned int server_com_get_n_servers() { 
+unsigned int server_com_get_n_servers(void) { 
     return n_servers; 
 }
 
