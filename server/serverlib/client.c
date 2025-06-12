@@ -67,7 +67,9 @@ static void server_status(netadr_t *net_addr) {
 
     Wipeout__ServerInfo msg = WIPEOUT__SERVER_INFO__INIT;
 
-    msg.name = "my server";
+    // TODO:
+    // read from config or environment
+    msg.name = "MY SERVER";
     msg.port = 8000;
 
     size_t len = wipeout__server_info__get_packed_size(&msg);
