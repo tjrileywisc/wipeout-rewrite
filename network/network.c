@@ -155,6 +155,7 @@ int network_get_client_socket(void) {
     }
 
 #if defined(WIN32)
+    unsigned long _true = 1;
     if (ioctlsocket(new_socket, FIONBIO, &_true) == -1) {
 #else
     bool _true = true;
