@@ -352,21 +352,6 @@ void network_send_command(const char *command, netadr_t dest)
     }
 }
 
-void network_process_command(const char* command) 
-{
-    if(strcmp(command, "server_info") == 0) {
-        Wipeout__ServerInfo* msg = NULL;
-        wipeout__server_info__init(msg);
-        msg->name = "my server";
-        msg->port = 8000;
-
-        unsigned char* out = (unsigned char*)malloc(wipeout__server_info__get_packed_size(msg));
-        if(out) {
-            wipeout__server_info__pack(msg, out);
-        }
-    }
-}
-
 int network_sleep(int msec)
 {
     struct timeval timeout;

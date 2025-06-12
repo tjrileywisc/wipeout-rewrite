@@ -87,8 +87,6 @@ void network_send_packet(int sockfd, int length, const void* data, netadr_t dest
  */
 void network_send_command(const char* command, netadr_t dest);
 
-void network_process_command(const char* command);
-
 /**
  * @brief clears the current message queue
  */
