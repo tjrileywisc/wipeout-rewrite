@@ -74,12 +74,13 @@ static int server_com_discovery_response(void* arg) {
     servers = realloc(servers, 0); // start with an empty list
     n_servers = 0;
 
-    time_t start_time = time(NULL);
+    time_t start_time;
 
-    while (1) {
+    while (true) {
 
         while(!network_discovery_on) {
             thrd_yield(); // wait until discovery is enabled
+            start_time = time(NULL); // reset start time when we start listening
         }
 
         if(time(NULL) - start_time > DISCOVERY_TIMEOUT) {
