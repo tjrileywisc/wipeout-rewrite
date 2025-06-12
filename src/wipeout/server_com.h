@@ -1,6 +1,8 @@
 
 #pragma once
 
+#include "menu.h"
+
 /*
 client communication to server(s),
 including server discovery
