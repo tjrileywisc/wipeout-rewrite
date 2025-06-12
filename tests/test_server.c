@@ -130,7 +130,7 @@ void server_status_query(void**) {
     expect_value(wrap_sendto, dest_addr->sa_family, AF_INET);
 
     will_return(wrap_sendto, "STATUS");  // tag for wrap_sendto to know how to interpret buf
-    will_return(wrap_sendto, "my server");
+    will_return(wrap_sendto, "MY SERVER");
     will_return(wrap_sendto, 8000);
     will_return(wrap_sendto, 0); // return value
 
