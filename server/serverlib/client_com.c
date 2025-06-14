@@ -1,5 +1,5 @@
 
-#include "client.h"
+#include "client_com.h"
 
 #include <network_types.h>
 #include <addr_conversions.h>

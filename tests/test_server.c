@@ -1,5 +1,5 @@
 #include <network.h>
-#include <client.h>
+#include <client_com.h>
 
 #include "utils.h"
 
