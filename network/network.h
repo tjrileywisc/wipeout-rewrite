@@ -79,10 +79,9 @@ void network_close_socket(int* sockfd);
  * listen for incoming packets.
  * 
  * @param sockfd the socket file descriptor
- * @param ip_addr the IP address to bind to
  * @param port the port to bind to
  */
-bool network_bind_socket(int sockfd, char *ip_addr, char* port);
+bool network_bind_socket(int sockfd, char* port);
 
 bool network_get_packet(void);
 

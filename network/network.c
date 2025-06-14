@@ -204,7 +204,7 @@ int network_get_client_socket(void) {
     return new_socket;
 }
 
-bool network_bind_socket(int sockfd, char *ip_addr, char* port)
+bool network_bind_socket(int sockfd, char* port)
 {
     if(client_sockfd != INVALID_SOCKET)
     {

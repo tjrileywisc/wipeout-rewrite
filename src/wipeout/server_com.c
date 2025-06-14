@@ -172,10 +172,7 @@ void server_com_init_network_discovery(void) {
         return;
     }
 
-    char my_ip[INET_ADDRSTRLEN];
-    network_get_my_ip(my_ip, INET_ADDRSTRLEN);
-
-    if(!network_bind_socket(sockfd, my_ip, "8001")) {
+    if(!network_bind_socket(sockfd, "8001")) {
         printf("unable to bind socket for network discovery\n");
         network_close_socket(&sockfd);
         return;

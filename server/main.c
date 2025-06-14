@@ -34,14 +34,13 @@ int main(int argc, char** argv)
     printf("welcome to the server!\n");
 
     server_init();
-    char my_ip[16];
-    network_get_my_ip(my_ip, sizeof(my_ip));
+
     int sockfd = network_get_client_socket();
     if(sockfd == INVALID_SOCKET) {
         printf("could not create socket, quitting\n");
         return 1;
     }
-    if(!network_bind_socket(sockfd, my_ip, "8000")) {
+    if(!network_bind_socket(sockfd, "8000")) {
         printf("could not start server, quitting\n");
         return 1;
     }
