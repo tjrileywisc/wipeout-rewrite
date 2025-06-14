@@ -1,4 +1,4 @@
 
 #pragma once
 
-void network_test_cleanup(void);
+int network_test_cleanup(void** state);

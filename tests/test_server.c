@@ -23,8 +23,6 @@
 
 
 void empties_queue_after_process(void**) {
-
-    network_clear_msg_queue();
     const char *mock_data = "hello";
     struct sockaddr_in mock_addr = {0};
     socklen_t mock_addr_len = sizeof(mock_addr);
@@ -62,14 +60,9 @@ void empties_queue_after_process(void**) {
 
     queue_size = network_get_msg_queue_size();
     assert_int_equal(queue_size, 0);
-
-    // cleanup
-    network_test_cleanup();
 }
 
 void unknown_message_echo(void**) {
-
-    network_clear_msg_queue();
     const char *mock_data = "unknown";
     struct sockaddr_in mock_addr = {0};
     socklen_t mock_addr_len = sizeof(mock_addr);
@@ -102,14 +95,9 @@ void unknown_message_echo(void**) {
     assert_int_equal(queue_size, 1);
 
     server_process_queue();
-
-    // cleanup
-    network_test_cleanup();
 }
 
 void server_status_query(void**) {
-
-    network_clear_msg_queue();
     const char *mock_data = "status";
     struct sockaddr_in mock_addr = {0};
     socklen_t mock_addr_len = sizeof(mock_addr);
@@ -138,7 +126,4 @@ void server_status_query(void**) {
     network_get_packet();
 
     server_process_queue();
-
-    // cleanup
-    network_test_cleanup();
 }
