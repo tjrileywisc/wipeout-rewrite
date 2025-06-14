@@ -7,7 +7,12 @@
 #include <addr_conversions.h>
 #include <network.h>
 #include <ServerInfo.pb-c.h>
+
+#if defined(WIN32)
+#include <ws2ipdef.h>
+#else
 #include <arpa/inet.h>
+#endif
 
 #include <errno.h>
 #include <stdio.h>
