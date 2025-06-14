@@ -7,16 +7,7 @@
 #include <addr_conversions.h>
 #include <network.h>
 #include <ServerInfo.pb-c.h>
-
-#if defined(WIN32)
-#include <ws2ipdef.h>
-#include <WS2tcpip.h>
-#else
 #include <arpa/inet.h>
-#include <net/if.h>
-#include <sys/ioctl.h>
-#include <ifaddrs.h> // Needed for getifaddrs
-#endif
 
 #include <errno.h>
 #include <stdio.h>
@@ -63,7 +54,6 @@ static void server_com_update_servers() {
     server_info_t server = servers[n_servers];
     char name[32];
     snprintf(name, sizeof(name), "%s", server.name);
-    menu_entry_t* entry = &server_menu_page->entries[n_servers + 1];
 
     menu_page_add_button(server_menu_page, n_servers + 1, name, server_com_client_connect);
 }
@@ -82,7 +72,7 @@ static int server_com_discovery_response(void* arg) {
     servers = realloc(servers, 0); // start with an empty list
     n_servers = 0;
 
-    time_t start_time;
+    time_t start_time = time(NULL);
 
     while (true) {
 
@@ -117,8 +107,7 @@ static int server_com_discovery_response(void* arg) {
                 fprintf(stderr, "Failed to unpack server info message\n");
                 continue;
             }
-            // TODO:
-            // translate protobuf message to something we can use
+
             buffer[len] = '\0';
             printf("Found server %s @ %s:%d\n", msg->name, inet_ntoa(from.sin_addr), msg->port);
 

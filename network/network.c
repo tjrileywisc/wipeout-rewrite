@@ -17,6 +17,7 @@
 #include <WinSock2.h>
 #include <WS2tcpip.h>
 #else
+#include <net/if.h>
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <netinet/in.h>
@@ -469,7 +470,7 @@ broadcast_list_t network_get_broadcast_addresses(void) {
         memset(&ifr, 0, sizeof(ifr));
         strncpy(ifr.ifr_name, ifa->ifa_name, IFNAMSIZ - 1);
 
-        if (ioctl(sockfd, SIOCGIFBRDADDR, &ifr) < 0)
+        if (ioctl(network_get_client_socket(), SIOCGIFBRDADDR, &ifr) < 0)
             continue;
 
         struct sockaddr_in* baddr = (struct sockaddr_in*)&ifr.ifr_broadaddr;
