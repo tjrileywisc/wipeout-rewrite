@@ -127,3 +127,85 @@ void server_status_query(void**) {
 
     server_process_queue();
 }
+
+void server_connect_client_ok(void**) {
+
+    // client sends us a connect message
+    const char *mock_data = "connect";
+    struct sockaddr_in mock_addr = {0};
+    socklen_t mock_addr_len = sizeof(mock_addr);
+
+    expect_value(wrap_recvfrom, sockfd, 3);
+    expect_value(wrap_recvfrom, len, 99);
+    expect_value(wrap_recvfrom, flags, 0);
+    will_return(wrap_recvfrom, &mock_addr);
+    will_return(wrap_recvfrom, mock_addr_len);
+    will_return(wrap_recvfrom, mock_data);
+    will_return(wrap_recvfrom, strlen(mock_data)); // return value
+
+    network_set_bound_ip_socket(3);
+    network_get_packet();
+
+
+    // we tell the client they are connected
+    const char* returned_data = "connected";
+
+    expect_value(wrap_sendto, sockfd, 3);
+    expect_string(wrap_sendto, buf, returned_data);
+    expect_value(wrap_sendto, len, strlen(returned_data));
+    expect_value(wrap_sendto, flags, 0);
+    expect_value(wrap_sendto, dest_addr->sa_family, AF_INET);
+
+    will_return(wrap_sendto, "STRING");  // tag for wrap_sendto to know how to interpret buf
+    will_return(wrap_sendto, strlen(returned_data)); // return value
+
+    server_process_queue();
+
+    int connected_client_count = server_get_connected_clients_count();
+    assert_int_equal(connected_client_count, 1);
+    client_t *client = server_get_client_by_index(0);
+    assert_non_null(client);
+    // TODO: check client IP
+}
+
+void server_connect_fails_too_many_clients(void**) {
+
+    server_set_connected_clients_count(8); // simulate 8 clients already connected
+
+    // client sends us a connect message
+    const char *mock_data = "connect";
+    struct sockaddr_in mock_addr = {0};
+    socklen_t mock_addr_len = sizeof(mock_addr);
+
+    expect_value(wrap_recvfrom, sockfd, 3);
+    expect_value(wrap_recvfrom, len, 99);
+    expect_value(wrap_recvfrom, flags, 0);
+    will_return(wrap_recvfrom, &mock_addr);
+    will_return(wrap_recvfrom, mock_addr_len);
+    will_return(wrap_recvfrom, mock_data);
+    will_return(wrap_recvfrom, strlen(mock_data)); // return value
+
+    network_set_bound_ip_socket(3);
+    network_get_packet();
+
+
+    // we tell the client they are connected
+    const char* returned_data = "connect_failed";
+
+    expect_value(wrap_sendto, sockfd, 3);
+    expect_string(wrap_sendto, buf, returned_data);
+    expect_value(wrap_sendto, len, strlen(returned_data));
+    expect_value(wrap_sendto, flags, 0);
+    expect_value(wrap_sendto, dest_addr->sa_family, AF_INET);
+
+    will_return(wrap_sendto, "STRING");  // tag for wrap_sendto to know how to interpret buf
+    will_return(wrap_sendto, strlen(returned_data)); // return value
+
+    server_process_queue();
+
+    int connected_client_count = server_get_connected_clients_count();
+    assert_int_equal(connected_client_count, 8);
+    client_t *client = server_get_client_by_index(0);
+    assert_null(client);
+    // TODO: check client IP
+}
