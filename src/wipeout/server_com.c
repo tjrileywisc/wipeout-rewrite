@@ -30,6 +30,11 @@ static int DISCOVERY_TIMEOUT = 30; // seconds
 
 static int sockfd = INVALID_SOCKET;
 
+struct server_info_t{
+    const char* name;
+    struct sockaddr_in addr; // server address
+};
+
 static server_info_t* servers = NULL; // dynamically allocated array of server_info_t
 static unsigned int n_servers = 0;
 
