@@ -30,11 +30,11 @@ int main(void) {
     };
 
     const struct CMUnitTest server_tests[] = {
-        cmocka_unit_test_prestate_setup_teardown(empties_queue_after_process, NULL, network_test_cleanup, NULL),
-        cmocka_unit_test_prestate_setup_teardown(unknown_message_echo, NULL, network_test_cleanup, NULL),
-        cmocka_unit_test_prestate_setup_teardown(server_status_query, NULL, network_test_cleanup, NULL),
-        cmocka_unit_test_prestate_setup_teardown(server_connect_client_ok, NULL, network_test_cleanup, NULL),
-        cmocka_unit_test_prestate_setup_teardown(server_connect_fails_too_many_clients, NULL, network_test_cleanup, NULL),
+        cmocka_unit_test_prestate_setup_teardown(empties_queue_after_process, server_test_setup, network_test_cleanup, NULL),
+        cmocka_unit_test_prestate_setup_teardown(unknown_message_echo, server_test_setup, network_test_cleanup, NULL),
+        cmocka_unit_test_prestate_setup_teardown(server_status_query, server_test_setup, network_test_cleanup, NULL),
+        cmocka_unit_test_prestate_setup_teardown(server_connect_client_ok, server_test_setup, network_test_cleanup, NULL),
+        cmocka_unit_test_prestate_setup_teardown(server_connect_fails_too_many_clients, server_test_setup, network_test_cleanup, NULL),
     };
  
     return cmocka_run_group_tests_name("network_tests", network_tests, NULL, NULL) || 

@@ -42,9 +42,6 @@ void empties_queue_after_process(void**) {
     expect_string(wrap_sendto, buf, returned_data);
     expect_value(wrap_sendto, len, strlen(returned_data));
     expect_value(wrap_sendto, flags, 0);
-    expect_value(wrap_sendto, dest_addr->sa_family, AF_INET);
-    // TODO
-    // expect_value(wrap_sendto, dest_addr->sa_data, &mock_addr);        // for dest_addr
 
     will_return(wrap_sendto, "STRING");  // tag for wrap_sendto to know how to interpret buf
     will_return(wrap_sendto, strlen(returned_data)); // return value
@@ -81,9 +78,6 @@ void unknown_message_echo(void**) {
     expect_string(wrap_sendto, buf, returned_data);
     expect_value(wrap_sendto, len, strlen(returned_data));
     expect_value(wrap_sendto, flags, 0);
-    expect_value(wrap_sendto, dest_addr->sa_family, AF_INET);
-    // TODO
-    // expect_value(wrap_sendto, dest_addr->sa_data, &mock_addr);        // for dest_addr
 
     will_return(wrap_sendto, "STRING");  // tag for wrap_sendto to know how to interpret buf
     will_return(wrap_sendto, strlen(returned_data)); // return value
@@ -115,7 +109,6 @@ void server_status_query(void**) {
     expect_not_value(wrap_sendto, buf, NULL);
     expect_any(wrap_sendto, len);
     expect_value(wrap_sendto, flags, 0);
-    expect_value(wrap_sendto, dest_addr->sa_family, AF_INET);
 
     will_return(wrap_sendto, "STATUS");  // tag for wrap_sendto to know how to interpret buf
     will_return(wrap_sendto, "MY SERVER");
@@ -154,14 +147,15 @@ void server_connect_client_ok(void**) {
     expect_string(wrap_sendto, buf, returned_data);
     expect_value(wrap_sendto, len, strlen(returned_data));
     expect_value(wrap_sendto, flags, 0);
-    expect_value(wrap_sendto, dest_addr->sa_family, AF_INET);
 
     will_return(wrap_sendto, "STRING");  // tag for wrap_sendto to know how to interpret buf
     will_return(wrap_sendto, strlen(returned_data)); // return value
 
+    int connected_client_count = server_get_connected_clients_count();
+    assert_int_equal(connected_client_count, 0);
     server_process_queue();
 
-    int connected_client_count = server_get_connected_clients_count();
+    connected_client_count = server_get_connected_clients_count();
     assert_int_equal(connected_client_count, 1);
     client_t *client = server_get_client_by_index(0);
     assert_non_null(client);
@@ -196,16 +190,14 @@ void server_connect_fails_too_many_clients(void**) {
     expect_string(wrap_sendto, buf, returned_data);
     expect_value(wrap_sendto, len, strlen(returned_data));
     expect_value(wrap_sendto, flags, 0);
-    expect_value(wrap_sendto, dest_addr->sa_family, AF_INET);
 
     will_return(wrap_sendto, "STRING");  // tag for wrap_sendto to know how to interpret buf
     will_return(wrap_sendto, strlen(returned_data)); // return value
 
-    server_process_queue();
-
     int connected_client_count = server_get_connected_clients_count();
     assert_int_equal(connected_client_count, 8);
-    client_t *client = server_get_client_by_index(0);
-    assert_null(client);
-    // TODO: check client IP
+    server_process_queue();
+
+    connected_client_count = server_get_connected_clients_count();
+    assert_int_equal(connected_client_count, 8);
 }

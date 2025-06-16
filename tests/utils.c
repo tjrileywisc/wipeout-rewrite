@@ -13,6 +13,13 @@ int network_test_cleanup(void** state) {
     return 0;
 }
 
+int server_test_setup(void** state) {
+    (void)state; // unused
+    // Initialize the server state before each test
+    client_com_init();
+    return 0;
+}
+
 int server_test_cleanup(void** state) {
     (void)state; // unused
     // Reset the server state after each test

@@ -24,6 +24,8 @@ static void server_init()
 {
     server.name = "master blaster";
     server.num_clients = 0;
+
+    client_com_init();
 }
 
 int main(int argc, char** argv)
