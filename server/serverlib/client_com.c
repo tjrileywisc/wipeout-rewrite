@@ -43,6 +43,14 @@ void client_com_init(void) {
 
 static void server_connect_client(struct sockaddr_in net_addr) {
 
+    if(!clients) {
+        fprintf(stderr, "Client array not initialized\n");
+
+        const char* response = "connect_failed";
+        network_send_packet(network_get_bound_ip_socket(), strlen(response), response, net_addr);
+        return;
+    }
+
     if (current_client_count >= MAX_CLIENTS) {
         fprintf(stderr, "Cannot connect client: max clients reached\n");
         
