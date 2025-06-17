@@ -119,7 +119,7 @@ static void page_network_draw(menu_t *menu, int) {
 	line_y += 40;
 
 	for (unsigned int i = 0; i < server_com_get_n_servers(); i++) {
-		server_info_t *server = &server_com_get_servers()[i];
+		//server_info_t *server = &server_com_get_servers()[i];
 
 		// TODO:
 		//pos.x = server_ip_col - ui_text_width(server->ip, UI_SIZE_8);
