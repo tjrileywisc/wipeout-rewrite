@@ -123,7 +123,12 @@ static int server_com_discovery_response(void* arg) {
 
             servers = realloc(servers, sizeof(server_info_t) * (n_servers + 1));
             servers[n_servers] = (server_info_t) {
-                .name = msg->name
+                .name = msg->name,
+                .addr = {
+                    .sin_family = AF_INET,
+                    .sin_port = htons(msg->port),
+                    .sin_addr = from.sin_addr
+                }
             };
             server_com_update_servers(); // update the menu with the new server
             n_servers++;
