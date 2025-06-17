@@ -26,7 +26,7 @@ atomic_bool network_discovery_on = false;
 thrd_t network_discovery_thread;
 thrd_t network_discovery_response_thread;
 
-static int DISCOVERY_TIMEOUT = 30; // seconds
+static int DISCOVERY_TIMEOUT = 3; // seconds
 
 static int sockfd = INVALID_SOCKET;
 
@@ -45,8 +45,41 @@ void server_com_client_init(void) {
 }
 
 static void server_com_client_connect(menu_t*, int index) {
-    server_info_t server = servers[index];
+
+    // TODO: causes a problem if we try to connect
+    // before server discovery has terminated;
+    // should we just halt discovery when we connect?
+
+    if(!servers || n_servers == 0) {
+        printf("No servers available to connect to.\n");
+        return;
+    }
+
+    struct server_info_t server = servers[index];
     printf("Connecting to server: %s\n", server.name);
+
+    socklen_t fromlen = sizeof(server.addr);
+
+    const char* message = "connect";
+    network_send_packet(sockfd, strlen(message), message, server.addr);
+
+    char buffer[1024];
+    ssize_t len = wrap_recvfrom(sockfd, buffer, sizeof(buffer)-1, 0,
+                               (struct sockaddr*)(&server.addr), &fromlen);
+
+    if (len < 0) {
+        perror("recvfrom");
+        return;
+    }
+
+    buffer[len] = '\0'; // null-terminate the received data
+    printf("Received response from server: %s\n", buffer);
+    if (strcmp(buffer, "connected") == 0) {
+        printf("Successfully connected to server %s\n", server.name);
+    }
+    else {
+        printf("Failed to connect to server %s: %s\n", server.name, buffer);
+    }
 }
 
 static void server_com_update_servers() {
