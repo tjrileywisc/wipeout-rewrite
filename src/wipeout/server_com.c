@@ -65,7 +65,7 @@ static void server_com_update_servers() {
     char name[32];
     snprintf(name, sizeof(name), "%s", server.name);
 
-    menu_page_add_button(server_menu_page, n_servers + 1, name, server_com_client_connect);
+    menu_page_add_button(server_menu_page, n_servers, name, server_com_client_connect);
 }
 
 /**
