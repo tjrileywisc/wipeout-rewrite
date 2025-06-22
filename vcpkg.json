@@ -1,17 +1,11 @@
 {
   "name": "wipeout-rewrite",
   "version-string": "1.0.0",
-  "builtin-baseline": "0fa8459cf3a7caca7adc58f992bc32ff13630684",
+  "builtin-baseline": "ce613c41372b23b1f51333815feb3edd87ef8a8b",
   "dependencies": [
     "cmocka",
-    {
-      "name": "sdl2",
-      "version>=": "2.26.5"
-    },
-    {
-      "name": "glew",
-      "version>=": "2.2.0#3"
-    },
+    "sdl2",
+    "glew",
     "sokol",
     "stb",
     {
