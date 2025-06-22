@@ -49,6 +49,10 @@ static void draw_model(Object *model, vec2_t offset, vec3_t pos, float rotation)
 }
 
 // -----------------------------------------------------------------------------
+// Commonly used settings choices
+static const char *opts_off_on[] = {"OFF", "ON"};
+
+// -----------------------------------------------------------------------------
 // Main Menu
 
 static void button_start_game(menu_t *menu, int) {
@@ -306,6 +310,12 @@ static void toggle_analog_response(menu_t*, int data) {
 
 static const char *analog_response[] = {"LINEAR", "MODERATE", "HEAVY"};
 
+static void toggle_enable_force_feedback(menu_t *menu, int data) {
+	save.enable_force_feedback = data;
+	save.is_dirty = true;
+	platform_set_force_feedback(save.enable_force_feedback);
+}
+
 static void page_options_controls_init(menu_t *menu) {
 	menu_page_t *page = menu_push(menu, "CONTROLS", page_options_control_draw, NULL, NULL);
 	flags_set(page->layout_flags, MENU_VERTICAL | MENU_FIXED);
@@ -328,6 +338,7 @@ static void page_options_controls_init(menu_t *menu) {
 	menu_page_add_button(page, A_CHANGE_VIEW, "VIEW", page_options_controls_set_init);
 
 	menu_page_add_toggle(page, save.analog_response - 1, "ANALOG RESPONSE", analog_response, len(analog_response), toggle_analog_response);
+	menu_page_add_toggle(page, save.enable_force_feedback, "ENABLE FORCE FEEDBACK", opts_off_on, len(opts_off_on), toggle_enable_force_feedback);
 }
 
 // -----------------------------------------------------------------------------

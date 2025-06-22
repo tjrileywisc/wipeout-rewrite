@@ -404,6 +404,7 @@ save_t save = {
 	.fullscreen = false,
 	.screen_res = 0,
 	.post_effect = 0,
+	.enable_force_feedback = false,
 	.network_interface = 0,
 
 	.has_rapier_class = true,  // for testing; should be false in prod
@@ -539,7 +540,6 @@ void game_init(void) {
 
 	sfx_music_mode(SFX_MUSIC_PAUSED);
 	sfx_music_play(rand_int(0, len(def.music)));
-
 
 	// System binds; always fixed
 	// Keyboard
