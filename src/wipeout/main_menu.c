@@ -382,7 +382,6 @@ static void toggle_screen_shake(menu_t*, int data) {
 	save.is_dirty = true;
 }
 
-static const char *opts_off_on[] = {"OFF", "ON"};
 static const char *opts_roll[] = {"0", "10", "20", "30", "40", "50", "60", "70", "80", "90", "100"};
 static const char *opts_ui_sizes[] = {"AUTO", "1X", "2X", "3X", "4X"};
 static const char *opts_res[] = {"NATIVE", "240P", "480P"};
