@@ -16,7 +16,7 @@
 #define CLIENT_SOCKET_TIMEOUT 3000 // 3 seconds
 
 typedef struct {
-    const char* command;
+    char* command;
     struct sockaddr_in dest_addr;
 } msg_queue_item_t;
 
