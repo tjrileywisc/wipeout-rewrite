@@ -310,7 +310,7 @@ static void toggle_analog_response(menu_t*, int data) {
 
 static const char *analog_response[] = {"LINEAR", "MODERATE", "HEAVY"};
 
-static void toggle_enable_force_feedback(menu_t *menu, int data) {
+static void toggle_enable_force_feedback(menu_t*, int data) {
 	save.enable_force_feedback = data;
 	save.is_dirty = true;
 	platform_set_force_feedback(save.enable_force_feedback);
