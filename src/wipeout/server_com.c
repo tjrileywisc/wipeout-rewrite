@@ -12,6 +12,7 @@
 #include <ws2ipdef.h>
 #else
 #include <arpa/inet.h>
+#include <sys/prctl.h>
 #endif
 
 #include <errno.h>
@@ -108,24 +109,28 @@ static void server_com_update_servers() {
 static int server_com_discovery_response(void* arg) {
     (void)arg; // unused
 
+#ifndef _WIN32
+    prctl(PR_SET_NAME, "brdcst_resp", 0, 0, 0);
+#endif
+
     struct sockaddr_in from;
     socklen_t fromlen = sizeof(from);
     char buffer[1024];
-
-    servers = realloc(servers, 0); // start with an empty list
-    n_servers = 0;
-
     time_t start_time = time(NULL);
 
     while (true) {
 
         while(!network_discovery_on) {
             thrd_yield(); // wait until discovery is enabled
+
+            servers = realloc(servers, 0); // start with an empty list
+            n_servers = 0;
+
             start_time = time(NULL); // reset start time when we start listening
         }
 
         if(time(NULL) - start_time > DISCOVERY_TIMEOUT) {
-            printf("No responses received in %d seconds, stopping discovery.\n", DISCOVERY_TIMEOUT);
+            printf("Discovery has timed out after %d seconds. %d servers found.\n", DISCOVERY_TIMEOUT, n_servers);
             network_discovery_on = false; // stop listening
             continue;
         }
@@ -182,57 +187,75 @@ static int server_com_network_discovery(void* arg) {
         printf("Failed to initialize Winsock for network discovery.\n");
         return 0;
     }
+#else
+    prctl(PR_SET_NAME, "brdcst_disc", 0, 0, 0);
 #endif
 
-    const char* message = "status";
-    broadcast_list_t broadcasts = network_get_broadcast_addresses();
+    // the outer loop runs forever, but we don't want to broadcast more than once
+    // while discovery is enabled
+    static bool has_run = false;
 
-    for (size_t i = 0; i < broadcasts.count; ++i) {
-        struct sockaddr_in addr = {
-            .sin_family = AF_INET,
-            .sin_port = htons(WIPEOUT_PORT),
-            .sin_addr = broadcasts.list[i].broadcast,
-        };
+    while(true) {
+        while(!network_discovery_on) {
+            thrd_yield(); // wait until discovery is enabled
+            has_run = false; // send one ping only
+        }
+        
+        if(has_run) {
+            continue;
+        }
+    
+        const char* message = "status";
+        broadcast_list_t broadcasts = network_get_broadcast_addresses();
 
-        wrap_sendto(sockfd, message, strlen(message), 0,
-                    (struct sockaddr*)&addr, sizeof(addr));
+        for (size_t i = 0; i < broadcasts.count; ++i) {
+            struct sockaddr_in addr = {
+                .sin_family = AF_INET,
+                .sin_port = htons(WIPEOUT_PORT),
+                .sin_addr = broadcasts.list[i].broadcast,
+            };
 
-        printf("[*] Broadcast packet sent. Waiting for replies...\n");
-        // tell receiver thread to start listening
-        network_discovery_on = true;
+            wrap_sendto(sockfd, message, strlen(message), 0,
+                        (struct sockaddr*)&addr, sizeof(addr));
+
+            printf("[*] Broadcast packet sent. Waiting for replies...\n");
+        }
+
+        free(broadcasts.list);
+        has_run = true;
     }
-
-    free(broadcasts.list);
 
     return 1;
 }
 
 void server_com_init_network_discovery(void) {
 
-    sockfd = network_get_client_socket();
-    if(sockfd == INVALID_SOCKET) {
-        printf("unable to create socket to run network discovery\n");
-        return;
+    if(network_discovery_response_thread != 0 || network_discovery_thread != 0) {
+        printf("network discovery already running\n");
+    } else {
+        sockfd = network_get_client_socket();
+        if(sockfd == INVALID_SOCKET) {
+            printf("unable to create socket to run network discovery\n");
+            return;
+        }
+
+        if(!network_bind_socket(sockfd, "8001")) {
+            printf("unable to bind socket for network discovery\n");
+            network_close_socket(&sockfd);
+            return;
+        }
+
+        thrd_create(&network_discovery_response_thread, (thrd_start_t)server_com_discovery_response, NULL);
+        thrd_detach(network_discovery_response_thread);
+
+        thrd_create(&network_discovery_thread, (thrd_start_t)server_com_network_discovery, NULL);
+        thrd_detach(network_discovery_thread);
     }
-
-    if(!network_bind_socket(sockfd, "8001")) {
-        printf("unable to bind socket for network discovery\n");
-        network_close_socket(&sockfd);
-        return;
-    }
-
-    // immediately make us ready to get responses before we start broadcasting
-    thrd_create(&network_discovery_response_thread, (thrd_start_t)server_com_discovery_response, NULL);
-    thrd_detach(network_discovery_response_thread);
-
-    thrd_create(&network_discovery_thread, (thrd_start_t)server_com_network_discovery, NULL);
-    thrd_detach(network_discovery_thread);
+    network_discovery_on = true;
 }
 
 void server_com_halt_network_discovery(void) {
     network_discovery_on = false;
-    thrd_join(network_discovery_thread, NULL);
-    thrd_join(network_discovery_response_thread, NULL);
 }
 
 server_info_t *server_com_get_servers(void) { 
