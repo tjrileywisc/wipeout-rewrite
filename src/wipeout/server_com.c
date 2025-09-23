@@ -7,6 +7,7 @@
 #include <addr_conversions.h>
 #include <network.h>
 #include <ServerInfo.pb-c.h>
+#include <stdbool.h>
 
 #if defined(WIN32)
 #include <ws2ipdef.h>
@@ -15,17 +16,17 @@
 #include <sys/prctl.h>
 #endif
 
-#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdatomic.h>
 #include <threads.h>
 
-atomic_bool network_discovery_on = false;
+atomic_bool network_discovery_on = ATOMIC_VAR_INIT(false);
 
 thrd_t network_discovery_thread;
 thrd_t network_discovery_response_thread;
+static bool network_discovery_threads_started = false;
 
 static int DISCOVERY_TIMEOUT = 3; // seconds
 
@@ -120,18 +121,22 @@ static int server_com_discovery_response(void* arg) {
 
     while (true) {
 
-        while(!network_discovery_on) {
+        while(!atomic_load(&network_discovery_on)) {
             thrd_yield(); // wait until discovery is enabled
-
-            servers = realloc(servers, 0); // start with an empty list
-            n_servers = 0;
-
+            
+            // Reset servers list once when discovery starts
+            if(servers != NULL) {
+                free(servers);
+                servers = NULL;
+                n_servers = 0;
+            }
             start_time = time(NULL); // reset start time when we start listening
         }
 
+
         if(time(NULL) - start_time > DISCOVERY_TIMEOUT) {
             printf("Discovery has timed out after %d seconds. %d servers found.\n", DISCOVERY_TIMEOUT, n_servers);
-            network_discovery_on = false; // stop listening
+            atomic_store(&network_discovery_on, false); // stop listening
             continue;
         }
 
@@ -196,12 +201,13 @@ static int server_com_network_discovery(void* arg) {
     static bool has_run = false;
 
     while(true) {
-        while(!network_discovery_on) {
+        while(!atomic_load(&network_discovery_on)) {
             thrd_yield(); // wait until discovery is enabled
             has_run = false; // send one ping only
         }
         
         if(has_run) {
+            thrd_sleep(&(struct timespec){.tv_sec = 0, .tv_nsec = 10000000}, NULL); // sleep for 10ms
             continue;
         }
     
@@ -227,10 +233,9 @@ static int server_com_network_discovery(void* arg) {
 
     return 1;
 }
-
 void server_com_init_network_discovery(void) {
 
-    if(network_discovery_response_thread != 0 || network_discovery_thread != 0) {
+    if(network_discovery_threads_started) {
         printf("network discovery already running\n");
     } else {
         sockfd = network_get_client_socket();
@@ -250,12 +255,15 @@ void server_com_init_network_discovery(void) {
 
         thrd_create(&network_discovery_thread, (thrd_start_t)server_com_network_discovery, NULL);
         thrd_detach(network_discovery_thread);
+
+        network_discovery_threads_started = true;
     }
-    network_discovery_on = true;
+    atomic_store(&network_discovery_on, true);
 }
 
+
 void server_com_halt_network_discovery(void) {
-    network_discovery_on = false;
+    atomic_store(&network_discovery_on, false);
 }
 
 server_info_t *server_com_get_servers(void) { 
