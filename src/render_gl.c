@@ -101,12 +101,20 @@ static GLuint compile_shader(GLenum type, const char *source) {
 	return shader;
 }
 
-static GLuint create_program(const char *vs_source, const char *fs_source) {
+static GLuint create_program(const char *vs_source, const char* gs_source, const char *fs_source) {
 	GLuint vs = compile_shader(GL_VERTEX_SHADER, vs_source);
+	GLuint gs;
+	if(gs_source) {
+		gs = compile_shader(GL_GEOMETRY_SHADER, gs_source);
+	}
 	GLuint fs = compile_shader(GL_FRAGMENT_SHADER, fs_source);
 
 	GLuint program = glCreateProgram();
 	glAttachShader(program, vs);
+	if(gs_source) {
+		glAttachShader(program, gs);
+	}
+
 	glAttachShader(program, fs);
 	glLinkProgram(program);
 	glUseProgram(program);
@@ -183,7 +191,7 @@ typedef struct {
 prg_game_t *shader_game_init(void) {
 	prg_game_t *s = mem_bump(sizeof(prg_game_t));
 	
-	s->program = create_program(SHADER_GAME_VS, SHADER_GAME_FS);
+	s->program = create_program(SHADER_GAME_VS, NULL, SHADER_GAME_FS);
 
 	s->uniform.view = glGetUniformLocation(s->program, "view");
 	s->uniform.model = glGetUniformLocation(s->program, "model");
@@ -330,14 +338,14 @@ void shader_post_general_init(prg_post_t *s) {
 
 prg_post_t *shader_post_default_init(void) {
 	prg_post_t *s = mem_bump(sizeof(prg_post_t));
-	s->program = create_program(SHADER_POST_VS, SHADER_POST_FS_DEFAULT);	
+	s->program = create_program(SHADER_POST_VS, NULL, SHADER_POST_FS_DEFAULT);
 	shader_post_general_init(s);
 	return s;
 }
 
 prg_post_t *shader_post_crt_init(void) {
 	prg_post_t *s = mem_bump(sizeof(prg_post_t));
-	s->program = create_program(SHADER_POST_VS, SHADER_POST_FS_CRT);	
+	s->program = create_program(SHADER_POST_VS, NULL, SHADER_POST_FS_CRT);
 	shader_post_general_init(s);
 	return s;
 }
