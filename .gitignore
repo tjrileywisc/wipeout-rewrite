@@ -16,4 +16,5 @@ coverage-report/
 /wipegame.exe
 /save.dat
 .DS_STORE
+.cache
 gamecontrollerdb.txt
