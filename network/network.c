@@ -342,7 +342,12 @@ void network_get_my_ip(char *subnet, size_t len) {
         return;
     }
 
-    connect(sockfd, (struct sockaddr *)&dest, sizeof(dest));
+    int res = connect(sockfd, (struct sockaddr *)&dest, sizeof(dest));
+    if(res == -1) {
+        perror("could not connect to determine ip address, quitting\n");
+        network_close_socket(&sockfd);
+        return;
+    }
 
     struct sockaddr_in local;
     len = sizeof(local);
