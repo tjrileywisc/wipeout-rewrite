@@ -471,6 +471,11 @@ void object_draw(Object *object, mat4_t *mat) {
 		int coord3;
 		switch (poly.primitive->type) {
 		case PRM_TYPE_GT3:
+			if (flags_is(poly.gt3->flag, PRM_SHIP_ENGINE)) {
+				// Don't draw engine glow polys in the main pass
+				poly.gt3 += 1;
+				break;
+			}
 			coord0 = poly.gt3->coords[0];
 			coord1 = poly.gt3->coords[1];
 			coord2 = poly.gt3->coords[2];
@@ -499,6 +504,11 @@ void object_draw(Object *object, mat4_t *mat) {
 			break;
 
 		case PRM_TYPE_GT4:
+			if (flags_is(poly.gt4->flag, PRM_SHIP_ENGINE)) {
+				// Don't draw engine glow polys in the main pass
+				poly.gt4 += 1;
+				break;
+			}
 			coord0 = poly.gt4->coords[0];
 			coord1 = poly.gt4->coords[1];
 			coord2 = poly.gt4->coords[2];
@@ -547,6 +557,11 @@ void object_draw(Object *object, mat4_t *mat) {
 			break;
 
 		case PRM_TYPE_FT3:
+			if (flags_is(poly.ft3->flag, PRM_SHIP_ENGINE)) {
+				// Don't draw engine glow polys in the main pass
+				poly.ft3 += 1;
+				break;
+			}
 			coord0 = poly.ft3->coords[0];
 			coord1 = poly.ft3->coords[1];
 			coord2 = poly.ft3->coords[2];
@@ -575,6 +590,11 @@ void object_draw(Object *object, mat4_t *mat) {
 			break;
 
 		case PRM_TYPE_FT4:
+			if (flags_is(poly.ft4->flag, PRM_SHIP_ENGINE)) {
+				// Don't draw engine glow polys in the main pass
+				poly.ft4 += 1;
+				break;
+			}
 			coord0 = poly.ft4->coords[0];
 			coord1 = poly.ft4->coords[1];
 			coord2 = poly.ft4->coords[2];
@@ -623,6 +643,11 @@ void object_draw(Object *object, mat4_t *mat) {
 			break;
 
 		case PRM_TYPE_G3:
+			if (flags_is(poly.g3->flag, PRM_SHIP_ENGINE)) {
+				// Don't draw engine glow polys in the main pass
+				poly.g3 += 1;
+				break;
+			}
 			coord0 = poly.g3->coords[0];
 			coord1 = poly.g3->coords[1];
 			coord2 = poly.g3->coords[2];
@@ -648,6 +673,11 @@ void object_draw(Object *object, mat4_t *mat) {
 			break;
 
 		case PRM_TYPE_G4:
+			if (flags_is(poly.g4->flag, PRM_SHIP_ENGINE)) {
+				// Don't draw engine glow polys in the main pass
+				poly.g4 += 1;
+				break;
+			}
 			coord0 = poly.g4->coords[0];
 			coord1 = poly.g4->coords[1];
 			coord2 = poly.g4->coords[2];
@@ -690,6 +720,11 @@ void object_draw(Object *object, mat4_t *mat) {
 			break;
 
 		case PRM_TYPE_F3:
+			if (flags_is(poly.f3->flag, PRM_SHIP_ENGINE)) {
+				// Don't draw engine glow polys in the main pass
+				poly.f3 += 1;
+				break;
+			}
 			coord0 = poly.f3->coords[0];
 			coord1 = poly.f3->coords[1];
 			coord2 = poly.f3->coords[2];
@@ -715,6 +750,11 @@ void object_draw(Object *object, mat4_t *mat) {
 			break;
 
 		case PRM_TYPE_F4:
+			if (flags_is(poly.f4->flag, PRM_SHIP_ENGINE)) {
+				// Don't draw engine glow polys in the main pass
+				poly.f4 += 1;
+				break;
+			}
 			coord0 = poly.f4->coords[0];
 			coord1 = poly.f4->coords[1];
 			coord2 = poly.f4->coords[2];
