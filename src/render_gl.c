@@ -51,7 +51,7 @@
 	#define FAR_PLANE (RENDER_FADEOUT_FAR)
 	#define RENDER_DEPTH_BUFFER_INTERNAL_FORMAT GL_DEPTH_COMPONENT16
 #else
-	#define SHADER_SOURCE(...) #__VA_ARGS__
+	#define SHADER_SOURCE(...) "#version 330 core\n" #__VA_ARGS__
 
 	#define NEAR_PLANE 16.0
 	#define FAR_PLANE (RENDER_FADEOUT_FAR)
