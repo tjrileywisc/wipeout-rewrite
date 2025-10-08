@@ -218,6 +218,114 @@ prg_game_t *shader_game_init(void) {
 	return s;
 }
 
+static const char * const SHADER_EXHAUST_VS = SHADER_SOURCE(
+
+	layout(location = 0) in vec3 a_position;
+
+	out vec3 v_position;
+
+	void main() {
+		v_position = a_position;
+		gl_Position = vec4(a_position, 1.0);
+	}
+);
+
+static const char * const SHADER_EXHAUST_GS = SHADER_SOURCE(
+	layout(triangles) in;
+	layout(triangle_strip, max_vertices = 3) out;
+
+	uniform float u_time;
+	uniform float u_exhaust_len;
+	uniform vec3 u_engine_dir; // Usually (0, 0, -1)
+
+	in vec3 v_position[]; // Input from vertex shader
+	out vec4 f_color;
+
+	float rand(vec2 co) {
+		return fract(sin(dot(co.xy ,vec2(12.9898,78.233))) * 43758.5453);
+	}
+
+	void main() {
+		for (int i = 0; i < 3; i++) {
+			vec4 pos = gl_in[i].gl_Position;
+
+			// Simulate the random jitter using a deterministic hash
+			float r_x = (rand(vec2(u_time, i * 0.1)) - 0.5) * 8.0;
+			float r_y = (rand(vec2(u_time + 1.0, i * 0.1)) - 0.5) * 8.0;
+			float r_z = (rand(vec2(u_time + 2.0, i * 0.1)) - 0.5) * 16.0;
+
+			vec3 jitter = vec3(r_x, r_y, r_z);
+
+			// Pull vertex backward along engine direction
+			vec3 animated_pos = pos.xyz - u_engine_dir * u_exhaust_len + jitter;
+
+			gl_Position = vec4(animated_pos, 1.0);
+
+			f_color = vec4(0.7, 0.3, 0.5, 0.5); // example plume color
+			EmitVertex();
+		}
+		EndPrimitive();
+	}
+);
+
+static const char * const SHADER_EXHAUST_FS = SHADER_SOURCE(
+	in vec4 f_color;
+	out vec4 FragColor;
+
+	void main() {
+		FragColor = f_color;
+	}
+);
+
+typedef struct {
+	GLuint program;
+	GLuint vao;
+	struct {
+		GLuint projection;
+		GLuint view;
+		GLuint model;
+		GLuint time;
+		GLuint camera_pos;
+		GLuint exhaust_len;
+		GLuint engine_dir;
+	} uniform;
+	struct {
+		GLuint pos;
+		GLuint uv;
+		GLuint color;
+	} attribute;
+} prg_exhaust_t;
+
+
+prg_exhaust_t* shader_exhaust_init(void) {
+    prg_exhaust_t *s = mem_bump(sizeof(prg_exhaust_t));
+    s->program =
+        create_program(SHADER_EXHAUST_VS, SHADER_EXHAUST_GS, SHADER_EXHAUST_FS);
+
+    // s->uniform.projection = glGetUniformLocation(s->program, "projection");
+    // s->uniform.view = glGetUniformLocation(s->program, "view");
+    // s->uniform.model = glGetUniformLocation(s->program, "model");
+    // s->uniform.time = glGetUniformLocation(s->program, "time");
+    // s->uniform.camera_pos = glGetUniformLocation(s->program, "camera_pos");
+
+    // s->attribute.pos = glGetAttribLocation(s->program, "pos");
+    // s->attribute.uv = glGetAttribLocation(s->program, "uv");
+    // s->attribute.color = glGetAttribLocation(s->program, "color");
+
+    // glGenVertexArrays(1, &s->vao);
+    // glBindVertexArray(s->vao);
+
+    // glEnableVertexAttribArray(s->attribute.pos);
+    // glEnableVertexAttribArray(s->attribute.uv);
+    // glEnableVertexAttribArray(s->attribute.color);
+
+    // bind_va_f(s->attribute.pos, vertex_t, pos, 0);
+    // bind_va_f(s->attribute.uv, vertex_t, uv, 0);
+    // bind_va_color(s->attribute.color, vertex_t, color, 0);
+
+    return s;
+}
+
 
 // -----------------------------------------------------------------------------
 // POST Effect shaders
@@ -383,6 +491,7 @@ static GLuint backbuffer_texture = 0;
 static GLuint backbuffer_depth_buffer = 0;
 
 prg_game_t *prg_game;
+prg_exhaust_t *prg_exhaust;
 prg_post_t *prg_post;
 prg_post_t *prg_post_effects[NUM_RENDER_POST_EFFCTS] = {};
 
@@ -440,6 +549,9 @@ void render_init(vec2i_t screen_size) {
 	prg_post_effects[RENDER_POST_CRT] = shader_post_crt_init();
 	render_set_post_effect(RENDER_POST_NONE);
 
+	// Exhaust shader
+	prg_exhaust = shader_exhaust_init();
+
 	// Game shader
 
 	prg_game = shader_game_init();
@@ -451,7 +563,6 @@ void render_init(vec2i_t screen_size) {
 	glEnable(GL_CULL_FACE);
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
 
 	// Create white texture
 
