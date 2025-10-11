@@ -187,12 +187,6 @@ void ships_draw(void) {
 	render_set_depth_write(true);
 }
 
-
-
-
-
-
-
 void ship_init(ship_t *self, section_t *section, int pilot, int inv_start_rank) {
 	self->pilot = pilot;
 	self->velocity = vec3(0, 0, 0);
