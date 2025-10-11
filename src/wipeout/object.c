@@ -469,329 +469,317 @@ void object_draw(Object *object, mat4_t *mat) {
 		int coord1;
 		int coord2;
 		int coord3;
+
+		tris_t tri;
+		tris_t tri1;
+		tris_t tri2;
+
 		switch (poly.primitive->type) {
 		case PRM_TYPE_GT3:
-			if (flags_is(poly.gt3->flag, PRM_SHIP_ENGINE)) {
-				// Don't draw engine glow polys in the main pass
-				poly.gt3 += 1;
-				break;
-			}
+			
 			coord0 = poly.gt3->coords[0];
 			coord1 = poly.gt3->coords[1];
 			coord2 = poly.gt3->coords[2];
 
-			render_push_tris((tris_t) {
-				.vertices = {
-					{
-						.pos = vertex[coord2],
-						.uv = {poly.gt3->u2, poly.gt3->v2},
-						.color = poly.gt3->color[2]
-					},
-					{
-						.pos = vertex[coord1],
-						.uv = {poly.gt3->u1, poly.gt3->v1},
-						.color = poly.gt3->color[1]
-					},
-					{
-						.pos = vertex[coord0],
-						.uv = {poly.gt3->u0, poly.gt3->v0},
-						.color = poly.gt3->color[0]
-					},
-				}
-			}, poly.gt3->texture);
+			tri.vertices[0] = (vertex_t) {
+				.pos = vertex[coord2],
+				.uv = {poly.gt3->u2, poly.gt3->v2},
+				.color = poly.gt3->color[2]
+			};
+			tri.vertices[1] = (vertex_t) {
+				.pos = vertex[coord1],
+				.uv = {poly.gt3->u1, poly.gt3->v1},
+				.color = poly.gt3->color[1]
+			};
+			tri.vertices[2] = (vertex_t) {
+				.pos = vertex[coord0],
+				.uv = {poly.gt3->u0, poly.gt3->v0},
+				.color = poly.gt3->color[0]
+			};
+
+			if (flags_is(poly.gt3->flag, PRM_SHIP_ENGINE)) {
+				// Don't draw engine glow polys in the main pass
+				// TODO: push to exhaust tris buffer
+			}
+			else {
+				render_push_tris(tri, poly.gt3->texture);
+			}
 
 			poly.gt3 += 1;
 			break;
 
 		case PRM_TYPE_GT4:
-			if (flags_is(poly.gt4->flag, PRM_SHIP_ENGINE)) {
-				// Don't draw engine glow polys in the main pass
-				poly.gt4 += 1;
-				break;
-			}
 			coord0 = poly.gt4->coords[0];
 			coord1 = poly.gt4->coords[1];
 			coord2 = poly.gt4->coords[2];
 			coord3 = poly.gt4->coords[3];
 
-			render_push_tris((tris_t) {
-				.vertices = {
-					{
-						.pos = vertex[coord2],
-						.uv = {poly.gt4->u2, poly.gt4->v2},
-						.color = poly.gt4->color[2]
-					},
-					{
-						.pos = vertex[coord1],
-						.uv = {poly.gt4->u1, poly.gt4->v1},
-						.color = poly.gt4->color[1]
-					},
-					{
-						.pos = vertex[coord0],
-						.uv = {poly.gt4->u0, poly.gt4->v0},
-						.color = poly.gt4->color[0]
-					},
-				}
-			}, poly.gt4->texture);
-			render_push_tris((tris_t) {
-				.vertices = {
-					{
-						.pos = vertex[coord2],
-						.uv = {poly.gt4->u2, poly.gt4->v2},
-						.color = poly.gt4->color[2]
-					},
-					{
-						.pos = vertex[coord3],
-						.uv = {poly.gt4->u3, poly.gt4->v3},
-						.color = poly.gt4->color[3]
-					},
-					{
-						.pos = vertex[coord1],
-						.uv = {poly.gt4->u1, poly.gt4->v1},
-						.color = poly.gt4->color[1]
-					},
-				}
-			}, poly.gt4->texture);
+			tri1.vertices[0] = (vertex_t) {
+				.pos = vertex[coord2],
+				.uv = {poly.gt4->u2, poly.gt4->v2},
+				.color = poly.gt4->color[2]
+			};
+			tri1.vertices[1] = (vertex_t) {
+				.pos = vertex[coord1],
+				.uv = {poly.gt4->u1, poly.gt4->v1},
+				.color = poly.gt4->color[1]
+			};
+			tri1.vertices[2] = (vertex_t) {
+				.pos = vertex[coord0],
+				.uv = {poly.gt4->u0, poly.gt4->v0},
+				.color = poly.gt4->color[0]
+			};
+
+			tri2.vertices[0] = (vertex_t) {
+				.pos = vertex[coord2],
+				.uv = {poly.gt4->u2, poly.gt4->v2},
+				.color = poly.gt4->color[2]
+			};
+			tri2.vertices[1] = (vertex_t) {
+				.pos = vertex[coord3],
+				.uv = {poly.gt4->u3, poly.gt4->v3	},
+				.color = poly.gt4->color[3]
+			};
+			tri2.vertices[2] = (vertex_t) {
+				.pos = vertex[coord1],
+				.uv = {poly.gt4->u1, poly.gt4->v1	},
+				.color = poly.gt4->color[1]
+			};
+
+			if (flags_is(poly.gt4->flag, PRM_SHIP_ENGINE)) {
+				// Don't draw engine glow polys in the main pass
+				// TODO: push to exhaust tris buffer
+			}
+			else {
+				render_push_tris(tri1, poly.gt4->texture);
+				render_push_tris(tri2, poly.gt4->texture);
+			}
 
 			poly.gt4 += 1;
 			break;
 
 		case PRM_TYPE_FT3:
-			if (flags_is(poly.ft3->flag, PRM_SHIP_ENGINE)) {
-				// Don't draw engine glow polys in the main pass
-				poly.ft3 += 1;
-				break;
-			}
 			coord0 = poly.ft3->coords[0];
 			coord1 = poly.ft3->coords[1];
 			coord2 = poly.ft3->coords[2];
 
-			render_push_tris((tris_t) {
-				.vertices = {
-					{
-						.pos = vertex[coord2],
-						.uv = {poly.ft3->u2, poly.ft3->v2},
-						.color = poly.ft3->color
-					},
-					{
-						.pos = vertex[coord1],
-						.uv = {poly.ft3->u1, poly.ft3->v1},
-						.color = poly.ft3->color
-					},
-					{
-						.pos = vertex[coord0],
-						.uv = {poly.ft3->u0, poly.ft3->v0},
-						.color = poly.ft3->color
-					},
-				}
-			}, poly.ft3->texture);
+			tri.vertices[0] = (vertex_t) {
+				.pos = vertex[coord2],
+				.uv = {poly.ft3->u2, poly.ft3->v2},
+				.color = poly.ft3->color
+			};
+
+			tri.vertices[1] = (vertex_t) {
+				.pos = vertex[coord1],
+				.uv = {poly.ft3->u1, poly.ft3->v1},
+				.color = poly.ft3->color
+			};
+			tri.vertices[2] = (vertex_t) {
+				.pos = vertex[coord0],
+				.uv = {poly.ft3->u0, poly.ft3->v0},
+				.color = poly.ft3->color
+			};
+
+			if (flags_is(poly.ft3->flag, PRM_SHIP_ENGINE)) {
+				// Don't draw engine glow polys in the main pass
+				// TODO: push to exhaust tris buffer
+			}
+			else {
+				render_push_tris(tri, poly.ft3->texture);
+			}
 
 			poly.ft3 += 1;
 			break;
 
 		case PRM_TYPE_FT4:
-			if (flags_is(poly.ft4->flag, PRM_SHIP_ENGINE)) {
-				// Don't draw engine glow polys in the main pass
-				poly.ft4 += 1;
-				break;
-			}
 			coord0 = poly.ft4->coords[0];
 			coord1 = poly.ft4->coords[1];
 			coord2 = poly.ft4->coords[2];
 			coord3 = poly.ft4->coords[3];
 
-			render_push_tris((tris_t) {
-				.vertices = {
-					{
-						.pos = vertex[coord2],
-						.uv = {poly.ft4->u2, poly.ft4->v2},
-						.color = poly.ft4->color
-					},
-					{
-						.pos = vertex[coord1],
-						.uv = {poly.ft4->u1, poly.ft4->v1},
-						.color = poly.ft4->color
-					},
-					{
-						.pos = vertex[coord0],
-						.uv = {poly.ft4->u0, poly.ft4->v0},
-						.color = poly.ft4->color
-					},
-				}
-			}, poly.ft4->texture);
-			render_push_tris((tris_t) {
-				.vertices = {
-					{
-						.pos = vertex[coord2],
-						.uv = {poly.ft4->u2, poly.ft4->v2},
-						.color = poly.ft4->color
-					},
-					{
-						.pos = vertex[coord3],
-						.uv = {poly.ft4->u3, poly.ft4->v3},
-						.color = poly.ft4->color
-					},
-					{
-						.pos = vertex[coord1],
-						.uv = {poly.ft4->u1, poly.ft4->v1},
-						.color = poly.ft4->color
-					},
-				}
-			}, poly.ft4->texture);
+			tri1.vertices[0] = (vertex_t) {
+				.pos = vertex[coord2],
+				.uv = {poly.ft4->u2, poly.ft4->v2},
+				.color = poly.ft4->color
+			};
+			tri1.vertices[1] = (vertex_t) {
+				.pos = vertex[coord1],
+				.uv = {poly.ft4->u1, poly.ft4->v1},
+				.color = poly.ft4->color
+			};
+			tri1.vertices[2] = (vertex_t) {
+				.pos = vertex[coord0],
+				.uv = {poly.ft4->u0, poly.ft4->v0},
+				.color = poly.ft4->color
+			};
+
+			tri2.vertices[0] = (vertex_t) {
+				.pos = vertex[coord2],
+				.uv = {poly.ft4->u2, poly.ft4->v2},
+				.color = poly.ft4->color
+			};
+			tri2.vertices[1] = (vertex_t) {
+				.pos = vertex[coord3],
+				.uv = {poly.ft4->u3, poly.ft4->v3},
+				.color = poly.ft4->color
+			};
+			tri2.vertices[2] = (vertex_t) {
+				.pos = vertex[coord1],
+				.uv = {poly.ft4->u1, poly.ft4->v1},
+				.color = poly.ft4->color
+			};
+
+			if (flags_is(poly.ft4->flag, PRM_SHIP_ENGINE)) {
+				// Don't draw engine glow polys in the main pass
+
+			}
+			else {
+				render_push_tris(tri1, poly.ft4->texture);
+				render_push_tris(tri2, poly.ft4->texture);
+			}
 
 			poly.ft4 += 1;
 			break;
 
 		case PRM_TYPE_G3:
-			if (flags_is(poly.g3->flag, PRM_SHIP_ENGINE)) {
-				// Don't draw engine glow polys in the main pass
-				poly.g3 += 1;
-				break;
-			}
 			coord0 = poly.g3->coords[0];
 			coord1 = poly.g3->coords[1];
 			coord2 = poly.g3->coords[2];
 
-			render_push_tris((tris_t) {
-				.vertices = {
-					{
-						.pos = vertex[coord2],
-						.color = poly.g3->color[2]
-					},
-					{
-						.pos = vertex[coord1],
-						.color = poly.g3->color[1]
-					},
-					{
-						.pos = vertex[coord0],
-						.color = poly.g3->color[0]
-					},
-				}
-			}, RENDER_NO_TEXTURE);
+			tri.vertices[0] = (vertex_t) {
+				.pos = vertex[coord2],
+				.color = poly.g3->color[2]
+			};
+			tri.vertices[1] = (vertex_t) {
+				.pos = vertex[coord1],
+				.color = poly.g3->color[1]
+			};
+			tri.vertices[2] = (vertex_t) {
+				.pos = vertex[coord0],
+				.color = poly.g3->color[0]
+			};
+
+			if (flags_is(poly.g3->flag, PRM_SHIP_ENGINE)) {
+				// Don't draw engine glow polys in the main pass
+
+			}
+			else {
+				render_push_tris(tri, RENDER_NO_TEXTURE);
+			}
 
 			poly.g3 += 1;
 			break;
 
 		case PRM_TYPE_G4:
-			if (flags_is(poly.g4->flag, PRM_SHIP_ENGINE)) {
-				// Don't draw engine glow polys in the main pass
-				poly.g4 += 1;
-				break;
-			}
 			coord0 = poly.g4->coords[0];
 			coord1 = poly.g4->coords[1];
 			coord2 = poly.g4->coords[2];
 			coord3 = poly.g4->coords[3];
 
-			render_push_tris((tris_t) {
-				.vertices = {
-					{
-						.pos = vertex[coord2],
-						.color = poly.g4->color[2]
-					},
-					{
-						.pos = vertex[coord1],
-						.color = poly.g4->color[1]
-					},
-					{
-						.pos = vertex[coord0],
-						.color = poly.g4->color[0]
-					},
-				}
-			}, RENDER_NO_TEXTURE);
-			render_push_tris((tris_t) {
-				.vertices = {
-					{
-						.pos = vertex[coord2],
-						.color = poly.g4->color[2]
-					},
-					{
-						.pos = vertex[coord3],
-						.color = poly.g4->color[3]
-					},
-					{
-						.pos = vertex[coord1],
-						.color = poly.g4->color[1]
-					},
-				}
-			}, RENDER_NO_TEXTURE);
+			tri1.vertices[0] = (vertex_t) {
+				.pos = vertex[coord2],
+				.color = poly.g4->color[2]
+			};
+			tri1.vertices[1] = (vertex_t) {
+				.pos = vertex[coord1],
+				.color = poly.g4->color[1]
+			};
+			tri1.vertices[2] = (vertex_t) {
+				.pos = vertex[coord0],
+				.color = poly.g4->color[0]
+			};
+
+			tri2.vertices[0] = (vertex_t) {
+				.pos = vertex[coord2],
+				.color = poly.g4->color[2]
+			};
+			tri2.vertices[1] = (vertex_t) {
+				.pos = vertex[coord3],
+				.color = poly.g4->color[3]
+			};
+			tri2.vertices[2] = (vertex_t) {
+				.pos = vertex[coord1],
+				.color = poly.g4->color[1]
+			};
+
+			if (flags_is(poly.g4->flag, PRM_SHIP_ENGINE)) {
+				// Don't draw engine glow polys in the main pass
+			}
+			else {
+				render_push_tris(tri1, RENDER_NO_TEXTURE);
+				render_push_tris(tri2, RENDER_NO_TEXTURE);
+			}
 
 			poly.g4 += 1;
 			break;
 
 		case PRM_TYPE_F3:
-			if (flags_is(poly.f3->flag, PRM_SHIP_ENGINE)) {
-				// Don't draw engine glow polys in the main pass
-				poly.f3 += 1;
-				break;
-			}
 			coord0 = poly.f3->coords[0];
 			coord1 = poly.f3->coords[1];
 			coord2 = poly.f3->coords[2];
 
-			render_push_tris((tris_t) {
-				.vertices = {
-					{
-						.pos = vertex[coord2],
-						.color = poly.f3->color
-					},
-					{
-						.pos = vertex[coord1],
-						.color = poly.f3->color
-					},
-					{
-						.pos = vertex[coord0],
-						.color = poly.f3->color
-					},
-				}
-			}, RENDER_NO_TEXTURE);
+			tri.vertices[0] = (vertex_t) {
+				.pos = vertex[coord2],
+				.color = poly.f3->color
+			};
+			tri.vertices[1] = (vertex_t) {
+				.pos = vertex[coord1],
+				.color = poly.f3->color
+			};
+			tri.vertices[2] = (vertex_t) {
+				.pos = vertex[coord0],
+				.color = poly.f3->color
+			};
+
+			if (flags_is(poly.f3->flag, PRM_SHIP_ENGINE)) {
+				// Don't draw engine glow polys in the main pass
+			}
+			else {
+				render_push_tris(tri, RENDER_NO_TEXTURE);
+			}
 
 			poly.f3 += 1;
 			break;
 
 		case PRM_TYPE_F4:
-			if (flags_is(poly.f4->flag, PRM_SHIP_ENGINE)) {
-				// Don't draw engine glow polys in the main pass
-				poly.f4 += 1;
-				break;
-			}
 			coord0 = poly.f4->coords[0];
 			coord1 = poly.f4->coords[1];
 			coord2 = poly.f4->coords[2];
 			coord3 = poly.f4->coords[3];
 
-			render_push_tris((tris_t) {
-				.vertices = {
-					{
-						.pos = vertex[coord2],
-						.color = poly.f4->color
-					},
-					{
-						.pos = vertex[coord1],
-						.color = poly.f4->color
-					},
-					{
-						.pos = vertex[coord0],
-						.color = poly.f4->color
-					},
-				}
-			}, RENDER_NO_TEXTURE);
-			render_push_tris((tris_t) {
-				.vertices = {
-					{
-						.pos = vertex[coord2],
-						.color = poly.f4->color
-					},
-					{
-						.pos = vertex[coord3],
-						.color = poly.f4->color
-					},
-					{
-						.pos = vertex[coord1],
-						.color = poly.f4->color
-					},
-				}
-			}, RENDER_NO_TEXTURE);
+			tri1.vertices[0] = (vertex_t) {
+				.pos = vertex[coord2],
+				.color = poly.f4->color
+			};
+			tri1.vertices[1] = (vertex_t) {
+				.pos = vertex[coord1],
+				.color = poly.f4->color
+			};
+			tri1.vertices[2] = (vertex_t) {
+				.pos = vertex[coord0],
+				.color = poly.f4->color
+			};
+
+			tri2.vertices[0] = (vertex_t) {
+				.pos = vertex[coord2],
+				.color = poly.f4->color
+			};
+			tri2.vertices[1] = (vertex_t) {
+				.pos = vertex[coord3],
+				.color = poly.f4->color
+			};
+			tri2.vertices[2] = (vertex_t) {
+				.pos = vertex[coord1],
+				.color = poly.f4->color
+			};
+
+			if (flags_is(poly.f4->flag, PRM_SHIP_ENGINE)) {
+				// Don't draw engine glow polys in the main pass
+			}
+			else {
+				render_push_tris(tri1, RENDER_NO_TEXTURE);
+				render_push_tris(tri2, RENDER_NO_TEXTURE);
+			}
 
 			poly.f4 += 1;
 			break;
