@@ -2,6 +2,7 @@
 
 add_executable(tests
     main.c
+    test_name_gen.c
     test_network.c
     test_server.c
 

@@ -39,6 +39,12 @@ int main(int argc, char** argv)
     char name[NAME_GEN_MAX_LEN];
     if (argc > 1) {
         snprintf(name, sizeof(name), "%s", argv[1]);
+        if (!name_gen_is_valid(name)) {
+            char fallback[NAME_GEN_MAX_LEN];
+            name_gen_random(fallback, sizeof(fallback));
+            printf("WARNING: server name \"%s\" contains invalid characters (A-Z, 0-9, space only); using \"%s\"\n", name, fallback);
+            snprintf(name, sizeof(name), "%s", fallback);
+        }
     } else {
         name_gen_random(name, sizeof(name));
     }
