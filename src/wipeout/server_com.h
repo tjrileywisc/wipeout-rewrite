@@ -16,6 +16,10 @@ void server_com_set_connect_callback(void (*callback)(menu_t *menu));
 
 void server_com_disconnect(void);
 
+unsigned int server_com_get_n_connected_clients(void);
+const char *server_com_get_connected_client_name(unsigned int index);
+const char *server_com_get_connected_client_ip(unsigned int index);
+
 void server_com_client_init(void);
 
 void server_com_init_network_discovery(void);

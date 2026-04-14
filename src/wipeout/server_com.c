@@ -6,6 +6,9 @@
 
 #include <addr_conversions.h>
 #include <network.h>
+#include <name_gen.h>
+#include <protocol.h>
+#include <ClientList.pb-c.h>
 #include <ServerInfo.pb-c.h>
 #include <stdbool.h>
 
@@ -39,6 +42,14 @@ struct server_info_t{
 #define MAX_SERVERS 16
 static server_info_t servers[MAX_SERVERS];
 static unsigned int n_servers = 0;
+
+#define MAX_CONNECTED_CLIENTS 8
+typedef struct {
+    char name[NAME_GEN_MAX_LEN];
+    char ip[INET_ADDRSTRLEN];
+} connected_client_t;
+static connected_client_t connected_clients[MAX_CONNECTED_CLIENTS];
+static unsigned int n_connected_clients = 0;
 
 static menu_page_t* server_menu_page = NULL; // menu for server discovery
 static void (*on_connect_callback)(menu_t *menu) = NULL;
@@ -138,10 +149,53 @@ static int server_com_discovery_response(void* arg) {
         // }
 
         if (len > 0) {
-            buffer[len] = '\0';
-            Wipeout__ServerInfo* msg = wipeout__server_info__unpack(NULL, len, (const uint8_t*)buffer);
-            if(msg == NULL) {
-                // Not a ServerInfo protobuf — check for a text connect response
+            uint8_t type_byte = (uint8_t)buffer[0];
+
+            if (type_byte == MSG_TYPE_SERVER_INFO) {
+                Wipeout__ServerInfo* msg = wipeout__server_info__unpack(NULL, len - 1, (const uint8_t*)buffer + 1);
+                if (msg == NULL) {
+                    fprintf(stderr, "Failed to unpack ServerInfo message\n");
+                    continue;
+                }
+                printf("Found server %s @ %s:%d\n", msg->name, inet_ntoa(from.sin_addr), msg->port);
+                bool duplicate = false;
+                for (unsigned int i = 0; i < n_servers; i++) {
+                    if (servers[i].addr.sin_addr.s_addr == from.sin_addr.s_addr &&
+                        servers[i].addr.sin_port == htons(msg->port)) {
+                        duplicate = true;
+                        break;
+                    }
+                }
+                if (!duplicate && n_servers < MAX_SERVERS) {
+                    servers[n_servers] = (server_info_t) {
+                        .name = msg->name,
+                        .addr = {
+                            .sin_family = AF_INET,
+                            .sin_port = htons(msg->port),
+                            .sin_addr = from.sin_addr
+                        }
+                    };
+                    server_com_update_servers();
+                    n_servers++;
+                }
+
+            } else if (type_byte == MSG_TYPE_CLIENT_LIST) {
+                Wipeout__ClientList* msg = wipeout__client_list__unpack(NULL, len - 1, (const uint8_t*)buffer + 1);
+                if (msg == NULL) {
+                    fprintf(stderr, "Failed to unpack ClientList message\n");
+                    continue;
+                }
+                n_connected_clients = 0;
+                for (size_t i = 0; i < msg->n_clients && i < MAX_CONNECTED_CLIENTS; i++) {
+                    snprintf(connected_clients[i].name, NAME_GEN_MAX_LEN, "%s", msg->clients[i]->name);
+                    snprintf(connected_clients[i].ip,   INET_ADDRSTRLEN,  "%s", msg->clients[i]->ip);
+                    n_connected_clients++;
+                }
+                wipeout__client_list__free_unpacked(msg, NULL);
+
+            } else {
+                // Plain-text message
+                buffer[len] = '\0';
                 if (strcmp(buffer, "connected") == 0) {
                     printf("Successfully connected to server\n");
                     connected_server_addr = from;
@@ -153,32 +207,8 @@ static int server_com_discovery_response(void* arg) {
                     printf("Failed to connect to server\n");
                     pending_connect_menu = NULL;
                 } else {
-                    fprintf(stderr, "Failed to unpack server info message\n");
+                    fprintf(stderr, "Unrecognised message from server\n");
                 }
-                continue;
-            }
-
-            printf("Found server %s @ %s:%d\n", msg->name, inet_ntoa(from.sin_addr), msg->port);
-
-            bool duplicate = false;
-            for (unsigned int i = 0; i < n_servers; i++) {
-                if (servers[i].addr.sin_addr.s_addr == from.sin_addr.s_addr &&
-                    servers[i].addr.sin_port == htons(msg->port)) {
-                    duplicate = true;
-                    break;
-                }
-            }
-            if (!duplicate && n_servers < MAX_SERVERS) {
-                servers[n_servers] = (server_info_t) {
-                    .name = msg->name,
-                    .addr = {
-                        .sin_family = AF_INET,
-                        .sin_port = htons(msg->port),
-                        .sin_addr = from.sin_addr
-                    }
-                };
-                server_com_update_servers(); // update the menu with the new server
-                n_servers++;
             }
         }
         } // end inner discovery loop
@@ -291,4 +321,19 @@ void server_com_disconnect(void) {
     const char* message = "disconnect";
     network_send_packet(sockfd, strlen(message), message, connected_server_addr);
     connected_server_addr = (struct sockaddr_in){0};
+    n_connected_clients = 0;
+}
+
+unsigned int server_com_get_n_connected_clients(void) {
+    return n_connected_clients;
+}
+
+const char *server_com_get_connected_client_name(unsigned int index) {
+    if (index >= n_connected_clients) return "";
+    return connected_clients[index].name;
+}
+
+const char *server_com_get_connected_client_ip(unsigned int index) {
+    if (index >= n_connected_clients) return "";
+    return connected_clients[index].ip;
 }

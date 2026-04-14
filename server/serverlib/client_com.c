@@ -19,7 +19,9 @@
 #endif
 
 #include <ServerInfo.pb-c.h>
+#include <ClientList.pb-c.h>
 #include <name_gen.h>
+#include <protocol.h>
 
 typedef enum { DISCONNECTED, CONNECTED } connect_state_t;
 
@@ -43,6 +45,8 @@ void client_com_init(const char *name) {
     snprintf(server_name, sizeof(server_name), "%s", name);
 }
 
+
+static void server_send_client_list(struct sockaddr_in net_addr);
 
 static void server_connect_client(struct sockaddr_in net_addr) {
 
@@ -83,6 +87,7 @@ static void server_connect_client(struct sockaddr_in net_addr) {
 
     const char* response = "connected";
     network_send_packet(network_get_bound_ip_socket(), strlen(response), response, net_addr);
+    server_send_client_list(net_addr);
 }
 
 static void server_disconnect_client(struct sockaddr_in net_addr) {
@@ -120,22 +125,37 @@ client_t *server_get_client_by_index(unsigned int index) {
 }
 
 static void server_status(struct sockaddr_in net_addr) {
-
     Wipeout__ServerInfo msg = WIPEOUT__SERVER_INFO__INIT;
-
     msg.name = server_name;
     msg.port = 8000;
 
-    size_t len = wipeout__server_info__get_packed_size(&msg);
-    uint8_t *buffer = malloc(len);
-    if (!buffer) {
-        fprintf(stderr, "Failed to allocate buffer for server info\n");
-        return;
-    }
-    wipeout__server_info__pack(&msg, buffer);
-    network_send_packet(network_get_bound_ip_socket(), len, buffer, net_addr);
+    uint8_t packet[256];
+    packet[0] = MSG_TYPE_SERVER_INFO;
+    size_t packed_len = wipeout__server_info__pack(&msg, packet + 1);
+    network_send_packet(network_get_bound_ip_socket(), 1 + packed_len, packet, net_addr);
+}
 
-    return;
+static void server_send_client_list(struct sockaddr_in net_addr) {
+    Wipeout__ClientInfo client_infos[MAX_CLIENTS];
+    Wipeout__ClientInfo *client_info_ptrs[MAX_CLIENTS];
+    char ip_strs[MAX_CLIENTS][INET_ADDRSTRLEN];
+
+    for (unsigned int i = 0; i < current_client_count; i++) {
+        wipeout__client_info__init(&client_infos[i]);
+        client_infos[i].name = clients[i].name;
+        inet_ntop(AF_INET, &clients[i].addr.sin_addr, ip_strs[i], INET_ADDRSTRLEN);
+        client_infos[i].ip = ip_strs[i];
+        client_info_ptrs[i] = &client_infos[i];
+    }
+
+    Wipeout__ClientList list = WIPEOUT__CLIENT_LIST__INIT;
+    list.clients = client_info_ptrs;
+    list.n_clients = current_client_count;
+
+    uint8_t packet[1024];
+    packet[0] = MSG_TYPE_CLIENT_LIST;
+    size_t packed_len = wipeout__client_list__pack(&list, packet + 1);
+    network_send_packet(network_get_bound_ip_socket(), 1 + packed_len, packet, net_addr);
 }
 
 /**

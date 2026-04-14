@@ -148,8 +148,39 @@ static void toggle_network_interface(menu_t*, int data) {
 	server_com_init_network_discovery();
 }
 
+static void page_network_connected_draw(menu_t *menu, int) {
+	menu_page_t *page = &menu->pages[menu->index];
+
+	int name_col = page->items_pos.x + page->block_width - 200;
+	int ip_col   = page->items_pos.x + page->block_width;
+	int line_y   = page->items_pos.y - 20;
+
+	vec2i_t hdr_name_pos = vec2i(name_col - ui_text_width("NAME", UI_SIZE_8), line_y);
+	ui_draw_text("NAME", ui_scaled_pos(page->items_anchor, hdr_name_pos), UI_SIZE_8, UI_COLOR_DEFAULT);
+
+	vec2i_t hdr_ip_pos = vec2i(ip_col - ui_text_width("IP", UI_SIZE_8), line_y);
+	ui_draw_text("IP", ui_scaled_pos(page->items_anchor, hdr_ip_pos), UI_SIZE_8, UI_COLOR_DEFAULT);
+	line_y += 20;
+
+	for (unsigned int i = 0; i < server_com_get_n_connected_clients(); i++) {
+		vec2i_t name_pos = vec2i(name_col - ui_text_width(server_com_get_connected_client_name(i), UI_SIZE_8), line_y);
+		ui_draw_text(server_com_get_connected_client_name(i), ui_scaled_pos(page->items_anchor, name_pos), UI_SIZE_8, UI_COLOR_DEFAULT);
+
+		// Replace '.' with 'f' — the font encodes '.' at glyph index 37 ('f' - 'A')
+		char display_ip[16];
+		snprintf(display_ip, sizeof(display_ip), "%s", server_com_get_connected_client_ip(i));
+		for (int j = 0; display_ip[j]; j++) {
+			if (display_ip[j] == '.') display_ip[j] = 'f';
+		}
+
+		vec2i_t ip_pos = vec2i(ip_col - ui_text_width(display_ip, UI_SIZE_8), line_y);
+		ui_draw_text(display_ip, ui_scaled_pos(page->items_anchor, ip_pos), UI_SIZE_8, UI_COLOR_DEFAULT);
+		line_y += 12;
+	}
+}
+
 static void page_network_connected_init(menu_t *menu) {
-	menu_page_t *page = menu_push(menu, "CONNECTED", NULL, NULL, server_com_disconnect);
+	menu_page_t *page = menu_push(menu, "CONNECTED", page_network_connected_draw, NULL, server_com_disconnect);
 
 	flags_set(page->layout_flags, MENU_VERTICAL | MENU_FIXED);
 	page->title_pos = vec2i(-160, -100);

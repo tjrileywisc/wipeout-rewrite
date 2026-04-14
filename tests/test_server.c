@@ -151,6 +151,14 @@ void server_connect_client_ok(void**) {
     will_return(wrap_sendto, "STRING");  // tag for wrap_sendto to know how to interpret buf
     will_return(wrap_sendto, strlen(returned_data)); // return value
 
+    // after "connected", server sends a ClientList protobuf
+    expect_value(wrap_sendto, sockfd, 3);
+    expect_not_value(wrap_sendto, buf, NULL);
+    expect_any(wrap_sendto, len);
+    expect_value(wrap_sendto, flags, 0);
+    will_return(wrap_sendto, "CLIENT_LIST");
+    will_return(wrap_sendto, 0); // return value
+
     int connected_client_count = server_get_connected_clients_count();
     assert_int_equal(connected_client_count, 0);
     server_process_queue();
