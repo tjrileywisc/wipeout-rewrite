@@ -85,6 +85,15 @@ void ships_init(section_t *section) {
 		}
 	}
 
+	// In split screen, pilot2 is second to last
+	if (g.is_split_screen) {
+		for (unsigned int i = 0; i < len(ranks_to_pilots)-2; i++) {
+			if (ranks_to_pilots[i] == g.pilot2) {
+				swap(ranks_to_pilots[i], ranks_to_pilots[i+1]);
+			}
+		}
+	}
+
 
 	int start_line_pos = def.circuts[g.circut].settings[g.race_class].start_line_pos;
 	for (int i = 0; i < start_line_pos - 15; i++) {
@@ -102,6 +111,16 @@ void ships_init(section_t *section) {
 		int rank_inv = (len(g.ships)-1) - i;
 		int pilot = ranks_to_pilots[i];
 		ship_init(&g.ships[pilot], start_sections[rank_inv], pilot, rank_inv);
+		g.ships[pilot].camera = NULL;
+		g.ships[pilot].player_index = -1;
+	}
+
+	// Assign cameras and player indices to player-controlled ships
+	g.ships[g.pilot].camera = &g.camera;
+	g.ships[g.pilot].player_index = 0;
+	if (g.is_split_screen) {
+		g.ships[g.pilot2].camera = &g.camera2;
+		g.ships[g.pilot2].player_index = 1;
 	}
 }
 
@@ -151,12 +170,12 @@ void ships_reset_exhaust_plumes(void) {
 }
 
 
-void ships_draw(void) {
+void ships_draw(int viewing_pilot) {
 	// Ship models
 	for (unsigned int i = 0; i < len(g.ships); i++) {
 		if (
-			(flags_is(g.ships[i].flags, SHIP_VIEW_INTERNAL) && flags_not(g.ships[i].flags, SHIP_IN_RESCUE)) ||
-			(g.race_type == RACE_TYPE_TIME_TRIAL && i != g.pilot)
+			(i == (unsigned int)viewing_pilot && flags_is(g.ships[i].flags, SHIP_VIEW_INTERNAL) && flags_not(g.ships[i].flags, SHIP_IN_RESCUE)) ||
+			(g.race_type == RACE_TYPE_TIME_TRIAL && i != (unsigned int)g.pilot)
 		) {
 			continue;
 		}
@@ -173,8 +192,8 @@ void ships_draw(void) {
 
 	for (unsigned int i = 0; i < len(g.ships); i++) {
 		if (
-			(g.race_type == RACE_TYPE_TIME_TRIAL && i != g.pilot) ||
-			flags_not(g.ships[i].flags, SHIP_VISIBLE) || 
+			(g.race_type == RACE_TYPE_TIME_TRIAL && i != (unsigned int)g.pilot) ||
+			flags_not(g.ships[i].flags, SHIP_VISIBLE) ||
 			flags_is(g.ships[i].flags, SHIP_FLYING)
 		) {
 			continue;

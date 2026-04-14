@@ -177,6 +177,15 @@ bool input_pressed(uint8_t action);
 bool input_released(uint8_t action);
 vec2_t input_mouse_pos(void);
 
+// Per-player input (player 0 = keyboard/gamepad 0, player 1 = gamepad 1)
+#define INPUT_MAX_PLAYERS 2
+void input_bind_p(int player, input_layer_t layer, button_t button, uint8_t action);
+void input_unbind_all_p(int player, input_layer_t layer);
+void input_set_button_state_p(button_t button, float state, int player);
+float input_state_p(uint8_t action, int player);
+bool input_pressed_p(uint8_t action, int player);
+bool input_released_p(uint8_t action, int player);
+
 button_t input_name_to_button(const char *name);
 const char *input_button_to_name(button_t button);
 

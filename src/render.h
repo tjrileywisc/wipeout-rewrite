@@ -38,6 +38,10 @@ vec2i_t render_size(void);
 void render_frame_prepare(void);
 void render_frame_end(void);
 
+void render_set_viewport(vec2i_t offset, vec2i_t size);
+void render_reset_viewport(void);
+vec2i_t render_backbuffer_size(void);
+
 void render_set_view(vec3_t pos, vec3_t angles);
 void render_set_view_2d(void);
 void render_set_model_mat(mat4_t *m);
