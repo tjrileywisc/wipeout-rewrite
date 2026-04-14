@@ -358,9 +358,11 @@ void network_get_my_ip(char *subnet, size_t len) {
  * 
  * @return broadcast_list_t 
  */
+#define MAX_BROADCAST_ADDRS 16
+static broadcast_addr_t broadcast_buf[MAX_BROADCAST_ADDRS];
+
 broadcast_list_t network_get_broadcast_addresses(void) {
-    broadcast_list_t result = {0};
-    size_t capacity = 8;
+    broadcast_list_t result = {.list = broadcast_buf, .count = 0};
 
 #if defined(WIN32)
     DWORD size = 0;
@@ -371,22 +373,18 @@ broadcast_list_t network_get_broadcast_addresses(void) {
         return result;
     }
 
-    result.list = (broadcast_addr_t*)malloc(sizeof(broadcast_addr_t) * capacity);
-
     for (IP_ADAPTER_ADDRESSES* adapter = adapters; adapter; adapter = adapter->Next) {
         if (adapter->IfType != IF_TYPE_ETHERNET_CSMACD && adapter->IfType != IF_TYPE_IEEE80211)
             continue;
 
         for (IP_ADAPTER_UNICAST_ADDRESS* ua = adapter->FirstUnicastAddress; ua; ua = ua->Next) {
+            if (result.count >= MAX_BROADCAST_ADDRS)
+                break;
+
             SOCKADDR_IN* sa = (SOCKADDR_IN*)ua->Address.lpSockaddr;
             uint32_t ip = ntohl(sa->sin_addr.S_un.S_addr);
             uint32_t mask = (0xFFFFFFFF << (32 - ua->OnLinkPrefixLength)) & 0xFFFFFFFF;
             uint32_t bcast = (ip & mask) | (~mask);
-            
-            if (result.count >= capacity) {
-                capacity *= 2;
-                result.list = realloc(result.list, sizeof(broadcast_addr_t) * capacity);
-            }
 
             result.list[result.count++].broadcast.s_addr = htonl(bcast);
         }
@@ -399,9 +397,10 @@ broadcast_list_t network_get_broadcast_addresses(void) {
         return result;
     }
 
-    result.list = (broadcast_addr_t*)malloc(sizeof(broadcast_addr_t) * capacity);
-
     for (struct ifaddrs* ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
+        if (result.count >= MAX_BROADCAST_ADDRS)
+            break;
+
         if (!ifa->ifa_addr || ifa->ifa_addr->sa_family != AF_INET)
             continue;
 
@@ -416,11 +415,6 @@ broadcast_list_t network_get_broadcast_addresses(void) {
             continue;
 
         struct sockaddr_in* baddr = (struct sockaddr_in*)&ifr.ifr_broadaddr;
-        if (result.count >= capacity) {
-            capacity *= 2;
-            result.list = realloc(result.list, sizeof(broadcast_addr_t) * capacity);
-        }
-
         result.list[result.count++].broadcast = baddr->sin_addr;
     }
 

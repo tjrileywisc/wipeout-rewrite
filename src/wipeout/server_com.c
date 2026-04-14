@@ -17,7 +17,6 @@
 #endif
 
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include <stdatomic.h>
 #include <threads.h>
@@ -37,7 +36,8 @@ struct server_info_t{
     struct sockaddr_in addr; // server address
 };
 
-static server_info_t* servers = NULL; // dynamically allocated array of server_info_t
+#define MAX_SERVERS 16
+static server_info_t servers[MAX_SERVERS];
 static unsigned int n_servers = 0;
 
 static menu_page_t* server_menu_page = NULL; // menu for server discovery
@@ -123,13 +123,7 @@ static int server_com_discovery_response(void* arg) {
 
         while(!atomic_load(&network_discovery_on)) {
             thrd_yield(); // wait until discovery is enabled
-            
-            // Reset servers list once when discovery starts
-            if(servers != NULL) {
-                free(servers);
-                servers = NULL;
-                n_servers = 0;
-            }
+            n_servers = 0;
             start_time = time(NULL); // reset start time when we start listening
         }
 
@@ -164,17 +158,18 @@ static int server_com_discovery_response(void* arg) {
             buffer[len] = '\0';
             printf("Found server %s @ %s:%d\n", msg->name, inet_ntoa(from.sin_addr), msg->port);
 
-            servers = realloc(servers, sizeof(server_info_t) * (n_servers + 1));
-            servers[n_servers] = (server_info_t) {
-                .name = msg->name,
-                .addr = {
-                    .sin_family = AF_INET,
-                    .sin_port = htons(msg->port),
-                    .sin_addr = from.sin_addr
-                }
-            };
-            server_com_update_servers(); // update the menu with the new server
-            n_servers++;
+            if (n_servers < MAX_SERVERS) {
+                servers[n_servers] = (server_info_t) {
+                    .name = msg->name,
+                    .addr = {
+                        .sin_family = AF_INET,
+                        .sin_port = htons(msg->port),
+                        .sin_addr = from.sin_addr
+                    }
+                };
+                server_com_update_servers(); // update the menu with the new server
+                n_servers++;
+            }
         }
     }
 
@@ -227,7 +222,6 @@ static int server_com_network_discovery(void* arg) {
             printf("[*] Broadcast packet sent. Waiting for replies...\n");
         }
 
-        free(broadcasts.list);
         has_run = true;
     }
 
