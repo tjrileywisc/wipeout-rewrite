@@ -52,7 +52,7 @@ static void server_com_client_connect(menu_t*, int index) {
     // before server discovery has terminated;
     // should we just halt discovery when we connect?
 
-    if(!servers || n_servers == 0) {
+    if(n_servers == 0) {
         printf("No servers available to connect to.\n");
         return;
     }
@@ -123,10 +123,9 @@ static int server_com_discovery_response(void* arg) {
 
         while(!atomic_load(&network_discovery_on)) {
             thrd_yield(); // wait until discovery is enabled
-            n_servers = 0;
-            start_time = time(NULL); // reset start time when we start listening
         }
-
+        n_servers = 0;
+        start_time = time(NULL);
 
         if(time(NULL) - start_time > DISCOVERY_TIMEOUT) {
             printf("Discovery has timed out after %d seconds. %d servers found.\n", DISCOVERY_TIMEOUT, n_servers);
@@ -158,7 +157,15 @@ static int server_com_discovery_response(void* arg) {
             buffer[len] = '\0';
             printf("Found server %s @ %s:%d\n", msg->name, inet_ntoa(from.sin_addr), msg->port);
 
-            if (n_servers < MAX_SERVERS) {
+            bool duplicate = false;
+            for (unsigned int i = 0; i < n_servers; i++) {
+                if (servers[i].addr.sin_addr.s_addr == from.sin_addr.s_addr &&
+                    servers[i].addr.sin_port == htons(msg->port)) {
+                    duplicate = true;
+                    break;
+                }
+            }
+            if (!duplicate && n_servers < MAX_SERVERS) {
                 servers[n_servers] = (server_info_t) {
                     .name = msg->name,
                     .addr = {
