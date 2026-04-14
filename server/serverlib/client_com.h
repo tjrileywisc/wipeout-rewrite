@@ -6,7 +6,7 @@ static const int MAX_CLIENTS = 8;
 
 typedef struct client_t client_t;
 
-void client_com_init(void);
+void client_com_init(const char *server_name);
 
 /**
  * @brief Processes queued messages from clients

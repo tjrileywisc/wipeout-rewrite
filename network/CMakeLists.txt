@@ -2,6 +2,7 @@
 add_library(network
     addr_conversions.c
     msg.c
+    name_gen.c
     network.c
     network_wrapper.c
 )

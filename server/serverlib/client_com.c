@@ -19,27 +19,34 @@
 #endif
 
 #include <ServerInfo.pb-c.h>
+#include <ClientList.pb-c.h>
+#include <name_gen.h>
+#include <protocol.h>
 
 typedef enum { DISCONNECTED, CONNECTED } connect_state_t;
 
 struct client_t {
-    const char *name;
+    char name[NAME_GEN_MAX_LEN];
     struct sockaddr_in addr; // client address
 };
 
 unsigned int current_client_count = 0; // number of connected clients
 static client_t* clients = NULL; // array of clients
+static char server_name[NAME_GEN_MAX_LEN];
 
 
-void client_com_init(void) {
+void client_com_init(const char *name) {
     clients = malloc(sizeof(client_t) * MAX_CLIENTS);
     if (!clients) {
         fprintf(stderr, "Failed to allocate memory for clients\n");
         exit(EXIT_FAILURE);
     }
     current_client_count = 0;
+    snprintf(server_name, sizeof(server_name), "%s", name);
 }
 
+
+static void server_send_client_list(struct sockaddr_in net_addr);
 
 static void server_connect_client(struct sockaddr_in net_addr) {
 
@@ -53,37 +60,49 @@ static void server_connect_client(struct sockaddr_in net_addr) {
 
     if (current_client_count >= MAX_CLIENTS) {
         fprintf(stderr, "Cannot connect client: max clients reached\n");
-        
+
         const char* response = "connect_failed";
         network_send_packet(network_get_bound_ip_socket(), strlen(response), response, net_addr);
 
         return;
     }
 
-    clients[current_client_count].name = "Client"; // TODO: get actual client name
+    for (unsigned int i = 0; i < current_client_count; i++) {
+        if (clients[i].addr.sin_addr.s_addr == net_addr.sin_addr.s_addr &&
+            clients[i].addr.sin_port == net_addr.sin_port) {
+            fprintf(stderr, "Client already connected\n");
+            const char* response = "connect_failed";
+            network_send_packet(network_get_bound_ip_socket(), strlen(response), response, net_addr);
+            return;
+        }
+    }
+
+    name_gen_random(clients[current_client_count].name, NAME_GEN_MAX_LEN);
     clients[current_client_count].addr = net_addr;
     current_client_count++;
 
+    char addr[INET_ADDRSTRLEN];
+    inet_ntop(AF_INET, &net_addr.sin_addr, addr, sizeof(addr));
+    printf("Client %s connected (total: %d)\n", addr, current_client_count);
+
     const char* response = "connected";
     network_send_packet(network_get_bound_ip_socket(), strlen(response), response, net_addr);
-
-    // char addr[INET_ADDRSTRLEN];
-    // netadr_to_sockadr(net_addr, (struct sockaddr_in *)&client->ip);
-
-    // printf("Client %s connected\n", addr);
+    server_send_client_list(net_addr);
 }
 
-static void server_disconnect_client(void) {
-	// handle client disconnection
-	client_t *client = malloc(sizeof(client_t));
-	if (!client) {
-		fprintf(stderr, "Failed to allocate memory for client\n");
-		return;
-	}
-	client->name = "Client";
-
-	// client will disconnect on their end,
-	// no need to tell them we are removing them
+static void server_disconnect_client(struct sockaddr_in net_addr) {
+    for (unsigned int i = 0; i < current_client_count; i++) {
+        if (clients[i].addr.sin_addr.s_addr == net_addr.sin_addr.s_addr &&
+            clients[i].addr.sin_port == net_addr.sin_port) {
+            char addr[INET_ADDRSTRLEN];
+            inet_ntop(AF_INET, &net_addr.sin_addr, addr, sizeof(addr));
+            printf("Client %s disconnected (total: %d)\n", addr, current_client_count - 1);
+            memmove(&clients[i], &clients[i + 1], (current_client_count - i - 1) * sizeof(client_t));
+            current_client_count--;
+            return;
+        }
+    }
+    fprintf(stderr, "Disconnect from unknown client\n");
 }
 
 void server_set_connected_clients_count(int count) {
@@ -106,24 +125,37 @@ client_t *server_get_client_by_index(unsigned int index) {
 }
 
 static void server_status(struct sockaddr_in net_addr) {
-
     Wipeout__ServerInfo msg = WIPEOUT__SERVER_INFO__INIT;
-
-    // TODO:
-    // read from config or environment
-    msg.name = "MY SERVER";
+    msg.name = server_name;
     msg.port = 8000;
 
-    size_t len = wipeout__server_info__get_packed_size(&msg);
-    uint8_t *buffer = malloc(len);
-    if (!buffer) {
-        fprintf(stderr, "Failed to allocate buffer for server info\n");
-        return;
-    }
-    wipeout__server_info__pack(&msg, buffer);
-    network_send_packet(network_get_bound_ip_socket(), len, buffer, net_addr);
+    uint8_t packet[256];
+    packet[0] = MSG_TYPE_SERVER_INFO;
+    size_t packed_len = wipeout__server_info__pack(&msg, packet + 1);
+    network_send_packet(network_get_bound_ip_socket(), 1 + packed_len, packet, net_addr);
+}
 
-    return;
+static void server_send_client_list(struct sockaddr_in net_addr) {
+    Wipeout__ClientInfo client_infos[MAX_CLIENTS];
+    Wipeout__ClientInfo *client_info_ptrs[MAX_CLIENTS];
+    char ip_strs[MAX_CLIENTS][INET_ADDRSTRLEN];
+
+    for (unsigned int i = 0; i < current_client_count; i++) {
+        wipeout__client_info__init(&client_infos[i]);
+        client_infos[i].name = clients[i].name;
+        inet_ntop(AF_INET, &clients[i].addr.sin_addr, ip_strs[i], INET_ADDRSTRLEN);
+        client_infos[i].ip = ip_strs[i];
+        client_info_ptrs[i] = &client_infos[i];
+    }
+
+    Wipeout__ClientList list = WIPEOUT__CLIENT_LIST__INIT;
+    list.clients = client_info_ptrs;
+    list.n_clients = current_client_count;
+
+    uint8_t packet[1024];
+    packet[0] = MSG_TYPE_CLIENT_LIST;
+    size_t packed_len = wipeout__client_list__pack(&list, packet + 1);
+    network_send_packet(network_get_bound_ip_socket(), 1 + packed_len, packet, net_addr);
 }
 
 /**
@@ -149,9 +181,8 @@ static void server_parse_msg(msg_queue_item_t *item) {
         server_connect_client(item->dest_addr);
         return;
     } else if (strcmp(cmd, "disconnect") == 0) {
-        // handle quit
-        server_disconnect_client();
-        sprintf(buf, "Client %s disconnected\n", addr);
+        server_disconnect_client(item->dest_addr);
+        return;
     } else if (strcmp(cmd, "hello") == 0) {
         // handle hello (just echo back the client's address)
         sprintf(buf, "Hello from %s\n", addr);

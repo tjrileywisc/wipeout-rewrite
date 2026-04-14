@@ -6,6 +6,9 @@
 
 #include <addr_conversions.h>
 #include <network.h>
+#include <name_gen.h>
+#include <protocol.h>
+#include <ClientList.pb-c.h>
 #include <ServerInfo.pb-c.h>
 #include <stdbool.h>
 
@@ -40,13 +43,24 @@ struct server_info_t{
 static server_info_t servers[MAX_SERVERS];
 static unsigned int n_servers = 0;
 
+#define MAX_CONNECTED_CLIENTS 8
+typedef struct {
+    char name[NAME_GEN_MAX_LEN];
+    char ip[INET_ADDRSTRLEN];
+} connected_client_t;
+static connected_client_t connected_clients[MAX_CONNECTED_CLIENTS];
+static unsigned int n_connected_clients = 0;
+
 static menu_page_t* server_menu_page = NULL; // menu for server discovery
+static void (*on_connect_callback)(menu_t *menu) = NULL;
+static menu_t *pending_connect_menu = NULL;
+static struct sockaddr_in connected_server_addr = {0};
 
 void server_com_client_init(void) {
     // TODO
 }
 
-static void server_com_client_connect(menu_t*, int index) {
+static void server_com_client_connect(menu_t *menu, int index) {
 
     // TODO: causes a problem if we try to connect
     // before server discovery has terminated;
@@ -60,28 +74,13 @@ static void server_com_client_connect(menu_t*, int index) {
     struct server_info_t server = servers[index];
     printf("Connecting to server: %s\n", server.name);
 
-    socklen_t fromlen = sizeof(server.addr);
-
     const char* message = "connect";
     network_send_packet(sockfd, strlen(message), message, server.addr);
 
-    char buffer[1024];
-    ssize_t len = wrap_recvfrom(sockfd, buffer, sizeof(buffer)-1, 0,
-                               (struct sockaddr*)(&server.addr), &fromlen);
-
-    if (len < 0) {
-        perror("recvfrom");
-        return;
-    }
-
-    buffer[len] = '\0'; // null-terminate the received data
-    printf("Received response from server: %s\n", buffer);
-    if (strcmp(buffer, "connected") == 0) {
-        printf("Successfully connected to server %s\n", server.name);
-    }
-    else {
-        printf("Failed to connect to server %s: %s\n", server.name, buffer);
-    }
+    // The response arrives on the same non-blocking socket that the discovery
+    // thread is already reading. Store the menu and let the discovery thread
+    // handle the "connected"/"connect_failed" reply.
+    pending_connect_menu = menu;
 }
 
 static void server_com_update_servers() {
@@ -121,20 +120,26 @@ static int server_com_discovery_response(void* arg) {
 
     while (true) {
 
-        while(!atomic_load(&network_discovery_on)) {
-            thrd_yield(); // wait until discovery is enabled
+        // Wait until discovery starts OR a connect response is expected.
+        while(!atomic_load(&network_discovery_on) && !pending_connect_menu) {
+            thrd_yield();
         }
-        n_servers = 0;
-        start_time = time(NULL);
-
-        if(time(NULL) - start_time > DISCOVERY_TIMEOUT) {
-            printf("Discovery has timed out after %d seconds. %d servers found.\n", DISCOVERY_TIMEOUT, n_servers);
-            atomic_store(&network_discovery_on, false); // stop listening
-            continue;
+        // Only reset discovery state when a new discovery cycle begins.
+        if (atomic_load(&network_discovery_on)) {
+            n_servers = 0;
+            start_time = time(NULL);
         }
 
-        ssize_t len = recvfrom(sockfd, buffer, sizeof(buffer)-1, 0,
-                               (struct sockaddr*)&from, &fromlen);
+        // Keep receiving while discovery is running OR a connect is in flight.
+        while (atomic_load(&network_discovery_on) || pending_connect_menu) {
+            if (atomic_load(&network_discovery_on) && time(NULL) - start_time > DISCOVERY_TIMEOUT) {
+                printf("Discovery has timed out after %d seconds. %d servers found.\n", DISCOVERY_TIMEOUT, n_servers);
+                atomic_store(&network_discovery_on, false);
+                // Do not break — keep looping to receive the connect response if one is pending.
+            }
+
+            ssize_t len = recvfrom(sockfd, buffer, sizeof(buffer)-1, 0,
+                                   (struct sockaddr*)&from, &fromlen);
 
         // TODO: how do we need to handle recvfrom timeouts and errors?
         // if (len < 0) {
@@ -148,37 +153,70 @@ static int server_com_discovery_response(void* arg) {
         // }
 
         if (len > 0) {
-            Wipeout__ServerInfo* msg = wipeout__server_info__unpack(NULL, len, (const uint8_t*)buffer);
-            if(msg == NULL) {
-                fprintf(stderr, "Failed to unpack server info message\n");
-                continue;
-            }
+            uint8_t type_byte = (uint8_t)buffer[0];
 
-            buffer[len] = '\0';
-            printf("Found server %s @ %s:%d\n", msg->name, inet_ntoa(from.sin_addr), msg->port);
+            if (type_byte == MSG_TYPE_SERVER_INFO) {
+                Wipeout__ServerInfo* msg = wipeout__server_info__unpack(NULL, len - 1, (const uint8_t*)buffer + 1);
+                if (msg == NULL) {
+                    fprintf(stderr, "Failed to unpack ServerInfo message\n");
+                    continue;
+                }
+                printf("Found server %s @ %s:%d\n", msg->name, inet_ntoa(from.sin_addr), msg->port);
+                bool duplicate = false;
+                for (unsigned int i = 0; i < n_servers; i++) {
+                    if (servers[i].addr.sin_addr.s_addr == from.sin_addr.s_addr &&
+                        servers[i].addr.sin_port == htons(msg->port)) {
+                        duplicate = true;
+                        break;
+                    }
+                }
+                if (!duplicate && n_servers < MAX_SERVERS) {
+                    servers[n_servers] = (server_info_t) {
+                        .name = msg->name,
+                        .addr = {
+                            .sin_family = AF_INET,
+                            .sin_port = htons(msg->port),
+                            .sin_addr = from.sin_addr
+                        }
+                    };
+                    server_com_update_servers();
+                    n_servers++;
+                }
 
-            bool duplicate = false;
-            for (unsigned int i = 0; i < n_servers; i++) {
-                if (servers[i].addr.sin_addr.s_addr == from.sin_addr.s_addr &&
-                    servers[i].addr.sin_port == htons(msg->port)) {
-                    duplicate = true;
-                    break;
+            } else if (type_byte == MSG_TYPE_CLIENT_LIST) {
+                Wipeout__ClientList* msg = wipeout__client_list__unpack(NULL, len - 1, (const uint8_t*)buffer + 1);
+                if (msg == NULL) {
+                    fprintf(stderr, "Failed to unpack ClientList message\n");
+                    continue;
+                }
+                n_connected_clients = 0;
+                for (size_t i = 0; i < msg->n_clients && i < MAX_CONNECTED_CLIENTS; i++) {
+                    snprintf(connected_clients[i].name, NAME_GEN_MAX_LEN, "%s", msg->clients[i]->name);
+                    snprintf(connected_clients[i].ip,   INET_ADDRSTRLEN,  "%s", msg->clients[i]->ip);
+                    n_connected_clients++;
+                }
+                wipeout__client_list__free_unpacked(msg, NULL);
+
+            } else {
+                // Plain-text message
+                buffer[len] = '\0';
+                if (strcmp(buffer, "connected") == 0) {
+                    printf("Successfully connected to server\n");
+                    connected_server_addr = from;
+                    if (on_connect_callback && pending_connect_menu) {
+                        on_connect_callback(pending_connect_menu);
+                        pending_connect_menu = NULL;
+                    }
+                } else if (strcmp(buffer, "connect_failed") == 0) {
+                    printf("Failed to connect to server\n");
+                    pending_connect_menu = NULL;
+                } else {
+                    fprintf(stderr, "Unrecognised message from server\n");
                 }
             }
-            if (!duplicate && n_servers < MAX_SERVERS) {
-                servers[n_servers] = (server_info_t) {
-                    .name = msg->name,
-                    .addr = {
-                        .sin_family = AF_INET,
-                        .sin_port = htons(msg->port),
-                        .sin_addr = from.sin_addr
-                    }
-                };
-                server_com_update_servers(); // update the menu with the new server
-                n_servers++;
-            }
         }
-    }
+        } // end inner discovery loop
+    } // end outer while(true)
 
     return 1;
 }
@@ -277,4 +315,29 @@ unsigned int server_com_get_n_servers(void) {
 
 void server_com_set_menu_page(menu_page_t *page) {
     server_menu_page = page;
+}
+
+void server_com_set_connect_callback(void (*callback)(menu_t *menu)) {
+    on_connect_callback = callback;
+}
+
+void server_com_disconnect(void) {
+    const char* message = "disconnect";
+    network_send_packet(sockfd, strlen(message), message, connected_server_addr);
+    connected_server_addr = (struct sockaddr_in){0};
+    n_connected_clients = 0;
+}
+
+unsigned int server_com_get_n_connected_clients(void) {
+    return n_connected_clients;
+}
+
+const char *server_com_get_connected_client_name(unsigned int index) {
+    if (index >= n_connected_clients) return "";
+    return connected_clients[index].name;
+}
+
+const char *server_com_get_connected_client_ip(unsigned int index) {
+    if (index >= n_connected_clients) return "";
+    return connected_clients[index].ip;
 }

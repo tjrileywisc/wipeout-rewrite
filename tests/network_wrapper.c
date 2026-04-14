@@ -17,6 +17,8 @@
 
 // protobufs
 #include <ServerInfo.pb-c.h>
+#include <ClientList.pb-c.h>
+#include <protocol.h>
 
 ssize_t wrap_recvfrom(int sockfd, void *buf, size_t len, int flags,
                         struct sockaddr *src_addr, socklen_t *addrlen) {
@@ -48,15 +50,22 @@ ssize_t wrap_sendto(int sockfd, const void *buf, size_t len, int flags,
     // Get message type for this test
     const char *msg_type = mock_type(const char *);
 
+    const uint8_t *bytes = (const uint8_t *)buf;
+
     if (strcmp(msg_type, "STATUS") == 0) {
-        Wipeout__ServerInfo *msg = wipeout__server_info__unpack(NULL, len, buf);
+        assert_int_equal(bytes[0], MSG_TYPE_SERVER_INFO);
+        Wipeout__ServerInfo *msg = wipeout__server_info__unpack(NULL, len - 1, bytes + 1);
         assert_non_null(msg);
         const char *expected_name = mock_type(const char *);
         int expected_port = mock_type(int);
-
         assert_string_equal(msg->name, expected_name);
         assert_int_equal(msg->port, expected_port);
         wipeout__server_info__free_unpacked(msg, NULL);
+    } else if (strcmp(msg_type, "CLIENT_LIST") == 0) {
+        assert_int_equal(bytes[0], MSG_TYPE_CLIENT_LIST);
+        Wipeout__ClientList *msg = wipeout__client_list__unpack(NULL, len - 1, bytes + 1);
+        assert_non_null(msg);
+        wipeout__client_list__free_unpacked(msg, NULL);
     } else if (strcmp(msg_type, "STRING") == 0) {
         // const char *expected = mock_type(const char *);
         // assert_memory_equal(buf, expected, len);
