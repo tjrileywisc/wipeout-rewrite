@@ -53,37 +53,48 @@ static void server_connect_client(struct sockaddr_in net_addr) {
 
     if (current_client_count >= MAX_CLIENTS) {
         fprintf(stderr, "Cannot connect client: max clients reached\n");
-        
+
         const char* response = "connect_failed";
         network_send_packet(network_get_bound_ip_socket(), strlen(response), response, net_addr);
 
         return;
     }
 
+    for (unsigned int i = 0; i < current_client_count; i++) {
+        if (clients[i].addr.sin_addr.s_addr == net_addr.sin_addr.s_addr &&
+            clients[i].addr.sin_port == net_addr.sin_port) {
+            fprintf(stderr, "Client already connected\n");
+            const char* response = "connect_failed";
+            network_send_packet(network_get_bound_ip_socket(), strlen(response), response, net_addr);
+            return;
+        }
+    }
+
     clients[current_client_count].name = "Client"; // TODO: get actual client name
     clients[current_client_count].addr = net_addr;
     current_client_count++;
 
+    char addr[INET_ADDRSTRLEN];
+    inet_ntop(AF_INET, &net_addr.sin_addr, addr, sizeof(addr));
+    printf("Client %s connected (total: %d)\n", addr, current_client_count);
+
     const char* response = "connected";
     network_send_packet(network_get_bound_ip_socket(), strlen(response), response, net_addr);
-
-    // char addr[INET_ADDRSTRLEN];
-    // netadr_to_sockadr(net_addr, (struct sockaddr_in *)&client->ip);
-
-    // printf("Client %s connected\n", addr);
 }
 
-static void server_disconnect_client(void) {
-	// handle client disconnection
-	client_t *client = malloc(sizeof(client_t));
-	if (!client) {
-		fprintf(stderr, "Failed to allocate memory for client\n");
-		return;
-	}
-	client->name = "Client";
-
-	// client will disconnect on their end,
-	// no need to tell them we are removing them
+static void server_disconnect_client(struct sockaddr_in net_addr) {
+    for (unsigned int i = 0; i < current_client_count; i++) {
+        if (clients[i].addr.sin_addr.s_addr == net_addr.sin_addr.s_addr &&
+            clients[i].addr.sin_port == net_addr.sin_port) {
+            char addr[INET_ADDRSTRLEN];
+            inet_ntop(AF_INET, &net_addr.sin_addr, addr, sizeof(addr));
+            printf("Client %s disconnected (total: %d)\n", addr, current_client_count - 1);
+            memmove(&clients[i], &clients[i + 1], (current_client_count - i - 1) * sizeof(client_t));
+            current_client_count--;
+            return;
+        }
+    }
+    fprintf(stderr, "Disconnect from unknown client\n");
 }
 
 void server_set_connected_clients_count(int count) {
@@ -149,9 +160,8 @@ static void server_parse_msg(msg_queue_item_t *item) {
         server_connect_client(item->dest_addr);
         return;
     } else if (strcmp(cmd, "disconnect") == 0) {
-        // handle quit
-        server_disconnect_client();
-        sprintf(buf, "Client %s disconnected\n", addr);
+        server_disconnect_client(item->dest_addr);
+        return;
     } else if (strcmp(cmd, "hello") == 0) {
         // handle hello (just echo back the client's address)
         sprintf(buf, "Hello from %s\n", addr);

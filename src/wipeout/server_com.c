@@ -41,12 +41,15 @@ static server_info_t servers[MAX_SERVERS];
 static unsigned int n_servers = 0;
 
 static menu_page_t* server_menu_page = NULL; // menu for server discovery
+static void (*on_connect_callback)(menu_t *menu) = NULL;
+static menu_t *pending_connect_menu = NULL;
+static struct sockaddr_in connected_server_addr = {0};
 
 void server_com_client_init(void) {
     // TODO
 }
 
-static void server_com_client_connect(menu_t*, int index) {
+static void server_com_client_connect(menu_t *menu, int index) {
 
     // TODO: causes a problem if we try to connect
     // before server discovery has terminated;
@@ -60,28 +63,13 @@ static void server_com_client_connect(menu_t*, int index) {
     struct server_info_t server = servers[index];
     printf("Connecting to server: %s\n", server.name);
 
-    socklen_t fromlen = sizeof(server.addr);
-
     const char* message = "connect";
     network_send_packet(sockfd, strlen(message), message, server.addr);
 
-    char buffer[1024];
-    ssize_t len = wrap_recvfrom(sockfd, buffer, sizeof(buffer)-1, 0,
-                               (struct sockaddr*)(&server.addr), &fromlen);
-
-    if (len < 0) {
-        perror("recvfrom");
-        return;
-    }
-
-    buffer[len] = '\0'; // null-terminate the received data
-    printf("Received response from server: %s\n", buffer);
-    if (strcmp(buffer, "connected") == 0) {
-        printf("Successfully connected to server %s\n", server.name);
-    }
-    else {
-        printf("Failed to connect to server %s: %s\n", server.name, buffer);
-    }
+    // The response arrives on the same non-blocking socket that the discovery
+    // thread is already reading. Store the menu and let the discovery thread
+    // handle the "connected"/"connect_failed" reply.
+    pending_connect_menu = menu;
 }
 
 static void server_com_update_servers() {
@@ -124,17 +112,19 @@ static int server_com_discovery_response(void* arg) {
         while(!atomic_load(&network_discovery_on)) {
             thrd_yield(); // wait until discovery is enabled
         }
+        // Reset state once when discovery (re)starts
         n_servers = 0;
         start_time = time(NULL);
 
-        if(time(NULL) - start_time > DISCOVERY_TIMEOUT) {
-            printf("Discovery has timed out after %d seconds. %d servers found.\n", DISCOVERY_TIMEOUT, n_servers);
-            atomic_store(&network_discovery_on, false); // stop listening
-            continue;
-        }
+        while (atomic_load(&network_discovery_on)) {
+            if(time(NULL) - start_time > DISCOVERY_TIMEOUT) {
+                printf("Discovery has timed out after %d seconds. %d servers found.\n", DISCOVERY_TIMEOUT, n_servers);
+                atomic_store(&network_discovery_on, false); // stop listening
+                break;
+            }
 
-        ssize_t len = recvfrom(sockfd, buffer, sizeof(buffer)-1, 0,
-                               (struct sockaddr*)&from, &fromlen);
+            ssize_t len = recvfrom(sockfd, buffer, sizeof(buffer)-1, 0,
+                                   (struct sockaddr*)&from, &fromlen);
 
         // TODO: how do we need to handle recvfrom timeouts and errors?
         // if (len < 0) {
@@ -148,13 +138,26 @@ static int server_com_discovery_response(void* arg) {
         // }
 
         if (len > 0) {
+            buffer[len] = '\0';
             Wipeout__ServerInfo* msg = wipeout__server_info__unpack(NULL, len, (const uint8_t*)buffer);
             if(msg == NULL) {
-                fprintf(stderr, "Failed to unpack server info message\n");
+                // Not a ServerInfo protobuf — check for a text connect response
+                if (strcmp(buffer, "connected") == 0) {
+                    printf("Successfully connected to server\n");
+                    connected_server_addr = from;
+                    if (on_connect_callback && pending_connect_menu) {
+                        on_connect_callback(pending_connect_menu);
+                        pending_connect_menu = NULL;
+                    }
+                } else if (strcmp(buffer, "connect_failed") == 0) {
+                    printf("Failed to connect to server\n");
+                    pending_connect_menu = NULL;
+                } else {
+                    fprintf(stderr, "Failed to unpack server info message\n");
+                }
                 continue;
             }
 
-            buffer[len] = '\0';
             printf("Found server %s @ %s:%d\n", msg->name, inet_ntoa(from.sin_addr), msg->port);
 
             bool duplicate = false;
@@ -178,7 +181,8 @@ static int server_com_discovery_response(void* arg) {
                 n_servers++;
             }
         }
-    }
+        } // end inner discovery loop
+    } // end outer while(true)
 
     return 1;
 }
@@ -277,4 +281,14 @@ unsigned int server_com_get_n_servers(void) {
 
 void server_com_set_menu_page(menu_page_t *page) {
     server_menu_page = page;
+}
+
+void server_com_set_connect_callback(void (*callback)(menu_t *menu)) {
+    on_connect_callback = callback;
+}
+
+void server_com_disconnect(void) {
+    const char* message = "disconnect";
+    network_send_packet(sockfd, strlen(message), message, connected_server_addr);
+    connected_server_addr = (struct sockaddr_in){0};
 }

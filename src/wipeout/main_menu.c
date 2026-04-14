@@ -19,6 +19,7 @@ static void page_team_init(menu_t *menu);
 static void page_pilot_init(menu_t *menu);
 static void page_circut_init(menu_t *menu);
 static void page_network_init(menu_t *menu);
+static void page_network_connected_init(menu_t *menu);
 static void page_options_controls_init(menu_t *menu);
 static void page_options_video_init(menu_t *menu);
 static void page_options_audio_init(menu_t *menu);
@@ -147,9 +148,21 @@ static void toggle_network_interface(menu_t*, int data) {
 	server_com_init_network_discovery();
 }
 
+static void page_network_connected_init(menu_t *menu) {
+	menu_page_t *page = menu_push(menu, "CONNECTED", NULL, NULL, server_com_disconnect);
+
+	flags_set(page->layout_flags, MENU_VERTICAL | MENU_FIXED);
+	page->title_pos = vec2i(-160, -100);
+	page->title_anchor = UI_POS_MIDDLE | UI_POS_CENTER;
+	page->items_pos = vec2i(-160, -50);
+	page->block_width = 320;
+	page->items_anchor = UI_POS_MIDDLE | UI_POS_CENTER;
+}
+
 static void page_network_init(menu_t *menu) {
 	menu_page_t *page = menu_push(menu, "NETWORK", page_network_draw, server_com_init_network_discovery, server_com_halt_network_discovery);
 	server_com_set_menu_page(page);
+	server_com_set_connect_callback(page_network_connected_init);
 
 	flags_set(page->layout_flags, MENU_VERTICAL | MENU_FIXED);
 	page->title_pos = vec2i(-160, -100);

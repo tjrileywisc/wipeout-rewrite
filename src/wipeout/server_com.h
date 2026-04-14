@@ -12,6 +12,10 @@ typedef struct server_info_t server_info_t;
 
 void server_com_set_menu_page(menu_page_t *page);
 
+void server_com_set_connect_callback(void (*callback)(menu_t *menu));
+
+void server_com_disconnect(void);
+
 void server_com_client_init(void);
 
 void server_com_init_network_discovery(void);
