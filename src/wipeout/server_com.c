@@ -17,7 +17,6 @@
 #endif
 
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include <stdatomic.h>
 #include <threads.h>
@@ -37,7 +36,8 @@ struct server_info_t{
     struct sockaddr_in addr; // server address
 };
 
-static server_info_t* servers = NULL; // dynamically allocated array of server_info_t
+#define MAX_SERVERS 16
+static server_info_t servers[MAX_SERVERS];
 static unsigned int n_servers = 0;
 
 static menu_page_t* server_menu_page = NULL; // menu for server discovery
@@ -52,7 +52,7 @@ static void server_com_client_connect(menu_t*, int index) {
     // before server discovery has terminated;
     // should we just halt discovery when we connect?
 
-    if(!servers || n_servers == 0) {
+    if(n_servers == 0) {
         printf("No servers available to connect to.\n");
         return;
     }
@@ -123,16 +123,9 @@ static int server_com_discovery_response(void* arg) {
 
         while(!atomic_load(&network_discovery_on)) {
             thrd_yield(); // wait until discovery is enabled
-            
-            // Reset servers list once when discovery starts
-            if(servers != NULL) {
-                free(servers);
-                servers = NULL;
-                n_servers = 0;
-            }
-            start_time = time(NULL); // reset start time when we start listening
         }
-
+        n_servers = 0;
+        start_time = time(NULL);
 
         if(time(NULL) - start_time > DISCOVERY_TIMEOUT) {
             printf("Discovery has timed out after %d seconds. %d servers found.\n", DISCOVERY_TIMEOUT, n_servers);
@@ -164,17 +157,26 @@ static int server_com_discovery_response(void* arg) {
             buffer[len] = '\0';
             printf("Found server %s @ %s:%d\n", msg->name, inet_ntoa(from.sin_addr), msg->port);
 
-            servers = realloc(servers, sizeof(server_info_t) * (n_servers + 1));
-            servers[n_servers] = (server_info_t) {
-                .name = msg->name,
-                .addr = {
-                    .sin_family = AF_INET,
-                    .sin_port = htons(msg->port),
-                    .sin_addr = from.sin_addr
+            bool duplicate = false;
+            for (unsigned int i = 0; i < n_servers; i++) {
+                if (servers[i].addr.sin_addr.s_addr == from.sin_addr.s_addr &&
+                    servers[i].addr.sin_port == htons(msg->port)) {
+                    duplicate = true;
+                    break;
                 }
-            };
-            server_com_update_servers(); // update the menu with the new server
-            n_servers++;
+            }
+            if (!duplicate && n_servers < MAX_SERVERS) {
+                servers[n_servers] = (server_info_t) {
+                    .name = msg->name,
+                    .addr = {
+                        .sin_family = AF_INET,
+                        .sin_port = htons(msg->port),
+                        .sin_addr = from.sin_addr
+                    }
+                };
+                server_com_update_servers(); // update the menu with the new server
+                n_servers++;
+            }
         }
     }
 
@@ -227,7 +229,6 @@ static int server_com_network_discovery(void* arg) {
             printf("[*] Broadcast packet sent. Waiting for replies...\n");
         }
 
-        free(broadcasts.list);
         has_run = true;
     }
 
