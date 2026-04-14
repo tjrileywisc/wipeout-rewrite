@@ -2,11 +2,14 @@
 #include <client_com.h>
 
 #include <msg.h>
+#include <name_gen.h>
 #include <network.h>
 
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #if defined(WIN32)
 #else
 #include <unistd.h>
@@ -14,28 +17,35 @@
 
 typedef struct
 {
-    const char *name;
+    char name[NAME_GEN_MAX_LEN];
     int num_clients;
 } server_t;
 
 static server_t server;
 
-static void server_init()
+static void server_init(const char *name)
 {
-    server.name = "master blaster";
+    snprintf(server.name, sizeof(server.name), "%s", name);
     server.num_clients = 0;
 
-    client_com_init();
+    client_com_init(server.name);
 }
 
 int main(int argc, char** argv)
 {
-    (void)argc; // unused
-    (void)argv; // unused
 
-    printf("welcome to the server!\n");
+    srand((unsigned int)time(NULL));
 
-    server_init();
+    char name[NAME_GEN_MAX_LEN];
+    if (argc > 1) {
+        snprintf(name, sizeof(name), "%s", argv[1]);
+    } else {
+        name_gen_random(name, sizeof(name));
+    }
+
+    printf("welcome to the %s server!\n", name);
+
+    server_init(name);
 
     int sockfd = network_get_client_socket();
     if(sockfd == INVALID_SOCKET) {

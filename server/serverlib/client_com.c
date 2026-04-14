@@ -19,25 +19,28 @@
 #endif
 
 #include <ServerInfo.pb-c.h>
+#include <name_gen.h>
 
 typedef enum { DISCONNECTED, CONNECTED } connect_state_t;
 
 struct client_t {
-    const char *name;
+    char name[NAME_GEN_MAX_LEN];
     struct sockaddr_in addr; // client address
 };
 
 unsigned int current_client_count = 0; // number of connected clients
 static client_t* clients = NULL; // array of clients
+static char server_name[NAME_GEN_MAX_LEN];
 
 
-void client_com_init(void) {
+void client_com_init(const char *name) {
     clients = malloc(sizeof(client_t) * MAX_CLIENTS);
     if (!clients) {
         fprintf(stderr, "Failed to allocate memory for clients\n");
         exit(EXIT_FAILURE);
     }
     current_client_count = 0;
+    snprintf(server_name, sizeof(server_name), "%s", name);
 }
 
 
@@ -70,7 +73,7 @@ static void server_connect_client(struct sockaddr_in net_addr) {
         }
     }
 
-    clients[current_client_count].name = "Client"; // TODO: get actual client name
+    name_gen_random(clients[current_client_count].name, NAME_GEN_MAX_LEN);
     clients[current_client_count].addr = net_addr;
     current_client_count++;
 
@@ -120,9 +123,7 @@ static void server_status(struct sockaddr_in net_addr) {
 
     Wipeout__ServerInfo msg = WIPEOUT__SERVER_INFO__INIT;
 
-    // TODO:
-    // read from config or environment
-    msg.name = "MY SERVER";
+    msg.name = server_name;
     msg.port = 8000;
 
     size_t len = wipeout__server_info__get_packed_size(&msg);

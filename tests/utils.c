@@ -16,7 +16,7 @@ int network_test_cleanup(void** state) {
 int server_test_setup(void** state) {
     (void)state; // unused
     // Initialize the server state before each test
-    client_com_init();
+    client_com_init("MY SERVER");
     return 0;
 }
 
