@@ -120,18 +120,22 @@ static int server_com_discovery_response(void* arg) {
 
     while (true) {
 
-        while(!atomic_load(&network_discovery_on)) {
-            thrd_yield(); // wait until discovery is enabled
+        // Wait until discovery starts OR a connect response is expected.
+        while(!atomic_load(&network_discovery_on) && !pending_connect_menu) {
+            thrd_yield();
         }
-        // Reset state once when discovery (re)starts
-        n_servers = 0;
-        start_time = time(NULL);
+        // Only reset discovery state when a new discovery cycle begins.
+        if (atomic_load(&network_discovery_on)) {
+            n_servers = 0;
+            start_time = time(NULL);
+        }
 
-        while (atomic_load(&network_discovery_on)) {
-            if(time(NULL) - start_time > DISCOVERY_TIMEOUT) {
+        // Keep receiving while discovery is running OR a connect is in flight.
+        while (atomic_load(&network_discovery_on) || pending_connect_menu) {
+            if (atomic_load(&network_discovery_on) && time(NULL) - start_time > DISCOVERY_TIMEOUT) {
                 printf("Discovery has timed out after %d seconds. %d servers found.\n", DISCOVERY_TIMEOUT, n_servers);
-                atomic_store(&network_discovery_on, false); // stop listening
-                break;
+                atomic_store(&network_discovery_on, false);
+                // Do not break — keep looping to receive the connect response if one is pending.
             }
 
             ssize_t len = recvfrom(sockfd, buffer, sizeof(buffer)-1, 0,
