@@ -9,6 +9,7 @@ gamecontrollerdb.txt
 
 # build artifacts
 /build/
+.cache
 coverage-report/
 *.info
 
