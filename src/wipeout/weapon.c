@@ -342,7 +342,7 @@ void weapon_update_mine_wait_for_release(weapon_t *self) {
 		self->track_hit_particle = PARTICLE_TYPE_NONE;
 		self->ship_hit_particle = PARTICLE_TYPE_FIRE;
 
-		if (self->owner->pilot == g.pilot) {
+		if (self->owner->camera) {
 			sfx_play(SFX_MINE_DROP);
 		}
 	}
@@ -384,10 +384,12 @@ void weapon_update_mine(weapon_t *self) {
 		sfx_play_at(SFX_EXPLOSION_1, self->position, vec3(0,0,0), 1);
 		self->active = false;
 		if (flags_not(ship->flags, SHIP_SHIELDED)) {
-			if (ship->pilot == g.pilot) {
+			if (ship->camera) {
 				ship->velocity = vec3_sub(ship->velocity, vec3_mulf(ship->velocity, 0.125));
-				camera_set_shake(&g.camera, CAMERA_SHAKE_LONG);
-				platform_force_feedback(0.75, 500);
+				camera_set_shake(ship->camera, CAMERA_SHAKE_LONG);
+				if (ship->pilot == g.pilot) {
+					platform_force_feedback(0.75, 500);
+				}
 			}
 			else {
 				ship->speed = ship->speed * 0.125;
@@ -413,7 +415,7 @@ void weapon_fire_missile(ship_t *ship) {
 	self->drag = 0.25;
 	weapon_set_trajectory(self);
 
-	if (self->owner->pilot == g.pilot) {
+	if (self->owner->camera) {
 		sfx_play(SFX_MISSILE_FIRE);
 	}
 }
@@ -433,12 +435,14 @@ void weapon_update_missile(weapon_t *self) {
 		self->active = false;
 
 		if (flags_not(ship->flags, SHIP_SHIELDED)) {
-			if (ship->pilot == g.pilot) {
+			if (ship->camera) {
 				ship->velocity = vec3_sub(ship->velocity, vec3_mulf(ship->velocity, 0.75));
 				ship->angular_velocity.z += rand_float(-0.1, 0.1);
 				ship->turn_rate_from_hit = rand_float(-0.1, 0.1);
-				camera_set_shake(&g.camera, CAMERA_SHAKE_LONG);
-				platform_force_feedback(1.0, 500);
+				camera_set_shake(ship->camera, CAMERA_SHAKE_LONG);
+				if (ship->pilot == g.pilot) {
+					platform_force_feedback(1.0, 500);
+				}
 			}
 			else {
 				ship->speed = ship->speed * 0.03125;
@@ -464,7 +468,7 @@ void weapon_fire_rocket(ship_t *ship) {
 	self->drag = 0.03125;
 	weapon_set_trajectory(self);
 
-	if (self->owner->pilot == g.pilot) {
+	if (self->owner->camera) {
 		sfx_play(SFX_MISSILE_FIRE);
 	}
 }
@@ -482,12 +486,14 @@ void weapon_update_rocket(weapon_t *self) {
 		self->active = false;
 
 		if (flags_not(ship->flags, SHIP_SHIELDED)) {
-			if (ship->pilot == g.pilot) {
+			if (ship->camera) {
 				ship->velocity = vec3_sub(ship->velocity, vec3_mulf(ship->velocity, 0.75));
 				ship->angular_velocity.z += rand_float(-0.1, 0.1);;
 				ship->turn_rate_from_hit = rand_float(-0.1, 0.1);;
-				camera_set_shake(&g.camera, CAMERA_SHAKE_LONG);
-				platform_force_feedback(1.0, 750);
+				camera_set_shake(ship->camera, CAMERA_SHAKE_LONG);
+				if (ship->pilot == g.pilot) {
+					platform_force_feedback(1.0, 750);
+				}
 			}
 			else {
 				ship->speed = ship->speed * 0.03125;
@@ -515,7 +521,7 @@ void weapon_fire_ebolt(ship_t *ship) {
 	self->drag = 0.25;
 	weapon_set_trajectory(self);
 
-	if (self->owner->pilot == g.pilot) {
+	if (self->owner->camera) {
 		sfx_play(SFX_EBOLT);
 	}
 }
@@ -537,7 +543,7 @@ void weapon_update_ebolt(weapon_t *self) {
 		if (flags_not(ship->flags, SHIP_SHIELDED)) {
 			flags_add(ship->flags, SHIP_ELECTROED);
 			ship->ebolt_timer = WEAPON_EBOLT_DURATION;
-			if (ship->pilot == g.pilot) {
+			if (ship->camera && ship->pilot == g.pilot) {
 				platform_force_feedback(0.8, WEAPON_EBOLT_DURATION * 1000);
 			}
 		}
@@ -647,7 +653,7 @@ void weapon_update_shield(weapon_t *self) {
 void weapon_fire_turbo(ship_t *ship) {
 	ship->velocity = vec3_add(ship->velocity, vec3_mulf(ship->dir_forward, 39321)); // unitVecNose.vx) << 3) * FR60) / 50
 	
-	if (ship->pilot == g.pilot) {
+	if (ship->camera) {
 		sfx_t *sfx = sfx_play(SFX_MISSILE_FIRE);
 		sfx->pitch = 0.25;
 	}
