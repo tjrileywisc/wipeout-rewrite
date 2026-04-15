@@ -353,6 +353,7 @@ static uint32_t tris_len = 0;
 
 static vec2i_t screen_size;
 static vec2i_t backbuffer_size;
+static vec2i_t current_viewport_size;
 
 static uint32_t atlas_map[ATLAS_SIZE] = {0};
 static GLuint atlas_texture = 0;
@@ -550,6 +551,7 @@ void render_set_resolution(render_resolution_t res) {
 
 	projection_mat_2d = render_setup_2d_projection_mat(backbuffer_size);
 	projection_mat_3d = render_setup_3d_projection_mat(backbuffer_size);
+	current_viewport_size = backbuffer_size;
 
 
 	// Use nearest texture min filter for 240p and 480p
@@ -569,12 +571,37 @@ void render_set_post_effect(render_post_effect_t post) {
 }
 
 vec2i_t render_size(void) {
+	return current_viewport_size;
+}
+
+vec2i_t render_backbuffer_size(void) {
 	return backbuffer_size;
+}
+
+void render_set_viewport(vec2i_t offset, vec2i_t size) {
+	render_flush();
+	current_viewport_size = size;
+	glEnable(GL_SCISSOR_TEST);
+	glScissor(offset.x, offset.y, size.x, size.y);
+	glViewport(offset.x, offset.y, size.x, size.y);
+	projection_mat_2d = render_setup_2d_projection_mat(size);
+	projection_mat_3d = render_setup_3d_projection_mat(size);
+}
+
+void render_reset_viewport(void) {
+	render_flush();
+	current_viewport_size = backbuffer_size;
+	glDisable(GL_SCISSOR_TEST);
+	glViewport(0, 0, backbuffer_size.x, backbuffer_size.y);
+	projection_mat_2d = render_setup_2d_projection_mat(backbuffer_size);
+	projection_mat_3d = render_setup_3d_projection_mat(backbuffer_size);
 }
 
 void render_frame_prepare(void) {
 	use_program(prg_game);
 	glBindFramebuffer(GL_FRAMEBUFFER, backbuffer);
+	glDisable(GL_SCISSOR_TEST);
+	current_viewport_size = backbuffer_size;
 	glViewport(0, 0, backbuffer_size.x, backbuffer_size.y);
 
 	glBindTexture(GL_TEXTURE_2D, atlas_texture);
@@ -589,6 +616,7 @@ void render_frame_prepare(void) {
 
 void render_frame_end(void) {
 	render_flush();
+	glDisable(GL_SCISSOR_TEST);
 
 	use_program(prg_post);
 

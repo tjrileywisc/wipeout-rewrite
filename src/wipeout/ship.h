@@ -5,6 +5,9 @@
 #include "track.h"
 #include "sfx.h"
 
+// Forward declaration to avoid circular dependency with camera.h
+struct camera_t;
+
 #define SHIP_IN_TOW			 	(1<< 0)
 #define SHIP_VIEW_REMOTE	 	(1<< 1)
 #define SHIP_VIEW_INTERNAL		(1<< 2)
@@ -139,6 +142,10 @@ typedef struct ship_t {
 	vec3_t (*update_strat_func)(struct ship_t *, track_face_t *);
 	void (*update_func)(struct ship_t *);
 
+	// Player control (NULL for AI ships)
+	struct camera_t *camera;
+	int player_index;  // 0 = P1, 1 = P2, -1 = AI
+
 	// Audio
 	sfx_t *sfx_engine_thrust;
 	sfx_t *sfx_engine_intake;
@@ -148,7 +155,7 @@ typedef struct ship_t {
 
 void ships_load(void);
 void ships_init(section_t *section);
-void ships_draw(void);
+void ships_draw(int viewing_pilot);
 void ships_update(void);
 void ships_reset_exhaust_plumes(void);
 

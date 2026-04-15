@@ -282,8 +282,6 @@ Some things from the original game are not yet implemented in this rewrite. This
 - the menu system is... not great. It's better than the 5000 lines of spaghetti that it was before, but the different layouts need a lot of `if`s
 - the save data is just dumping the whole struct on disk. A textual format would be preferable.
 - since this whole thing is relying on some custom assembled assets anyway, maybe all SFX should be in QOA format too (like the music). Or switch everything to Vorbis.
-- a lot of functions assume that there's just one player. This needs to be fixed for a potential splitscreen mode.
-
 
 # License
 

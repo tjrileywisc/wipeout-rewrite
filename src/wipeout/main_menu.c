@@ -17,6 +17,7 @@ static void page_race_class_init(menu_t *menu);
 static void page_race_type_init(menu_t *menu);
 static void page_team_init(menu_t *menu);
 static void page_pilot_init(menu_t *menu);
+static void page_pilot2_init(menu_t *menu);
 static void page_circut_init(menu_t *menu);
 static void page_network_init(menu_t *menu);
 static void page_network_connected_init(menu_t *menu);
@@ -630,7 +631,8 @@ static void page_race_class_init(menu_t *menu) {
 // Race Type
 
 static void button_race_type_select(menu_t *menu, int data) {
-	g.race_type = data;
+	g.is_split_screen = (data == RACE_TYPE_SPLIT_SCREEN);
+	g.race_type = g.is_split_screen ? RACE_TYPE_SINGLE : data;
 	g.highscore_tab = g.race_type == RACE_TYPE_TIME_TRIAL ? HIGHSCORE_TAB_TIME_TRIAL : HIGHSCORE_TAB_RACE;
 
 	if(g.race_type != RACE_TYPE_NETWORK) {
@@ -645,6 +647,7 @@ static void page_race_type_draw(menu_t*, int data) {
 		case RACE_TYPE_CHAMPIONSHIP: draw_model(models.misc.championship, vec2(0, -0.2), vec3(0, 0, -400), system_cycle_time()); break;
 		case RACE_TYPE_SINGLE: draw_model(models.misc.single_race, vec2(0, -0.2), vec3(0, 0, -400), system_cycle_time()); break;
 		case RACE_TYPE_TIME_TRIAL: draw_model(models.options.stopwatch, vec2(0, -0.2), vec3(0, 0, -400), system_cycle_time()); break;
+		case RACE_TYPE_SPLIT_SCREEN: draw_model(models.misc.single_race, vec2(0, -0.2), vec3(0, 0, -400), system_cycle_time()); break;
 	}
 }
 
@@ -696,7 +699,10 @@ static void page_team_init(menu_t *menu) {
 
 static void button_pilot_select(menu_t *menu, int data) {
 	g.pilot = data;
-	if (g.race_type != RACE_TYPE_CHAMPIONSHIP) {
+	if (g.is_split_screen) {
+		page_pilot2_init(menu);
+	}
+	else if (g.race_type != RACE_TYPE_CHAMPIONSHIP) {
 		page_circut_init(menu);
 	}
 	else {
@@ -719,6 +725,31 @@ static void page_pilot_init(menu_t *menu) {
 	page->items_anchor = UI_POS_BOTTOM | UI_POS_CENTER;
 	for (unsigned int i = 0; i < len(def.teams[g.team].pilots); i++) {
 		menu_page_add_button(page, def.teams[g.team].pilots[i], def.pilots[def.teams[g.team].pilots[i]].name, button_pilot_select);
+	}
+}
+
+// Player 2 pilot selection (split screen only)
+
+static void button_pilot2_select(menu_t *menu, int data) {
+	g.pilot2 = data;
+	page_circut_init(menu);
+}
+
+static void page_pilot2_draw(menu_t*, int data) {
+	draw_model(models.pilots[def.pilots[data].logo_model], vec2(0, -0.2), vec3(0, 0, -10000), system_cycle_time());
+}
+
+static void page_pilot2_init(menu_t *menu) {
+	menu_page_t *page = menu_push(menu, "PLAYER 2 CHOOSE PILOT", page_pilot2_draw, NULL, NULL);
+	flags_add(page->layout_flags, MENU_FIXED);
+	page->title_pos = vec2i(0, 30);
+	page->title_anchor = UI_POS_TOP | UI_POS_CENTER;
+	page->items_pos = vec2i(0, -110);
+	page->items_anchor = UI_POS_BOTTOM | UI_POS_CENTER;
+	for (unsigned int i = 0; i < (unsigned int)NUM_PILOTS; i++) {
+		if (i != (unsigned int)g.pilot) {
+			menu_page_add_button(page, i, def.pilots[i].name, button_pilot2_select);
+		}
 	}
 }
 

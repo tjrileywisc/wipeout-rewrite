@@ -31,10 +31,11 @@ const game_def_t def = {
 	},
 
 	.race_types = {
-		[RACE_TYPE_CHAMPIONSHIP] = {.name = "CHAMPIONSHIP RACE"},
-		[RACE_TYPE_SINGLE]       = {.name = "SINGLE RACE"},
-		[RACE_TYPE_NETWORK]      = {.name = "NETWORK"},
-		[RACE_TYPE_TIME_TRIAL]   = {.name = "TIME TRIAL"},
+		[RACE_TYPE_CHAMPIONSHIP]  = {.name = "CHAMPIONSHIP RACE"},
+		[RACE_TYPE_SINGLE]        = {.name = "SINGLE RACE"},
+		[RACE_TYPE_NETWORK]       = {.name = "NETWORK"},
+		[RACE_TYPE_TIME_TRIAL]    = {.name = "TIME TRIAL"},
+		[RACE_TYPE_SPLIT_SCREEN]  = {.name = "SPLIT SCREEN"},
 	},
 
 	.pilots = {
@@ -594,6 +595,28 @@ void game_init(void) {
 		}
 	}
 
+	// P1 left-stick racing controls (supplemental to save.buttons)
+	input_bind(INPUT_LAYER_USER, INPUT_GAMEPAD_L_STICK_UP,    A_UP);
+	input_bind(INPUT_LAYER_USER, INPUT_GAMEPAD_L_STICK_DOWN,  A_DOWN);
+	input_bind(INPUT_LAYER_USER, INPUT_GAMEPAD_L_STICK_LEFT,  A_LEFT);
+	input_bind(INPUT_LAYER_USER, INPUT_GAMEPAD_L_STICK_RIGHT, A_RIGHT);
+
+	// Player 2 gamepad bindings (mirrors default P1 gamepad layout)
+	input_bind_p(1, INPUT_LAYER_USER, INPUT_GAMEPAD_DPAD_UP,    A_UP);
+	input_bind_p(1, INPUT_LAYER_USER, INPUT_GAMEPAD_DPAD_DOWN,  A_DOWN);
+	input_bind_p(1, INPUT_LAYER_USER, INPUT_GAMEPAD_DPAD_LEFT,  A_LEFT);
+	input_bind_p(1, INPUT_LAYER_USER, INPUT_GAMEPAD_DPAD_RIGHT, A_RIGHT);
+	input_bind_p(1, INPUT_LAYER_USER, INPUT_GAMEPAD_L_SHOULDER, A_BRAKE_LEFT);
+	input_bind_p(1, INPUT_LAYER_USER, INPUT_GAMEPAD_R_SHOULDER, A_BRAKE_RIGHT);
+	input_bind_p(1, INPUT_LAYER_USER, INPUT_GAMEPAD_A,          A_THRUST);
+	input_bind_p(1, INPUT_LAYER_USER, INPUT_GAMEPAD_X,          A_FIRE);
+	input_bind_p(1, INPUT_LAYER_USER, INPUT_GAMEPAD_Y,          A_CHANGE_VIEW);
+	input_bind_p(1, INPUT_LAYER_USER, INPUT_GAMEPAD_L_STICK_UP,    A_UP);
+	input_bind_p(1, INPUT_LAYER_USER, INPUT_GAMEPAD_L_STICK_DOWN,  A_DOWN);
+	input_bind_p(1, INPUT_LAYER_USER, INPUT_GAMEPAD_L_STICK_LEFT,  A_LEFT);
+	input_bind_p(1, INPUT_LAYER_USER, INPUT_GAMEPAD_L_STICK_RIGHT, A_RIGHT);
+
+	g.pilot2 = 1;
 
 	game_set_scene(GAME_SCENE_INTRO);
 }

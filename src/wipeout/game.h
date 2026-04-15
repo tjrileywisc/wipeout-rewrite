@@ -63,6 +63,7 @@ enum race_type {
 	RACE_TYPE_SINGLE,
 	RACE_TYPE_NETWORK,
 	RACE_TYPE_TIME_TRIAL,
+	RACE_TYPE_SPLIT_SCREEN,
 	NUM_RACE_TYPES,
 };
 
@@ -215,8 +216,13 @@ typedef struct {
 	pilot_points_t race_ranks[NUM_PILOTS];
 	pilot_points_t championship_ranks[NUM_PILOTS];
 
+	bool is_split_screen;
+	int pilot2;
+
 	camera_t camera;
+	camera_t camera2;
 	droid_t droid;
+	droid_t droid2;
 	ship_t ships[NUM_PILOTS];
 	track_t track;
 } game_t;

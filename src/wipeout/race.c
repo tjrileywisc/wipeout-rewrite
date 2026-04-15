@@ -67,6 +67,30 @@ void race_init(void) {
 	is_paused = false;
 }
 
+static void race_draw_view(int pilot_idx, camera_t *camera, droid_t *droid) {
+	// 3D
+	render_set_view(camera->position, camera->angle);
+	render_set_screen_position(camera->shake);
+
+	render_set_cull_backface(false);
+	scene_draw(camera);
+	track_draw(camera);
+	render_set_cull_backface(true);
+
+	ships_draw(pilot_idx);
+	droid_draw(droid);
+	weapons_draw();
+	particles_draw();
+
+	// 2D HUD
+	render_set_screen_position(vec2(0, 0));
+	render_set_view_2d();
+
+	if (flags_is(g.ships[pilot_idx].flags, SHIP_RACING)) {
+		hud_draw(&g.ships[pilot_idx]);
+	}
+}
+
 void race_update(void) {
 	if (is_paused) {
 		if (!active_menu) {
@@ -80,6 +104,10 @@ void race_update(void) {
 		ships_update();
 		droid_update(&g.droid, &g.ships[g.pilot]);
 		camera_update(&g.camera, &g.ships[g.pilot], &g.droid);
+		if (g.is_split_screen) {
+			droid_update(&g.droid2, &g.ships[g.pilot2]);
+			camera_update(&g.camera2, &g.ships[g.pilot2], &g.droid2);
+		}
 		weapons_update();
 		particles_update();
 		scene_update();
@@ -101,34 +129,33 @@ void race_update(void) {
 		}
 	}
 
+	// Draw views
+	if (g.is_split_screen) {
+		vec2i_t full = render_backbuffer_size();
+		vec2i_t half = vec2i(full.x, full.y / 2);
+		// P1: top half (GL origin is bottom-left, so top half starts at y = full.y/2)
+		render_set_viewport(vec2i(0, full.y / 2), half);
+		race_draw_view(g.pilot, &g.camera, &g.droid);
+		// P2: bottom half
+		render_set_viewport(vec2i(0, 0), half);
+		race_draw_view(g.pilot2, &g.camera2, &g.droid2);
+		render_reset_viewport();
+	}
+	else {
+		race_draw_view(g.pilot, &g.camera, &g.droid);
+	}
 
-	// Draw 3D
-	render_set_view(g.camera.position, g.camera.angle);
-	render_set_screen_position(g.camera.shake);
-
-	render_set_cull_backface(false);
-	scene_draw(&g.camera);
-	track_draw(&g.camera);
-	render_set_cull_backface(true);
-
-	ships_draw();
-	droid_draw(&g.droid);
-	weapons_draw();
-	particles_draw();
-
-	// Draw 2d
-	render_set_screen_position(vec2(0,0));
-	render_set_view_2d();
-
-	if (g.is_attract_mode && !active_menu) {
+	// 2D attract mode label (single player only)
+	if (!g.is_split_screen && g.is_attract_mode && !active_menu) {
+		render_set_screen_position(vec2(0, 0));
+		render_set_view_2d();
 		ui_draw_text("DEMO MODE", ui_scaled_pos(UI_POS_TOP | UI_POS_CENTER, vec2i(-56, 24)), UI_SIZE_8, UI_COLOR_ACCENT);
 	}
 
-	if (flags_is(g.ships[g.pilot].flags, SHIP_RACING)) {
-		hud_draw(&g.ships[g.pilot]);
-	}
-
+	// Menu overlay (full screen)
 	if (active_menu) {
+		render_set_screen_position(vec2(0, 0));
+		render_set_view_2d();
 		if (!menu_is_scroll_text) {
 			vec2i_t size = render_size();
 			render_push_2d(vec2i(0, 0), size, rgba(0, 0, 0, 128), RENDER_NO_TEXTURE);
@@ -143,8 +170,15 @@ void race_start(void) {
 	scene_init();
 	camera_init(&g.camera, g.track.sections);
 	g.camera.update_func = camera_update_race_intro;
+	if (g.is_split_screen) {
+		camera_init(&g.camera2, g.track.sections);
+		g.camera2.update_func = camera_update_race_intro;
+	}
 	ships_init(g.track.sections);
 	droid_init(&g.droid, &g.ships[g.pilot]);
+	if (g.is_split_screen) {
+		droid_init(&g.droid2, &g.ships[g.pilot2]);
+	}
 	particles_init();
 	weapons_init();
 
@@ -182,17 +216,17 @@ static bool sort_points_compare(pilot_points_t *pa, pilot_points_t *pb) {
 	return (pa->points < pb->points);
 }
 
-void race_end(void) {
+void race_end(int finishing_pilot) {
 	race_release_control();
 
-	g.race_position = g.ships[g.pilot].position_rank;
+	g.race_position = g.ships[finishing_pilot].position_rank;
 
 	g.race_time = 0;
-	g.best_lap = g.lap_times[g.pilot][0];
+	g.best_lap = g.lap_times[finishing_pilot][0];
 	for (int i = 0; i < NUM_LAPS; i++) {
-		g.race_time += g.lap_times[g.pilot][i];
-		if (g.lap_times[g.pilot][i] < g.best_lap) {
-			g.best_lap = g.lap_times[g.pilot][i];
+		g.race_time += g.lap_times[finishing_pilot][i];
+		if (g.lap_times[finishing_pilot][i] < g.best_lap) {
+			g.best_lap = g.lap_times[finishing_pilot][i];
 		}
 	}
 
@@ -271,6 +305,13 @@ void race_release_control(void) {
 	g.ships[g.pilot].remote_thrust_mag = 32;
 	g.ships[g.pilot].speed = 3160;
 	g.camera.update_func = camera_update_attract_random;
+	if (g.is_split_screen) {
+		flags_rm(g.ships[g.pilot2].flags, SHIP_RACING);
+		g.ships[g.pilot2].remote_thrust_max = 3160;
+		g.ships[g.pilot2].remote_thrust_mag = 32;
+		g.ships[g.pilot2].speed = 3160;
+		g.camera2.update_func = camera_update_attract_random;
+	}
 }
 
 void race_pause(void) {

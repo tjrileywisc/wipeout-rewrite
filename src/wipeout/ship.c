@@ -85,6 +85,15 @@ void ships_init(section_t *section) {
 		}
 	}
 
+	// In split screen, pilot2 is second to last
+	if (g.is_split_screen) {
+		for (unsigned int i = 0; i < len(ranks_to_pilots)-2; i++) {
+			if (ranks_to_pilots[i] == g.pilot2) {
+				swap(ranks_to_pilots[i], ranks_to_pilots[i+1]);
+			}
+		}
+	}
+
 
 	int start_line_pos = def.circuts[g.circut].settings[g.race_class].start_line_pos;
 	for (int i = 0; i < start_line_pos - 15; i++) {
@@ -102,6 +111,16 @@ void ships_init(section_t *section) {
 		int rank_inv = (len(g.ships)-1) - i;
 		int pilot = ranks_to_pilots[i];
 		ship_init(&g.ships[pilot], start_sections[rank_inv], pilot, rank_inv);
+		g.ships[pilot].camera = NULL;
+		g.ships[pilot].player_index = -1;
+	}
+
+	// Assign cameras and player indices to player-controlled ships
+	g.ships[g.pilot].camera = &g.camera;
+	g.ships[g.pilot].player_index = 0;
+	if (g.is_split_screen) {
+		g.ships[g.pilot2].camera = &g.camera2;
+		g.ships[g.pilot2].player_index = 1;
 	}
 }
 
@@ -151,12 +170,12 @@ void ships_reset_exhaust_plumes(void) {
 }
 
 
-void ships_draw(void) {
+void ships_draw(int viewing_pilot) {
 	// Ship models
 	for (unsigned int i = 0; i < len(g.ships); i++) {
 		if (
-			(flags_is(g.ships[i].flags, SHIP_VIEW_INTERNAL) && flags_not(g.ships[i].flags, SHIP_IN_RESCUE)) ||
-			(g.race_type == RACE_TYPE_TIME_TRIAL && i != g.pilot)
+			(i == (unsigned int)viewing_pilot && flags_is(g.ships[i].flags, SHIP_VIEW_INTERNAL) && flags_not(g.ships[i].flags, SHIP_IN_RESCUE)) ||
+			(g.race_type == RACE_TYPE_TIME_TRIAL && i != (unsigned int)g.pilot)
 		) {
 			continue;
 		}
@@ -173,8 +192,8 @@ void ships_draw(void) {
 
 	for (unsigned int i = 0; i < len(g.ships); i++) {
 		if (
-			(g.race_type == RACE_TYPE_TIME_TRIAL && i != g.pilot) ||
-			flags_not(g.ships[i].flags, SHIP_VISIBLE) || 
+			(g.race_type == RACE_TYPE_TIME_TRIAL && i != (unsigned int)g.pilot) ||
+			flags_not(g.ships[i].flags, SHIP_VISIBLE) ||
 			flags_is(g.ships[i].flags, SHIP_FLYING)
 		) {
 			continue;
@@ -231,7 +250,7 @@ void ship_init(ship_t *self, section_t *section, int pilot, int inv_start_rank) 
 	self->update_timer = UPDATE_TIME_INITIAL;
 	self->position_rank = NUM_PILOTS - inv_start_rank;
 
-	if (pilot == g.pilot) {
+	if (pilot == g.pilot || (g.is_split_screen && pilot == g.pilot2)) {
 		self->update_func = ship_player_update_intro;
 		self->remote_thrust_max = 2900;
 		self->remote_thrust_mag = 46;
@@ -514,7 +533,7 @@ void ship_update(ship_t *self) {
 		self->weapon_type == WEAPON_TYPE_NONE &&
 		track_collect_pickups(face)
 	) {
-		if (self->pilot == g.pilot) {
+		if (self->camera) {
 			sfx_play(SFX_POWERUP);
 			if (flags_is(self->flags, SHIP_SHIELDED)) {
 				self->weapon_type = weapon_get_random_type(WEAPON_CLASS_PROJECTILE);
@@ -524,7 +543,7 @@ void ship_update(ship_t *self) {
 			}
 		}
 		else {
-			self->weapon_type = 1;
+			self->weapon_type = WEAPON_TYPE_MINE;
 		}
 	}
 
@@ -589,8 +608,8 @@ void ship_update(ship_t *self) {
 				self->weapon_type = WEAPON_TYPE_TURBO;
 			}
 
-			if (self->lap == NUM_LAPS && self->pilot == g.pilot) {
-				race_end();
+			if (self->lap == NUM_LAPS && (self->pilot == g.pilot || (g.is_split_screen && self->pilot == g.pilot2))) {
+				race_end(self->pilot);
 			}
 		}
 	}
