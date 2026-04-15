@@ -151,7 +151,6 @@ static bool actions_pressed[INPUT_MAX_PLAYERS][INPUT_ACTION_MAX];
 static bool actions_released[INPUT_MAX_PLAYERS][INPUT_ACTION_MAX];
 
 static uint8_t expected_button[INPUT_MAX_PLAYERS][INPUT_ACTION_MAX];
-static uint8_t bindings[INPUT_LAYER_MAX][INPUT_BUTTON_MAX];
 static uint8_t bindings_p[INPUT_MAX_PLAYERS][INPUT_LAYER_MAX][INPUT_BUTTON_MAX];
 
 static input_capture_callback_t capture_callback;
@@ -161,8 +160,6 @@ static int32_t mouse_x;
 static int32_t mouse_y;
 
 void input_init(void) {
-	input_unbind_all(INPUT_LAYER_SYSTEM);
-	input_unbind_all(INPUT_LAYER_USER);
 	for (int p = 0; p < INPUT_MAX_PLAYERS; p++) {
 		input_unbind_all_p(p, INPUT_LAYER_SYSTEM);
 		input_unbind_all_p(p, INPUT_LAYER_USER);
@@ -206,26 +203,7 @@ static void input_set_layer_button_state_for_player(int player, input_layer_t la
 
 void input_set_layer_button_state(input_layer_t layer, button_t button, float state) {
 	error_if(layer < 0 || layer >= INPUT_LAYER_MAX, "Invalid input layer %d", layer);
-
-	uint8_t action = bindings[layer][button];
-	if (action == INPUT_ACTION_NONE) {
-		return;
-	}
-
-	uint8_t expected = expected_button[0][action];
-	if (!expected || expected == button) {
-		state = (state > INPUT_DEADZONE) ? state : 0;
-
-		if (state && !actions_state[0][action]) {
-			actions_pressed[0][action] = true;
-			expected_button[0][action] = button;
-		}
-		else if (!state && actions_state[0][action]) {
-			actions_released[0][action] = true;
-			expected_button[0][action] = INPUT_BUTTON_NONE;
-		}
-		actions_state[0][action] = state;
-	}
+	input_set_layer_button_state_for_player(0, layer, button, state);
 }
 
 void input_set_button_state(button_t button, float state) {
@@ -266,15 +244,7 @@ void input_textinput(int32_t ascii_char) {
 }
 
 void input_bind(input_layer_t layer, button_t button, uint8_t action) {
-	error_if(button < 0 || button >= INPUT_BUTTON_MAX, "Invalid input button %d", button);
-	error_if(action >= INPUT_ACTION_MAX, "Invalid input action %d", action);
-	error_if(layer < 0 || layer >= INPUT_LAYER_MAX, "Invalid input layer %d", layer);
-
-	actions_state[0][action] = 0;
-	bindings[layer][button] = action;
-	for (int i = 0; i < INPUT_ACTION_MAX; i++) {
-		expected_button[0][i] = 0;
-	}
+	input_bind_p(0, layer, button, action);
 }
 
 void input_bind_p(int player, input_layer_t layer, button_t button, uint8_t action) {
@@ -301,22 +271,18 @@ void input_unbind_all_p(int player, input_layer_t layer) {
 
 uint8_t input_bound_to_action(button_t button) {
 	error_if(button < 0 || button >= INPUT_BUTTON_MAX, "Invalid input button %d", button);
-	return bindings[INPUT_LAYER_USER][button];
+	return bindings_p[0][INPUT_LAYER_USER][button];
 }
 
 void input_unbind(input_layer_t layer, button_t button) {
 	error_if(layer < 0 || layer >= INPUT_LAYER_MAX, "Invalid input layer %d", layer);
 	error_if(button < 0 || button >= INPUT_BUTTON_MAX, "Invalid input button %d", button);
 
-	bindings[layer][button] = INPUT_ACTION_NONE;
+	bindings_p[0][layer][button] = INPUT_ACTION_NONE;
 }
 
 void input_unbind_all(input_layer_t layer) {
-	error_if(layer < 0 || layer >= INPUT_LAYER_MAX, "Invalid input layer %d", layer);
-
-	for (uint32_t button = 0; button < INPUT_BUTTON_MAX; button++) {
-		input_unbind(layer, button);
-	}
+	input_unbind_all_p(0, layer);
 }
 
 
