@@ -210,12 +210,22 @@ sfx_t *sfx_reserve_loop(sfx_source_t source_index) {
 }
 
 void sfx_set_position(sfx_t *sfx, vec3_t pos, vec3_t vel, float volume) {
-	vec3_t relative_position = vec3_sub(g.camera.position, pos);
-	vec3_t relative_velocity = vec3_sub(g.camera.real_velocity, vel);
+	// In split-screen, use whichever camera is closer to the sound source
+	camera_t *cam = &g.camera;
+	if (g.is_split_screen) {
+		float d1 = vec3_len(vec3_sub(g.camera.position, pos));
+		float d2 = vec3_len(vec3_sub(g.camera2.position, pos));
+		if (d2 < d1) {
+			cam = &g.camera2;
+		}
+	}
+
+	vec3_t relative_position = vec3_sub(cam->position, pos);
+	vec3_t relative_velocity = vec3_sub(cam->real_velocity, vel);
 	float distance = vec3_len(relative_position);
 
 	sfx->volume = clamp(scale(distance, 512, 32768, 1, 0), 0, 1) * volume;
-	sfx->pan = -sin(atan2(g.camera.position.x - pos.x, g.camera.position.z - pos.z)+g.camera.angle.y);
+	sfx->pan = -sin(atan2(cam->position.x - pos.x, cam->position.z - pos.z) + cam->angle.y);
 
 	// Doppler effect
 	float away = vec3_dot(relative_velocity, relative_position) / distance;
