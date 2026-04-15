@@ -63,15 +63,6 @@ static int platform_gamepad_player(SDL_JoystickID instance_id) {
 	return -1;
 }
 
-SDL_GameController *platform_find_gamepad(void) {
-	for (int i = 0; i < SDL_NumJoysticks(); i++) {
-		if (SDL_IsGameController(i)) {
-			return SDL_GameControllerOpen(i);
-		}
-	}
-
-	return NULL;
-}
 
 void platform_force_feedback(double strength, uint32_t duration) {
 	if(!gamepads[0]) {
@@ -449,8 +440,6 @@ int main(int, char**) {
 	}
 
 
-
-	gamepads[0] = platform_find_gamepad();
 
 	perf_freq = SDL_GetPerformanceFrequency();
 
