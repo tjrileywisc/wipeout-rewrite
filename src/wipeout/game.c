@@ -506,6 +506,7 @@ struct {
 static game_scene_t scene_current = GAME_SCENE_NONE;
 static game_scene_t scene_next = GAME_SCENE_NONE;
 static int global_textures_len = 0;
+static uint32_t global_static_bufs_len = 0;
 static void *global_mem_mark = 0;
 
 void game_init(void) {
@@ -537,6 +538,7 @@ void game_init(void) {
 	weapons_load();
 
 	global_textures_len = render_textures_len();
+	global_static_bufs_len = render_static_bufs_len();
 	global_mem_mark = mem_mark();
 
 	sfx_music_mode(SFX_MUSIC_PAUSED);
@@ -649,6 +651,7 @@ void game_update(void) {
 		scene_current = scene_next;
 		scene_next = GAME_SCENE_NONE;
 		render_textures_reset(global_textures_len);
+		render_static_bufs_reset(global_static_bufs_len);
 		mem_reset(global_mem_mark);
 		system_reset_cycle_time();
 

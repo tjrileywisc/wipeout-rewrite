@@ -105,6 +105,16 @@ void weapons_load(void) {
 		}
 	}
 
+	// Shield vertex colors are animated each frame in weapon_update_shield
+	weapon_assets.shield->skip_static_bake = true;
+	weapon_assets.shield_internal->skip_static_bake = true;
+
+	// Bake static weapon models
+	object_bake_vbo(weapon_assets.rocket);
+	object_bake_vbo(weapon_assets.mine);
+	object_bake_vbo(weapon_assets.missile);
+	object_bake_vbo(weapon_assets.ebolt);
+
 	weapons_init();
 }
 

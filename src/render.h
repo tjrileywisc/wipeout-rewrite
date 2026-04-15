@@ -25,6 +25,14 @@ typedef struct {
 	uint32_t num_draw_calls;
 } render_stats_t;
 
+typedef uint32_t render_static_buf_t;
+#define RENDER_STATIC_BUF_INVALID ((render_static_buf_t)0xFFFFFFFF)
+
+typedef struct {
+	uint32_t first_vertex;
+	uint32_t vertex_count;
+} render_draw_range_t;
+
 #define RENDER_USE_MIPMAPS 1
 
 #define RENDER_FADEOUT_NEAR 48000.0
@@ -71,5 +79,14 @@ void render_texture_replace_pixels(uint16_t texture_index, rgba_t *pixels);
 uint16_t render_textures_len(void);
 void render_textures_reset(uint16_t len);
 void render_textures_dump(const char *path);
+
+void render_bake_tris_uv(tris_t *tris, uint32_t count, uint16_t texture_index);
+render_static_buf_t render_static_buf_create(const tris_t *tris, uint32_t count);
+render_static_buf_t render_static_buf_create_dynamic(const tris_t *tris, uint32_t count);
+void render_static_buf_update(render_static_buf_t buf, const tris_t *tris, uint32_t count);
+void render_static_buf_destroy(render_static_buf_t buf);
+void render_static_buf_draw(render_static_buf_t buf, render_draw_range_t range, mat4_t *model_mat);
+uint32_t render_static_bufs_len(void);
+void render_static_bufs_reset(uint32_t len);
 
 #endif

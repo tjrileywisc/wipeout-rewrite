@@ -33,6 +33,10 @@ void ships_load(void) {
 		g.ships[ship_index].model = ship_model;
 		g.ships[ship_index].collision_model = collision_model;
 
+		// Ship models cannot be statically baked: the exhaust plume
+		// animates vertex positions in model->vertices[] every frame.
+		ship_model->skip_static_bake = true;
+
 		ship_model = ship_model->next;
 		collision_model = collision_model->next;
 

@@ -71,10 +71,19 @@ typedef struct track_t {
 	int32_t pickups_len;
 	int32_t total_section_nums;
 	texture_list_t textures;
-	
+
 	track_face_t *faces;
 	section_t *sections;
 	track_pickup_t *pickups;
+
+	render_static_buf_t static_vbo;
+	render_draw_range_t static_draw_range;
+
+	render_static_buf_t pickup_vbo;
+	render_draw_range_t pickup_draw_range;
+	tris_t *pickup_cpu_buf;
+	int32_t *face_to_pickup_slot; // face index -> first tris slot in pickup_cpu_buf, or -1
+	bool pickup_vbo_dirty;
 } track_t;
 
 

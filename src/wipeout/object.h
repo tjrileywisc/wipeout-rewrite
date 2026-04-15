@@ -345,6 +345,11 @@ typedef struct Object {
 	int16_t flags; // Next object in list
 	float radius;
 	struct Object *next; // Next object in list
+
+	render_static_buf_t static_vbo;
+	uint32_t static_vbo_count;
+	bool has_sprites;
+	bool skip_static_bake; // set for objects with animated vertex data
 } Object;
 
 typedef union Prm {
@@ -379,6 +384,7 @@ typedef union Prm {
 } Prm;
 
 Object *objects_load(char *name, texture_list_t tl);
+void object_bake_vbo(Object *object);
 void object_draw(Object *object, mat4_t *mat);
 
 #endif

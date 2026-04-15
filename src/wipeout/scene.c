@@ -70,17 +70,19 @@ void scene_load(const char *base_path, float sky_y_offset) {
 		if (str_starts_with(obj->name, "start")) {
 			error_if(start_booms_len >= SCENE_START_BOOMS_MAX, "SCENE_START_BOOMS_MAX reached");
 			start_booms[start_booms_len++] = obj;
+			obj->skip_static_bake = true; // vertex colors animated by scene_set_start_booms
 		}
 		else if (str_starts_with(obj->name, "redl")) {
 			error_if(red_lights_len >= SCENE_RED_LIGHTS_MAX, "SCENE_RED_LIGHTS_MAX reached");
 			red_lights[red_lights_len++] = obj;
+			obj->skip_static_bake = true; // vertex colors animated by scene_pulsate_red_light
 		}
 		else if (str_starts_with(obj->name, "donkey")) {
 			error_if(oil_pumps_len >= SCENE_OIL_PUMPS_MAX, "SCENE_OIL_PUMPS_MAX reached");
 			oil_pumps[oil_pumps_len++] = obj;
 		}
 		else if (
-			str_starts_with(obj->name, "lostad") || 
+			str_starts_with(obj->name, "lostad") ||
 			str_starts_with(obj->name, "stad_") ||
 			str_starts_with(obj->name, "newstad_")
 		) {
@@ -89,6 +91,16 @@ void scene_load(const char *base_path, float sky_y_offset) {
 		}
 		obj = obj->next;
 	}
+
+	// Bake static scene objects (skip animated ones marked above)
+	obj = scene_objects;
+	while (obj) {
+		object_bake_vbo(obj);
+		obj = obj->next;
+	}
+
+	// Sky has aurora borealis animation that modifies vertex colors; keep it dynamic
+	sky_object->skip_static_bake = true;
 
 	aurora_borealis.enabled = false;
 }

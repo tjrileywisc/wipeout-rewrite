@@ -403,6 +403,15 @@ void render_textures_reset(uint16_t len) {
 
 void render_textures_dump(const char *path) {}
 
+void render_bake_tris_uv(tris_t *tris, uint32_t count, uint16_t texture_index) { (void)tris; (void)count; (void)texture_index; }
+render_static_buf_t render_static_buf_create(const tris_t *tris, uint32_t count) { (void)tris; (void)count; return RENDER_STATIC_BUF_INVALID; }
+render_static_buf_t render_static_buf_create_dynamic(const tris_t *tris, uint32_t count) { (void)tris; (void)count; return RENDER_STATIC_BUF_INVALID; }
+void render_static_buf_update(render_static_buf_t buf, const tris_t *tris, uint32_t count) { (void)buf; (void)tris; (void)count; }
+void render_static_buf_destroy(render_static_buf_t buf) { (void)buf; }
+void render_static_buf_draw(render_static_buf_t buf, render_draw_range_t range, mat4_t *model_mat) { (void)buf; (void)range; (void)model_mat; }
+uint32_t render_static_bufs_len(void) { return 0; }
+void render_static_bufs_reset(uint32_t len) { (void)len; }
+
 
 
 // Rasterizer ------------------------------------------------------------------

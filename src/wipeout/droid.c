@@ -20,6 +20,7 @@ static Object *droid_model;
 void droid_load(void) {
 	texture_list_t droid_textures = image_get_compressed_textures("wipeout/common/rescu.cmp");
 	droid_model = objects_load("wipeout/common/rescu.prm", droid_textures);
+	droid_model->skip_static_bake = true; // vertex colors animated every frame in droid_draw
 }
 
 void droid_init(droid_t *droid, ship_t *ship) {

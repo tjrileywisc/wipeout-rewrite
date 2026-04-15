@@ -39,6 +39,10 @@ Object *objects_load(char *name, texture_list_t tl) {
 		}
 		
 		object->mat = mat4_identity();
+		object->static_vbo = RENDER_STATIC_BUF_INVALID;
+		object->static_vbo_count = 0;
+		object->has_sprites = false;
+		object->skip_static_bake = false;
 		object->vertices_len = get_i16(bytes, &p); p += 2;
 		object->vertices = NULL; get_i32(bytes, &p);
 		object->normals_len = get_i16(bytes, &p); p += 2;
@@ -454,7 +458,381 @@ Object *objects_load(char *name, texture_list_t tl) {
 }
 
 
+void object_bake_vbo(Object *object) {
+	if (object->skip_static_bake || object->static_vbo != RENDER_STATIC_BUF_INVALID) {
+		return;
+	}
+
+	// Count how many tris this object produces (excluding sprites)
+	int tris_count = 0;
+	Prm poly = {.primitive = object->primitives};
+	for (int i = 0; i < object->primitives_len; i++) {
+		switch (poly.primitive->type) {
+		case PRM_TYPE_GT3: case PRM_TYPE_FT3: case PRM_TYPE_G3:
+		case PRM_TYPE_F3:  case PRM_TYPE_LSF3: case PRM_TYPE_LSFT3:
+		case PRM_TYPE_LSG3: case PRM_TYPE_LSGT3:
+			tris_count += 1;
+			break;
+		case PRM_TYPE_GT4: case PRM_TYPE_FT4: case PRM_TYPE_G4:
+		case PRM_TYPE_F4:  case PRM_TYPE_LSF4: case PRM_TYPE_LSFT4:
+		case PRM_TYPE_LSG4: case PRM_TYPE_LSGT4:
+			tris_count += 2;
+			break;
+		case PRM_TYPE_TSPR: case PRM_TYPE_BSPR:
+			object->has_sprites = true;
+			break;
+		default:
+			break;
+		}
+		// Advance pointer using the same logic as object_draw
+		switch (poly.primitive->type) {
+		case PRM_TYPE_GT3:  poly.gt3++;  break;
+		case PRM_TYPE_GT4:  poly.gt4++;  break;
+		case PRM_TYPE_FT3:  poly.ft3++;  break;
+		case PRM_TYPE_FT4:  poly.ft4++;  break;
+		case PRM_TYPE_G3:   poly.g3++;   break;
+		case PRM_TYPE_G4:   poly.g4++;   break;
+		case PRM_TYPE_F3:   poly.f3++;   break;
+		case PRM_TYPE_F4:   poly.f4++;   break;
+		case PRM_TYPE_TSPR: case PRM_TYPE_BSPR: poly.spr++; break;
+		case PRM_TYPE_LSF3:  poly.lsf3++;  break;
+		case PRM_TYPE_LSF4:  poly.lsf4++;  break;
+		case PRM_TYPE_LSFT3: poly.lsft3++; break;
+		case PRM_TYPE_LSFT4: poly.lsft4++; break;
+		case PRM_TYPE_LSG3:  poly.lsg3++;  break;
+		case PRM_TYPE_LSG4:  poly.lsg4++;  break;
+		case PRM_TYPE_LSGT3: poly.lsgt3++; break;
+		case PRM_TYPE_LSGT4: poly.lsgt4++; break;
+		default: break;
+		}
+	}
+
+	if (tris_count == 0) {
+		return;
+	}
+
+	vec3_t *vertex = object->vertices;
+	tris_t *buf = mem_temp_alloc(sizeof(tris_t) * tris_count);
+	int bi = 0;
+
+	poly.primitive = object->primitives;
+	for (int i = 0; i < object->primitives_len; i++) {
+		int coord0, coord1, coord2, coord3;
+		uint16_t tex;
+		switch (poly.primitive->type) {
+		case PRM_TYPE_GT3:
+			coord0 = poly.gt3->coords[0];
+			coord1 = poly.gt3->coords[1];
+			coord2 = poly.gt3->coords[2];
+			tex = poly.gt3->texture;
+			buf[bi] = (tris_t){.vertices = {
+				{.pos = vertex[coord2], .uv = {poly.gt3->u2, poly.gt3->v2}, .color = poly.gt3->color[2]},
+				{.pos = vertex[coord1], .uv = {poly.gt3->u1, poly.gt3->v1}, .color = poly.gt3->color[1]},
+				{.pos = vertex[coord0], .uv = {poly.gt3->u0, poly.gt3->v0}, .color = poly.gt3->color[0]},
+			}};
+			render_bake_tris_uv(&buf[bi], 1, tex);
+			bi++;
+			poly.gt3++;
+			break;
+
+		case PRM_TYPE_GT4:
+			coord0 = poly.gt4->coords[0];
+			coord1 = poly.gt4->coords[1];
+			coord2 = poly.gt4->coords[2];
+			coord3 = poly.gt4->coords[3];
+			tex = poly.gt4->texture;
+			buf[bi] = (tris_t){.vertices = {
+				{.pos = vertex[coord2], .uv = {poly.gt4->u2, poly.gt4->v2}, .color = poly.gt4->color[2]},
+				{.pos = vertex[coord1], .uv = {poly.gt4->u1, poly.gt4->v1}, .color = poly.gt4->color[1]},
+				{.pos = vertex[coord0], .uv = {poly.gt4->u0, poly.gt4->v0}, .color = poly.gt4->color[0]},
+			}};
+			render_bake_tris_uv(&buf[bi], 1, tex);
+			bi++;
+			buf[bi] = (tris_t){.vertices = {
+				{.pos = vertex[coord2], .uv = {poly.gt4->u2, poly.gt4->v2}, .color = poly.gt4->color[2]},
+				{.pos = vertex[coord3], .uv = {poly.gt4->u3, poly.gt4->v3}, .color = poly.gt4->color[3]},
+				{.pos = vertex[coord1], .uv = {poly.gt4->u1, poly.gt4->v1}, .color = poly.gt4->color[1]},
+			}};
+			render_bake_tris_uv(&buf[bi], 1, tex);
+			bi++;
+			poly.gt4++;
+			break;
+
+		case PRM_TYPE_FT3:
+			coord0 = poly.ft3->coords[0];
+			coord1 = poly.ft3->coords[1];
+			coord2 = poly.ft3->coords[2];
+			tex = poly.ft3->texture;
+			buf[bi] = (tris_t){.vertices = {
+				{.pos = vertex[coord2], .uv = {poly.ft3->u2, poly.ft3->v2}, .color = poly.ft3->color},
+				{.pos = vertex[coord1], .uv = {poly.ft3->u1, poly.ft3->v1}, .color = poly.ft3->color},
+				{.pos = vertex[coord0], .uv = {poly.ft3->u0, poly.ft3->v0}, .color = poly.ft3->color},
+			}};
+			render_bake_tris_uv(&buf[bi], 1, tex);
+			bi++;
+			poly.ft3++;
+			break;
+
+		case PRM_TYPE_FT4:
+			coord0 = poly.ft4->coords[0];
+			coord1 = poly.ft4->coords[1];
+			coord2 = poly.ft4->coords[2];
+			coord3 = poly.ft4->coords[3];
+			tex = poly.ft4->texture;
+			buf[bi] = (tris_t){.vertices = {
+				{.pos = vertex[coord2], .uv = {poly.ft4->u2, poly.ft4->v2}, .color = poly.ft4->color},
+				{.pos = vertex[coord1], .uv = {poly.ft4->u1, poly.ft4->v1}, .color = poly.ft4->color},
+				{.pos = vertex[coord0], .uv = {poly.ft4->u0, poly.ft4->v0}, .color = poly.ft4->color},
+			}};
+			render_bake_tris_uv(&buf[bi], 1, tex);
+			bi++;
+			buf[bi] = (tris_t){.vertices = {
+				{.pos = vertex[coord2], .uv = {poly.ft4->u2, poly.ft4->v2}, .color = poly.ft4->color},
+				{.pos = vertex[coord3], .uv = {poly.ft4->u3, poly.ft4->v3}, .color = poly.ft4->color},
+				{.pos = vertex[coord1], .uv = {poly.ft4->u1, poly.ft4->v1}, .color = poly.ft4->color},
+			}};
+			render_bake_tris_uv(&buf[bi], 1, tex);
+			bi++;
+			poly.ft4++;
+			break;
+
+		case PRM_TYPE_G3:
+			coord0 = poly.g3->coords[0];
+			coord1 = poly.g3->coords[1];
+			coord2 = poly.g3->coords[2];
+			buf[bi] = (tris_t){.vertices = {
+				{.pos = vertex[coord2], .color = poly.g3->color[2]},
+				{.pos = vertex[coord1], .color = poly.g3->color[1]},
+				{.pos = vertex[coord0], .color = poly.g3->color[0]},
+			}};
+			render_bake_tris_uv(&buf[bi], 1, RENDER_NO_TEXTURE);
+			bi++;
+			poly.g3++;
+			break;
+
+		case PRM_TYPE_G4:
+			coord0 = poly.g4->coords[0];
+			coord1 = poly.g4->coords[1];
+			coord2 = poly.g4->coords[2];
+			coord3 = poly.g4->coords[3];
+			buf[bi] = (tris_t){.vertices = {
+				{.pos = vertex[coord2], .color = poly.g4->color[2]},
+				{.pos = vertex[coord1], .color = poly.g4->color[1]},
+				{.pos = vertex[coord0], .color = poly.g4->color[0]},
+			}};
+			render_bake_tris_uv(&buf[bi], 1, RENDER_NO_TEXTURE);
+			bi++;
+			buf[bi] = (tris_t){.vertices = {
+				{.pos = vertex[coord2], .color = poly.g4->color[2]},
+				{.pos = vertex[coord3], .color = poly.g4->color[3]},
+				{.pos = vertex[coord1], .color = poly.g4->color[1]},
+			}};
+			render_bake_tris_uv(&buf[bi], 1, RENDER_NO_TEXTURE);
+			bi++;
+			poly.g4++;
+			break;
+
+		case PRM_TYPE_F3:
+			coord0 = poly.f3->coords[0];
+			coord1 = poly.f3->coords[1];
+			coord2 = poly.f3->coords[2];
+			buf[bi] = (tris_t){.vertices = {
+				{.pos = vertex[coord2], .color = poly.f3->color},
+				{.pos = vertex[coord1], .color = poly.f3->color},
+				{.pos = vertex[coord0], .color = poly.f3->color},
+			}};
+			render_bake_tris_uv(&buf[bi], 1, RENDER_NO_TEXTURE);
+			bi++;
+			poly.f3++;
+			break;
+
+		case PRM_TYPE_F4:
+			coord0 = poly.f4->coords[0];
+			coord1 = poly.f4->coords[1];
+			coord2 = poly.f4->coords[2];
+			coord3 = poly.f4->coords[3];
+			buf[bi] = (tris_t){.vertices = {
+				{.pos = vertex[coord2], .color = poly.f4->color},
+				{.pos = vertex[coord1], .color = poly.f4->color},
+				{.pos = vertex[coord0], .color = poly.f4->color},
+			}};
+			render_bake_tris_uv(&buf[bi], 1, RENDER_NO_TEXTURE);
+			bi++;
+			buf[bi] = (tris_t){.vertices = {
+				{.pos = vertex[coord2], .color = poly.f4->color},
+				{.pos = vertex[coord3], .color = poly.f4->color},
+				{.pos = vertex[coord1], .color = poly.f4->color},
+			}};
+			render_bake_tris_uv(&buf[bi], 1, RENDER_NO_TEXTURE);
+			bi++;
+			poly.f4++;
+			break;
+
+		case PRM_TYPE_LSF3:
+			coord0 = poly.lsf3->coords[0]; coord1 = poly.lsf3->coords[1]; coord2 = poly.lsf3->coords[2];
+			buf[bi] = (tris_t){.vertices = {
+				{.pos = vertex[coord2], .color = poly.lsf3->color},
+				{.pos = vertex[coord1], .color = poly.lsf3->color},
+				{.pos = vertex[coord0], .color = poly.lsf3->color},
+			}};
+			render_bake_tris_uv(&buf[bi], 1, RENDER_NO_TEXTURE); bi++;
+			poly.lsf3++; break;
+
+		case PRM_TYPE_LSF4:
+			coord0 = poly.lsf4->coords[0]; coord1 = poly.lsf4->coords[1];
+			coord2 = poly.lsf4->coords[2]; coord3 = poly.lsf4->coords[3];
+			buf[bi] = (tris_t){.vertices = {{.pos = vertex[coord2], .color = poly.lsf4->color}, {.pos = vertex[coord1], .color = poly.lsf4->color}, {.pos = vertex[coord0], .color = poly.lsf4->color}}};
+			render_bake_tris_uv(&buf[bi], 1, RENDER_NO_TEXTURE); bi++;
+			buf[bi] = (tris_t){.vertices = {{.pos = vertex[coord2], .color = poly.lsf4->color}, {.pos = vertex[coord3], .color = poly.lsf4->color}, {.pos = vertex[coord1], .color = poly.lsf4->color}}};
+			render_bake_tris_uv(&buf[bi], 1, RENDER_NO_TEXTURE); bi++;
+			poly.lsf4++; break;
+
+		case PRM_TYPE_LSFT3:
+			coord0 = poly.lsft3->coords[0]; coord1 = poly.lsft3->coords[1]; coord2 = poly.lsft3->coords[2];
+			tex = poly.lsft3->texture;
+			buf[bi] = (tris_t){.vertices = {
+				{.pos = vertex[coord2], .uv = {poly.lsft3->u2, poly.lsft3->v2}, .color = poly.lsft3->color},
+				{.pos = vertex[coord1], .uv = {poly.lsft3->u1, poly.lsft3->v1}, .color = poly.lsft3->color},
+				{.pos = vertex[coord0], .uv = {poly.lsft3->u0, poly.lsft3->v0}, .color = poly.lsft3->color},
+			}};
+			render_bake_tris_uv(&buf[bi], 1, tex); bi++;
+			poly.lsft3++; break;
+
+		case PRM_TYPE_LSFT4:
+			coord0 = poly.lsft4->coords[0]; coord1 = poly.lsft4->coords[1];
+			coord2 = poly.lsft4->coords[2]; coord3 = poly.lsft4->coords[3];
+			tex = poly.lsft4->texture;
+			buf[bi] = (tris_t){.vertices = {
+				{.pos = vertex[coord2], .uv = {poly.lsft4->u2, poly.lsft4->v2}, .color = poly.lsft4->color},
+				{.pos = vertex[coord1], .uv = {poly.lsft4->u1, poly.lsft4->v1}, .color = poly.lsft4->color},
+				{.pos = vertex[coord0], .uv = {poly.lsft4->u0, poly.lsft4->v0}, .color = poly.lsft4->color},
+			}};
+			render_bake_tris_uv(&buf[bi], 1, tex); bi++;
+			buf[bi] = (tris_t){.vertices = {
+				{.pos = vertex[coord2], .uv = {poly.lsft4->u2, poly.lsft4->v2}, .color = poly.lsft4->color},
+				{.pos = vertex[coord3], .uv = {poly.lsft4->u3, poly.lsft4->v3}, .color = poly.lsft4->color},
+				{.pos = vertex[coord1], .uv = {poly.lsft4->u1, poly.lsft4->v1}, .color = poly.lsft4->color},
+			}};
+			render_bake_tris_uv(&buf[bi], 1, tex); bi++;
+			poly.lsft4++; break;
+
+		case PRM_TYPE_LSG3:
+			coord0 = poly.lsg3->coords[0]; coord1 = poly.lsg3->coords[1]; coord2 = poly.lsg3->coords[2];
+			buf[bi] = (tris_t){.vertices = {
+				{.pos = vertex[coord2], .color = poly.lsg3->color[2]},
+				{.pos = vertex[coord1], .color = poly.lsg3->color[1]},
+				{.pos = vertex[coord0], .color = poly.lsg3->color[0]},
+			}};
+			render_bake_tris_uv(&buf[bi], 1, RENDER_NO_TEXTURE); bi++;
+			poly.lsg3++; break;
+
+		case PRM_TYPE_LSG4:
+			coord0 = poly.lsg4->coords[0]; coord1 = poly.lsg4->coords[1];
+			coord2 = poly.lsg4->coords[2]; coord3 = poly.lsg4->coords[3];
+			buf[bi] = (tris_t){.vertices = {{.pos = vertex[coord2], .color = poly.lsg4->color[2]}, {.pos = vertex[coord1], .color = poly.lsg4->color[1]}, {.pos = vertex[coord0], .color = poly.lsg4->color[0]}}};
+			render_bake_tris_uv(&buf[bi], 1, RENDER_NO_TEXTURE); bi++;
+			buf[bi] = (tris_t){.vertices = {{.pos = vertex[coord2], .color = poly.lsg4->color[2]}, {.pos = vertex[coord3], .color = poly.lsg4->color[3]}, {.pos = vertex[coord1], .color = poly.lsg4->color[1]}}};
+			render_bake_tris_uv(&buf[bi], 1, RENDER_NO_TEXTURE); bi++;
+			poly.lsg4++; break;
+
+		case PRM_TYPE_LSGT3:
+			coord0 = poly.lsgt3->coords[0]; coord1 = poly.lsgt3->coords[1]; coord2 = poly.lsgt3->coords[2];
+			tex = poly.lsgt3->texture;
+			buf[bi] = (tris_t){.vertices = {
+				{.pos = vertex[coord2], .uv = {poly.lsgt3->u2, poly.lsgt3->v2}, .color = poly.lsgt3->color[2]},
+				{.pos = vertex[coord1], .uv = {poly.lsgt3->u1, poly.lsgt3->v1}, .color = poly.lsgt3->color[1]},
+				{.pos = vertex[coord0], .uv = {poly.lsgt3->u0, poly.lsgt3->v0}, .color = poly.lsgt3->color[0]},
+			}};
+			render_bake_tris_uv(&buf[bi], 1, tex); bi++;
+			poly.lsgt3++; break;
+
+		case PRM_TYPE_LSGT4:
+			coord0 = poly.lsgt4->coords[0]; coord1 = poly.lsgt4->coords[1];
+			coord2 = poly.lsgt4->coords[2]; coord3 = poly.lsgt4->coords[3];
+			tex = poly.lsgt4->texture;
+			buf[bi] = (tris_t){.vertices = {
+				{.pos = vertex[coord2], .uv = {poly.lsgt4->u2, poly.lsgt4->v2}, .color = poly.lsgt4->color[2]},
+				{.pos = vertex[coord1], .uv = {poly.lsgt4->u1, poly.lsgt4->v1}, .color = poly.lsgt4->color[1]},
+				{.pos = vertex[coord0], .uv = {poly.lsgt4->u0, poly.lsgt4->v0}, .color = poly.lsgt4->color[0]},
+			}};
+			render_bake_tris_uv(&buf[bi], 1, tex); bi++;
+			buf[bi] = (tris_t){.vertices = {
+				{.pos = vertex[coord2], .uv = {poly.lsgt4->u2, poly.lsgt4->v2}, .color = poly.lsgt4->color[2]},
+				{.pos = vertex[coord3], .uv = {poly.lsgt4->u3, poly.lsgt4->v3}, .color = poly.lsgt4->color[3]},
+				{.pos = vertex[coord1], .uv = {poly.lsgt4->u1, poly.lsgt4->v1}, .color = poly.lsgt4->color[1]},
+			}};
+			render_bake_tris_uv(&buf[bi], 1, tex); bi++;
+			poly.lsgt4++; break;
+
+		case PRM_TYPE_TSPR:
+		case PRM_TYPE_BSPR:
+			poly.spr++;
+			break;
+
+		default:
+			break;
+		}
+	}
+
+	object->static_vbo = render_static_buf_create(buf, bi);
+	object->static_vbo_count = (uint32_t)bi * 3;
+	mem_temp_free(buf);
+}
+
 void object_draw(Object *object, mat4_t *mat) {
+	// Fast path: draw from pre-baked GPU buffer
+	if (object->static_vbo != RENDER_STATIC_BUF_INVALID) {
+		render_draw_range_t range = {0, object->static_vbo_count};
+		render_static_buf_draw(object->static_vbo, range, mat);
+		if (object->has_sprites) {
+			// Sprites are view-dependent; fall through to push them dynamically
+			render_set_model_mat(mat);
+			Prm poly = {.primitive = object->primitives};
+			vec3_t *vertex = object->vertices;
+			for (int i = 0; i < object->primitives_len; i++) {
+				switch (poly.primitive->type) {
+				case PRM_TYPE_TSPR:
+				case PRM_TYPE_BSPR:
+					render_push_sprite(
+						vec3(
+							vertex[poly.spr->coord].x,
+							vertex[poly.spr->coord].y + ((poly.primitive->type == PRM_TYPE_TSPR ? poly.spr->height : -poly.spr->height) >> 1),
+							vertex[poly.spr->coord].z
+						),
+						vec2i(poly.spr->width, poly.spr->height),
+						poly.spr->color,
+						poly.spr->texture
+					);
+					poly.spr++;
+					break;
+				default:
+					// Skip non-sprite primitives; advance pointer
+					switch (poly.primitive->type) {
+					case PRM_TYPE_GT3:  poly.gt3++;  break;
+					case PRM_TYPE_GT4:  poly.gt4++;  break;
+					case PRM_TYPE_FT3:  poly.ft3++;  break;
+					case PRM_TYPE_FT4:  poly.ft4++;  break;
+					case PRM_TYPE_G3:   poly.g3++;   break;
+					case PRM_TYPE_G4:   poly.g4++;   break;
+					case PRM_TYPE_F3:   poly.f3++;   break;
+					case PRM_TYPE_F4:   poly.f4++;   break;
+					case PRM_TYPE_LSF3:  poly.lsf3++;  break;
+					case PRM_TYPE_LSF4:  poly.lsf4++;  break;
+					case PRM_TYPE_LSFT3: poly.lsft3++; break;
+					case PRM_TYPE_LSFT4: poly.lsft4++; break;
+					case PRM_TYPE_LSG3:  poly.lsg3++;  break;
+					case PRM_TYPE_LSG4:  poly.lsg4++;  break;
+					case PRM_TYPE_LSGT3: poly.lsgt3++; break;
+					case PRM_TYPE_LSGT4: poly.lsgt4++; break;
+					default: break;
+					}
+					break;
+				}
+			}
+		}
+		return;
+	}
+
 	vec3_t *vertex = object->vertices;
 
 	Prm poly = {.primitive = object->primitives};

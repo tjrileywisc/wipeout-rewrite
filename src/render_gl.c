@@ -346,6 +346,17 @@ prg_post_t *shader_post_crt_init(void) {
 
 // -----------------------------------------------------------------------------
 
+#define STATIC_BUFS_MAX 256
+
+typedef struct {
+	GLuint vbo;
+	GLuint vao;
+	uint32_t vertex_count;
+} static_buf_entry_t;
+
+static static_buf_entry_t static_bufs[STATIC_BUFS_MAX];
+static uint32_t static_bufs_len = 0;
+
 static GLuint vbo;
 
 static tris_t tris_buffer[RENDER_TRIS_BUFFER_CAPACITY];
@@ -1007,7 +1018,6 @@ uint16_t render_textures_len(void) {
 void render_textures_reset(uint16_t len) {
 	error_if(len > textures_len, "Invalid texture reset len %d >= %d", len, textures_len);
 	render_flush();
-
 	textures_len = len;
 	clear(atlas_map);
 
@@ -1031,6 +1041,104 @@ void render_textures_reset(uint16_t len) {
 			atlas_map[cx] = grid_y + grid_height;
 		}
 	}
+}
+
+void render_bake_tris_uv(tris_t *tris, uint32_t count, uint16_t texture_index) {
+	error_if(texture_index >= textures_len, "Invalid texture %d", texture_index);
+	render_texture_t *t = &textures[texture_index];
+	for (uint32_t ti = 0; ti < count; ti++) {
+		for (int v = 0; v < 3; v++) {
+			tris[ti].vertices[v].uv.x += t->offset.x;
+			tris[ti].vertices[v].uv.y += t->offset.y;
+		}
+	}
+}
+
+static render_static_buf_t static_buf_create_with_usage(const tris_t *tris, uint32_t count, GLenum usage) {
+	error_if(static_bufs_len >= STATIC_BUFS_MAX, "STATIC_BUFS_MAX reached");
+
+	GLuint new_vbo;
+	glGenBuffers(1, &new_vbo);
+	glBindBuffer(GL_ARRAY_BUFFER, new_vbo);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(tris_t) * count, tris, usage);
+
+	GLuint new_vao;
+	glGenVertexArrays(1, &new_vao);
+	glBindVertexArray(new_vao);
+	glBindBuffer(GL_ARRAY_BUFFER, new_vbo);
+	glEnableVertexAttribArray(prg_game->attribute.pos);
+	glEnableVertexAttribArray(prg_game->attribute.uv);
+	glEnableVertexAttribArray(prg_game->attribute.color);
+	bind_va_f(prg_game->attribute.pos, vertex_t, pos, 0);
+	bind_va_f(prg_game->attribute.uv, vertex_t, uv, 0);
+	bind_va_color(prg_game->attribute.color, vertex_t, color, 0);
+
+	// Restore dynamic path bindings
+	glBindVertexArray(prg_game->vao);
+	glBindBuffer(GL_ARRAY_BUFFER, vbo);
+
+	uint32_t idx = static_bufs_len++;
+	static_bufs[idx] = (static_buf_entry_t){
+		.vbo = new_vbo,
+		.vao = new_vao,
+		.vertex_count = count * 3
+	};
+	return idx;
+}
+
+render_static_buf_t render_static_buf_create(const tris_t *tris, uint32_t count) {
+	return static_buf_create_with_usage(tris, count, GL_STATIC_DRAW);
+}
+
+render_static_buf_t render_static_buf_create_dynamic(const tris_t *tris, uint32_t count) {
+	return static_buf_create_with_usage(tris, count, GL_DYNAMIC_DRAW);
+}
+
+void render_static_buf_update(render_static_buf_t buf, const tris_t *tris, uint32_t count) {
+	error_if(buf >= static_bufs_len, "Invalid static buf %d", buf);
+	glBindBuffer(GL_ARRAY_BUFFER, static_bufs[buf].vbo);
+	glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(tris_t) * count, tris);
+	glBindBuffer(GL_ARRAY_BUFFER, vbo);
+}
+
+void render_static_buf_destroy(render_static_buf_t buf) {
+	error_if(buf >= static_bufs_len, "Invalid static buf %d", buf);
+	glDeleteBuffers(1, &static_bufs[buf].vbo);
+	glDeleteVertexArrays(1, &static_bufs[buf].vao);
+	static_bufs[buf].vbo = 0;
+	static_bufs[buf].vao = 0;
+	static_bufs[buf].vertex_count = 0;
+}
+
+void render_static_buf_draw(render_static_buf_t buf, render_draw_range_t range, mat4_t *model_mat) {
+	error_if(buf >= static_bufs_len, "Invalid static buf %d", buf);
+	render_flush();
+	mat4_t id = mat4_identity();
+	glUniformMatrix4fv(prg_game->uniform.model, 1, false, model_mat ? model_mat->m : id.m);
+	glBindVertexArray(static_bufs[buf].vao);
+	glDrawArrays(GL_TRIANGLES, (GLint)range.first_vertex, (GLsizei)range.vertex_count);
+	running_stats.num_tris += range.vertex_count / 3;
+	running_stats.num_draw_calls++;
+	glBindVertexArray(prg_game->vao);
+	glBindBuffer(GL_ARRAY_BUFFER, vbo);
+}
+
+uint32_t render_static_bufs_len(void) {
+	return static_bufs_len;
+}
+
+void render_static_bufs_reset(uint32_t len) {
+	error_if(len > static_bufs_len, "Invalid static bufs reset len %d >= %d", len, static_bufs_len);
+	for (uint32_t i = len; i < static_bufs_len; i++) {
+		if (static_bufs[i].vbo) {
+			glDeleteBuffers(1, &static_bufs[i].vbo);
+			glDeleteVertexArrays(1, &static_bufs[i].vao);
+			static_bufs[i].vbo = 0;
+			static_bufs[i].vao = 0;
+			static_bufs[i].vertex_count = 0;
+		}
+	}
+	static_bufs_len = len;
 }
 
 void render_textures_dump(const char *path) {

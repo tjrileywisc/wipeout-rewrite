@@ -67,7 +67,7 @@ void track_load(const char *base_path) {
 	g.track.pickups = mem_mark();
 	for (int i = 0; i < g.track.section_count; i++) {
 		track_face_t *face = track_section_get_base_face(&g.track.sections[i]);
-		
+
 		for (int f = 0; f < 2; f++) {
 			if (flags_any(face->flags, FACE_PICKUP_RIGHT | FACE_PICKUP_LEFT)) {
 				mem_bump(sizeof(track_pickup_t));
@@ -75,13 +75,61 @@ void track_load(const char *base_path) {
 				g.track.pickups[g.track.pickups_len].cooldown_timer = 0;
 				g.track.pickups_len++;
 			}
-			
+
 			if (flags_is(face->flags, FACE_BOOST)) {
 				track_face_set_color(face, rgba(0, 0, 255, 255));
 			}
 			face++;
 		}
 	}
+
+	// Bake track geometry into GPU-side static VBOs.
+	// Count static vs pickup faces
+	int32_t static_count = 0;
+	int32_t pickup_count = 0;
+	for (int i = 0; i < g.track.face_count; i++) {
+		if (flags_any(g.track.faces[i].flags, FACE_PICKUP_LEFT | FACE_PICKUP_RIGHT)) {
+			pickup_count++;
+		} else {
+			static_count++;
+		}
+	}
+
+	// Build face_to_pickup_slot mapping (face_count entries, -1 means not a pickup)
+	g.track.face_to_pickup_slot = mem_bump(sizeof(int32_t) * g.track.face_count);
+	for (int i = 0; i < g.track.face_count; i++) {
+		g.track.face_to_pickup_slot[i] = -1;
+	}
+
+	// Allocate CPU-side buffers (2 tris per face)
+	tris_t *static_cpu = mem_temp_alloc(sizeof(tris_t) * static_count * 2);
+	g.track.pickup_cpu_buf = mem_bump(sizeof(tris_t) * pickup_count * 2);
+	g.track.pickup_vbo_dirty = false;
+
+	int32_t si = 0, pi = 0;
+	for (int i = 0; i < g.track.face_count; i++) {
+		track_face_t *face = &g.track.faces[i];
+		uint16_t tex = texture_from_list(g.track.textures, face->texture);
+		tris_t t0 = face->tris[0];
+		tris_t t1 = face->tris[1];
+		render_bake_tris_uv(&t0, 1, tex);
+		render_bake_tris_uv(&t1, 1, tex);
+		if (flags_any(face->flags, FACE_PICKUP_LEFT | FACE_PICKUP_RIGHT)) {
+			g.track.face_to_pickup_slot[i] = pi;
+			g.track.pickup_cpu_buf[pi++] = t0;
+			g.track.pickup_cpu_buf[pi++] = t1;
+		} else {
+			static_cpu[si++] = t0;
+			static_cpu[si++] = t1;
+		}
+	}
+
+	g.track.static_vbo = render_static_buf_create(static_cpu, static_count * 2);
+	g.track.static_draw_range = (render_draw_range_t){0, (uint32_t)static_count * 2 * 3};
+	mem_temp_free(static_cpu);
+
+	g.track.pickup_vbo = render_static_buf_create_dynamic(g.track.pickup_cpu_buf, pickup_count * 2);
+	g.track.pickup_draw_range = (render_draw_range_t){0, (uint32_t)pickup_count * 2 * 3};
 }
 
 ttf_t *track_load_tile_format(char *ttf_name) {
@@ -258,15 +306,34 @@ void track_draw_section(section_t *section) {
 	}
 }
 
-void track_draw(camera_t *camera) {	
+void track_draw(camera_t *camera) {
+	if (g.track.static_vbo != RENDER_STATIC_BUF_INVALID) {
+		// Fast path: draw pre-baked static faces in one call, then pickup faces
+		mat4_t id = mat4_identity();
+		render_set_model_mat(&id);
+		render_static_buf_draw(g.track.static_vbo, g.track.static_draw_range, &id);
+
+		if (g.track.pickup_draw_range.vertex_count > 0) {
+			if (g.track.pickup_vbo_dirty) {
+				render_static_buf_update(g.track.pickup_vbo,
+					g.track.pickup_cpu_buf,
+					g.track.pickup_draw_range.vertex_count / 3);
+				g.track.pickup_vbo_dirty = false;
+			}
+			render_static_buf_draw(g.track.pickup_vbo, g.track.pickup_draw_range, &id);
+		}
+		return;
+	}
+
+	// Fallback (software renderer): push tris the old way
 	render_set_model_mat(&mat4_identity());
 
 	// Calculate the camera forward vector, so we can cull everything that's
 	// behind. Ideally we'd want to do a full frustum culling here. FIXME.
 	vec3_t cam_pos = camera->position;
 	vec3_t cam_dir = camera_forward(camera);
-	
-	for(int32_t i = 0; i < g.track.section_count; i++) {
+
+	for (int32_t i = 0; i < g.track.section_count; i++) {
 		section_t *s = &g.track.sections[i];
 		vec3_t diff = vec3_sub(cam_pos, s->center);
 		float cam_dot = vec3_dot(diff, cam_dir);
@@ -311,6 +378,19 @@ void track_face_set_color(track_face_t *face, rgba_t color) {
 	face->tris[1].vertices[0].color = color;
 	face->tris[1].vertices[1].color = color;
 	face->tris[1].vertices[2].color = color;
+
+	// Mirror color change into the pickup CPU buffer for GPU upload
+	if (g.track.face_to_pickup_slot) {
+		int32_t face_index = (int32_t)(face - g.track.faces);
+		int32_t slot = g.track.face_to_pickup_slot[face_index];
+		if (slot >= 0) {
+			for (int v = 0; v < 3; v++) {
+				g.track.pickup_cpu_buf[slot].vertices[v].color = color;
+				g.track.pickup_cpu_buf[slot + 1].vertices[v].color = color;
+			}
+			g.track.pickup_vbo_dirty = true;
+		}
+	}
 }
 
 track_face_t *track_section_get_base_face(section_t *section) {
