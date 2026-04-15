@@ -595,6 +595,12 @@ void game_init(void) {
 		}
 	}
 
+	// P1 left-stick racing controls (supplemental to save.buttons)
+	input_bind(INPUT_LAYER_USER, INPUT_GAMEPAD_L_STICK_UP,    A_UP);
+	input_bind(INPUT_LAYER_USER, INPUT_GAMEPAD_L_STICK_DOWN,  A_DOWN);
+	input_bind(INPUT_LAYER_USER, INPUT_GAMEPAD_L_STICK_LEFT,  A_LEFT);
+	input_bind(INPUT_LAYER_USER, INPUT_GAMEPAD_L_STICK_RIGHT, A_RIGHT);
+
 	// Player 2 gamepad bindings (mirrors default P1 gamepad layout)
 	input_bind_p(1, INPUT_LAYER_USER, INPUT_GAMEPAD_DPAD_UP,    A_UP);
 	input_bind_p(1, INPUT_LAYER_USER, INPUT_GAMEPAD_DPAD_DOWN,  A_DOWN);
