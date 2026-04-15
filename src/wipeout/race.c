@@ -216,17 +216,17 @@ static bool sort_points_compare(pilot_points_t *pa, pilot_points_t *pb) {
 	return (pa->points < pb->points);
 }
 
-void race_end(void) {
+void race_end(int finishing_pilot) {
 	race_release_control();
 
-	g.race_position = g.ships[g.pilot].position_rank;
+	g.race_position = g.ships[finishing_pilot].position_rank;
 
 	g.race_time = 0;
-	g.best_lap = g.lap_times[g.pilot][0];
+	g.best_lap = g.lap_times[finishing_pilot][0];
 	for (int i = 0; i < NUM_LAPS; i++) {
-		g.race_time += g.lap_times[g.pilot][i];
-		if (g.lap_times[g.pilot][i] < g.best_lap) {
-			g.best_lap = g.lap_times[g.pilot][i];
+		g.race_time += g.lap_times[finishing_pilot][i];
+		if (g.lap_times[finishing_pilot][i] < g.best_lap) {
+			g.best_lap = g.lap_times[finishing_pilot][i];
 		}
 	}
 

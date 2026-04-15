@@ -250,7 +250,7 @@ void ship_init(ship_t *self, section_t *section, int pilot, int inv_start_rank) 
 	self->update_timer = UPDATE_TIME_INITIAL;
 	self->position_rank = NUM_PILOTS - inv_start_rank;
 
-	if (pilot == g.pilot) {
+	if (pilot == g.pilot || (g.is_split_screen && pilot == g.pilot2)) {
 		self->update_func = ship_player_update_intro;
 		self->remote_thrust_max = 2900;
 		self->remote_thrust_mag = 46;
@@ -608,8 +608,8 @@ void ship_update(ship_t *self) {
 				self->weapon_type = WEAPON_TYPE_TURBO;
 			}
 
-			if (self->lap == NUM_LAPS && self->pilot == g.pilot) {
-				race_end();
+			if (self->lap == NUM_LAPS && (self->pilot == g.pilot || (g.is_split_screen && self->pilot == g.pilot2))) {
+				race_end(self->pilot);
 			}
 		}
 	}
