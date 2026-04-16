@@ -614,7 +614,7 @@ void ship_update(ship_t *self) {
 			if (g.local_player_count >= 3) { is_local |= (self->pilot == g.pilot3); }
 			if (g.local_player_count >= 4) { is_local |= (self->pilot == g.pilot4); }
 			if (self->lap == NUM_LAPS && is_local) {
-				race_end(self->pilot);
+				race_player_finished(self->pilot);
 			}
 		}
 	}

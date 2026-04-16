@@ -29,6 +29,7 @@ static bool menu_is_scroll_text = false;
 static bool has_show_credits = false;
 static float attract_start_time;
 static menu_t *active_menu = NULL;
+static int players_finished = 0;
 
 void race_init(void) {
 	ingame_menus_load();
@@ -254,6 +255,7 @@ void race_start(void) {
 	g.is_new_lap_record = false;
 	g.best_lap = 0;
 	g.race_time = 0;
+	players_finished = 0;
 }
 
 void race_restart(void) {
@@ -275,17 +277,68 @@ static bool sort_points_compare(pilot_points_t *pa, pilot_points_t *pb) {
 	return (pa->points < pb->points);
 }
 
-void race_end(int finishing_pilot) {
+static camera_t *camera_for_pilot(int pilot) {
+	if (pilot == g.pilot)  return &g.camera;
+	if (pilot == g.pilot2) return &g.camera2;
+	if (pilot == g.pilot3) return &g.camera3;
+	if (pilot == g.pilot4) return &g.camera4;
+	return &g.camera;
+}
+
+static void race_release_player(int pilot_idx, camera_t *cam) {
+	flags_rm(g.ships[pilot_idx].flags, SHIP_RACING);
+	g.ships[pilot_idx].remote_thrust_max = 3160;
+	g.ships[pilot_idx].remote_thrust_mag = 32;
+	g.ships[pilot_idx].speed = 3160;
+	cam->update_func = camera_update_attract_random;
+}
+
+void race_player_finished(int pilot) {
+	// Release this player's ship and camera now so they stop racing
+	race_release_player(pilot, camera_for_pilot(pilot));
+	players_finished++;
+
+	// Wait for all local players to cross the finish line
+	if (players_finished < g.local_player_count) {
+		return;
+	}
+
+	race_end();
+}
+
+void race_end(void) {
+	// Release any players who haven't finished yet (e.g. championship game-over)
 	race_release_control();
 
-	g.race_position = g.ships[finishing_pilot].position_rank;
+	// Find the best-performing local player: lowest total race time, best lap,
+	// and best finish position across all human players.
+	int local_pilots[4] = {g.pilot, g.pilot2, g.pilot3, g.pilot4};
 
+	g.race_position = g.ships[g.pilot].position_rank;
 	g.race_time = 0;
-	g.best_lap = g.lap_times[finishing_pilot][0];
+	g.best_lap = g.lap_times[g.pilot][0];
 	for (int i = 0; i < NUM_LAPS; i++) {
-		g.race_time += g.lap_times[finishing_pilot][i];
-		if (g.lap_times[finishing_pilot][i] < g.best_lap) {
-			g.best_lap = g.lap_times[finishing_pilot][i];
+		g.race_time += g.lap_times[g.pilot][i];
+		if (g.lap_times[g.pilot][i] < g.best_lap) {
+			g.best_lap = g.lap_times[g.pilot][i];
+		}
+	}
+
+	for (int p = 1; p < g.local_player_count; p++) {
+		int pilot = local_pilots[p];
+		float total = 0;
+		for (int i = 0; i < NUM_LAPS; i++) { total += g.lap_times[pilot][i]; }
+
+		// Best lap across all players
+		for (int i = 0; i < NUM_LAPS; i++) {
+			if (g.lap_times[pilot][i] > 0 && g.lap_times[pilot][i] < g.best_lap) {
+				g.best_lap = g.lap_times[pilot][i];
+			}
+		}
+		// Best race time and position (using player with lowest total)
+		if (total > 0 && total < g.race_time) {
+			g.race_time = total;
+			g.race_position = g.ships[pilot].position_rank;
 		}
 	}
 
@@ -356,14 +409,6 @@ void race_next(void) {
 		g.circut = next_circut;
 		game_set_scene(GAME_SCENE_RACE);
 	}
-}
-
-static void race_release_player(int pilot_idx, camera_t *cam) {
-	flags_rm(g.ships[pilot_idx].flags, SHIP_RACING);
-	g.ships[pilot_idx].remote_thrust_max = 3160;
-	g.ships[pilot_idx].remote_thrust_mag = 32;
-	g.ships[pilot_idx].speed = 3160;
-	cam->update_func = camera_update_attract_random;
 }
 
 void race_release_control(void) {
