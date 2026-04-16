@@ -175,6 +175,15 @@ void camera_update_attract_random(camera_t *camera, ship_t *ship, droid_t *droid
 	(camera->update_func)(camera, ship, droid);
 }
 
+void camera_update_spectator(camera_t *camera, ship_t *ship, droid_t *droid) {
+	(void)droid;
+	// Stay at fixed position; rotate to track the provided ship
+	vec3_t target = vec3_sub(ship->position, camera->position);
+	float horiz = sqrt(target.x * target.x + target.z * target.z);
+	camera->angle.x = -atan2(target.y, horiz);
+	camera->angle.y = -atan2(target.x, target.z);
+}
+
 void camera_set_shake(camera_t *camera, float duration) {
 	camera->shake_timer = duration;
 }

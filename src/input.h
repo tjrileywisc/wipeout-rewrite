@@ -177,8 +177,8 @@ bool input_pressed(uint8_t action);
 bool input_released(uint8_t action);
 vec2_t input_mouse_pos(void);
 
-// Per-player input (player 0 = keyboard/gamepad 0, player 1 = gamepad 1)
-#define INPUT_MAX_PLAYERS 2
+// Per-player input (player 0 = keyboard/gamepad 0, player 1+ = gamepads 1-3)
+#define INPUT_MAX_PLAYERS 4
 void input_bind_p(int player, input_layer_t layer, button_t button, uint8_t action);
 void input_unbind_all_p(int player, input_layer_t layer);
 void input_set_button_state_p(button_t button, float state, int player);

@@ -77,16 +77,16 @@ static void race_draw_view(int pilot_idx, camera_t *camera, droid_t *droid) {
 	track_draw(camera);
 	render_set_cull_backface(true);
 
-	ships_draw(pilot_idx);
+	ships_draw(pilot_idx);  // -1 = spectator: no ship suppressed
 	droid_draw(droid);
 	weapons_draw();
 	particles_draw();
 
-	// 2D HUD
+	// 2D HUD — skipped for spectator view (pilot_idx == -1)
 	render_set_screen_position(vec2(0, 0));
 	render_set_view_2d();
 
-	if (flags_is(g.ships[pilot_idx].flags, SHIP_RACING)) {
+	if (pilot_idx >= 0 && flags_is(g.ships[pilot_idx].flags, SHIP_RACING)) {
 		hud_draw(&g.ships[pilot_idx]);
 	}
 }
@@ -104,9 +104,19 @@ void race_update(void) {
 		ships_update();
 		droid_update(&g.droid, &g.ships[g.pilot]);
 		camera_update(&g.camera, &g.ships[g.pilot], &g.droid);
-		if (g.is_split_screen) {
+		if (g.local_player_count >= 2) {
 			droid_update(&g.droid2, &g.ships[g.pilot2]);
 			camera_update(&g.camera2, &g.ships[g.pilot2], &g.droid2);
+		}
+		if (g.local_player_count >= 3) {
+			droid_update(&g.droid3, &g.ships[g.pilot3]);
+			camera_update(&g.camera3, &g.ships[g.pilot3], &g.droid3);
+			// Spectator camera tracks P1 from a fixed start-line vantage point
+			camera_update_spectator(&g.spectator_camera, &g.ships[g.pilot], NULL);
+		}
+		if (g.local_player_count >= 4) {
+			droid_update(&g.droid4, &g.ships[g.pilot4]);
+			camera_update(&g.camera4, &g.ships[g.pilot4], &g.droid4);
 		}
 		weapons_update();
 		particles_update();
@@ -130,7 +140,29 @@ void race_update(void) {
 	}
 
 	// Draw views
-	if (g.is_split_screen) {
+	if (g.local_player_count >= 3) {
+		// 2x2 quadrant layout (3P uses bottom-right for spectator)
+		vec2i_t full = render_backbuffer_size();
+		vec2i_t q = vec2i(full.x / 2, full.y / 2); // quadrant size
+		// Top-left: P1
+		render_set_viewport(vec2i(0, full.y / 2), q);
+		race_draw_view(g.pilot, &g.camera, &g.droid);
+		// Top-right: P2
+		render_set_viewport(vec2i(full.x / 2, full.y / 2), q);
+		race_draw_view(g.pilot2, &g.camera2, &g.droid2);
+		// Bottom-left: P3
+		render_set_viewport(vec2i(0, 0), q);
+		race_draw_view(g.pilot3, &g.camera3, &g.droid3);
+		// Bottom-right: P4 or spectator camera pointed at start line
+		render_set_viewport(vec2i(full.x / 2, 0), q);
+		if (g.local_player_count >= 4) {
+			race_draw_view(g.pilot4, &g.camera4, &g.droid4);
+		} else {
+			race_draw_view(-1, &g.spectator_camera, &g.droid);
+		}
+		render_reset_viewport();
+	}
+	else if (g.local_player_count == 2) {
 		vec2i_t full = render_backbuffer_size();
 		vec2i_t half = vec2i(full.x, full.y / 2);
 		// P1: top half (GL origin is bottom-left, so top half starts at y = full.y/2)
@@ -146,7 +178,7 @@ void race_update(void) {
 	}
 
 	// 2D attract mode label (single player only)
-	if (!g.is_split_screen && g.is_attract_mode && !active_menu) {
+	if (g.local_player_count == 1 && g.is_attract_mode && !active_menu) {
 		render_set_screen_position(vec2(0, 0));
 		render_set_view_2d();
 		ui_draw_text("DEMO MODE", ui_scaled_pos(UI_POS_TOP | UI_POS_CENTER, vec2i(-56, 24)), UI_SIZE_8, UI_COLOR_ACCENT);
@@ -170,14 +202,41 @@ void race_start(void) {
 	scene_init();
 	camera_init(&g.camera, g.track.sections);
 	g.camera.update_func = camera_update_race_intro;
-	if (g.is_split_screen) {
+	if (g.local_player_count >= 2) {
 		camera_init(&g.camera2, g.track.sections);
 		g.camera2.update_func = camera_update_race_intro;
 	}
+	if (g.local_player_count >= 3) {
+		camera_init(&g.camera3, g.track.sections);
+		g.camera3.update_func = camera_update_race_intro;
+
+		// Position spectator camera at the start/finish line, slightly elevated
+		int start_pos = def.circuts[g.circut].settings[g.race_class].start_line_pos;
+		section_t *sec = g.track.sections;
+		for (int i = 0; i < start_pos; i++) { sec = sec->next; }
+		g.spectator_camera.position = vec3(sec->center.x, sec->center.y - 800, sec->center.z);
+		g.spectator_camera.shake = vec2(0, 0);
+		g.spectator_camera.shake_timer = 0;
+		g.spectator_camera.update_func = camera_update_spectator;
+		// Initial angle: face back down the track toward the grid
+		section_t *prev = sec->prev ? sec->prev : sec;
+		vec3_t back = vec3_sub(prev->center, sec->center);
+		g.spectator_camera.angle = vec3(0, -atan2(back.x, back.z), 0);
+	}
+	if (g.local_player_count >= 4) {
+		camera_init(&g.camera4, g.track.sections);
+		g.camera4.update_func = camera_update_race_intro;
+	}
 	ships_init(g.track.sections);
 	droid_init(&g.droid, &g.ships[g.pilot]);
-	if (g.is_split_screen) {
+	if (g.local_player_count >= 2) {
 		droid_init(&g.droid2, &g.ships[g.pilot2]);
+	}
+	if (g.local_player_count >= 3) {
+		droid_init(&g.droid3, &g.ships[g.pilot3]);
+	}
+	if (g.local_player_count >= 4) {
+		droid_init(&g.droid4, &g.ships[g.pilot4]);
 	}
 	particles_init();
 	weapons_init();
@@ -299,19 +358,19 @@ void race_next(void) {
 	}
 }
 
+static void race_release_player(int pilot_idx, camera_t *cam) {
+	flags_rm(g.ships[pilot_idx].flags, SHIP_RACING);
+	g.ships[pilot_idx].remote_thrust_max = 3160;
+	g.ships[pilot_idx].remote_thrust_mag = 32;
+	g.ships[pilot_idx].speed = 3160;
+	cam->update_func = camera_update_attract_random;
+}
+
 void race_release_control(void) {
-	flags_rm(g.ships[g.pilot].flags, SHIP_RACING);
-	g.ships[g.pilot].remote_thrust_max = 3160;
-	g.ships[g.pilot].remote_thrust_mag = 32;
-	g.ships[g.pilot].speed = 3160;
-	g.camera.update_func = camera_update_attract_random;
-	if (g.is_split_screen) {
-		flags_rm(g.ships[g.pilot2].flags, SHIP_RACING);
-		g.ships[g.pilot2].remote_thrust_max = 3160;
-		g.ships[g.pilot2].remote_thrust_mag = 32;
-		g.ships[g.pilot2].speed = 3160;
-		g.camera2.update_func = camera_update_attract_random;
-	}
+	race_release_player(g.pilot, &g.camera);
+	if (g.local_player_count >= 2) { race_release_player(g.pilot2, &g.camera2); }
+	if (g.local_player_count >= 3) { race_release_player(g.pilot3, &g.camera3); }
+	if (g.local_player_count >= 4) { race_release_player(g.pilot4, &g.camera4); }
 }
 
 void race_pause(void) {

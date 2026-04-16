@@ -601,22 +601,31 @@ void game_init(void) {
 	input_bind(INPUT_LAYER_USER, INPUT_GAMEPAD_L_STICK_LEFT,  A_LEFT);
 	input_bind(INPUT_LAYER_USER, INPUT_GAMEPAD_L_STICK_RIGHT, A_RIGHT);
 
-	// Player 2 gamepad bindings (mirrors default P1 gamepad layout)
-	input_bind_p(1, INPUT_LAYER_USER, INPUT_GAMEPAD_DPAD_UP,    A_UP);
-	input_bind_p(1, INPUT_LAYER_USER, INPUT_GAMEPAD_DPAD_DOWN,  A_DOWN);
-	input_bind_p(1, INPUT_LAYER_USER, INPUT_GAMEPAD_DPAD_LEFT,  A_LEFT);
-	input_bind_p(1, INPUT_LAYER_USER, INPUT_GAMEPAD_DPAD_RIGHT, A_RIGHT);
-	input_bind_p(1, INPUT_LAYER_USER, INPUT_GAMEPAD_L_SHOULDER, A_BRAKE_LEFT);
-	input_bind_p(1, INPUT_LAYER_USER, INPUT_GAMEPAD_R_SHOULDER, A_BRAKE_RIGHT);
-	input_bind_p(1, INPUT_LAYER_USER, INPUT_GAMEPAD_A,          A_THRUST);
-	input_bind_p(1, INPUT_LAYER_USER, INPUT_GAMEPAD_X,          A_FIRE);
-	input_bind_p(1, INPUT_LAYER_USER, INPUT_GAMEPAD_Y,          A_CHANGE_VIEW);
-	input_bind_p(1, INPUT_LAYER_USER, INPUT_GAMEPAD_L_STICK_UP,    A_UP);
-	input_bind_p(1, INPUT_LAYER_USER, INPUT_GAMEPAD_L_STICK_DOWN,  A_DOWN);
-	input_bind_p(1, INPUT_LAYER_USER, INPUT_GAMEPAD_L_STICK_LEFT,  A_LEFT);
-	input_bind_p(1, INPUT_LAYER_USER, INPUT_GAMEPAD_L_STICK_RIGHT, A_RIGHT);
+	// Gamepad bindings for P2-P4 (all mirror default P1 gamepad layout)
+	for (int p = 1; p < INPUT_MAX_PLAYERS; p++) {
+		input_bind_p(p, INPUT_LAYER_USER, INPUT_GAMEPAD_DPAD_UP,       A_UP);
+		input_bind_p(p, INPUT_LAYER_USER, INPUT_GAMEPAD_DPAD_DOWN,     A_DOWN);
+		input_bind_p(p, INPUT_LAYER_USER, INPUT_GAMEPAD_DPAD_LEFT,     A_LEFT);
+		input_bind_p(p, INPUT_LAYER_USER, INPUT_GAMEPAD_DPAD_RIGHT,    A_RIGHT);
+		input_bind_p(p, INPUT_LAYER_USER, INPUT_GAMEPAD_L_SHOULDER,    A_BRAKE_LEFT);
+		input_bind_p(p, INPUT_LAYER_USER, INPUT_GAMEPAD_R_SHOULDER,    A_BRAKE_RIGHT);
+		input_bind_p(p, INPUT_LAYER_USER, INPUT_GAMEPAD_A,             A_THRUST);
+		input_bind_p(p, INPUT_LAYER_USER, INPUT_GAMEPAD_X,             A_FIRE);
+		input_bind_p(p, INPUT_LAYER_USER, INPUT_GAMEPAD_Y,             A_CHANGE_VIEW);
+		input_bind_p(p, INPUT_LAYER_USER, INPUT_GAMEPAD_L_STICK_UP,    A_UP);
+		input_bind_p(p, INPUT_LAYER_USER, INPUT_GAMEPAD_L_STICK_DOWN,  A_DOWN);
+		input_bind_p(p, INPUT_LAYER_USER, INPUT_GAMEPAD_L_STICK_LEFT,  A_LEFT);
+		input_bind_p(p, INPUT_LAYER_USER, INPUT_GAMEPAD_L_STICK_RIGHT, A_RIGHT);
+		input_bind_p(p, INPUT_LAYER_SYSTEM, INPUT_GAMEPAD_DPAD_UP,    A_MENU_UP);
+		input_bind_p(p, INPUT_LAYER_SYSTEM, INPUT_GAMEPAD_DPAD_DOWN,  A_MENU_DOWN);
+		input_bind_p(p, INPUT_LAYER_SYSTEM, INPUT_GAMEPAD_A,          A_MENU_SELECT);
+		input_bind_p(p, INPUT_LAYER_SYSTEM, INPUT_GAMEPAD_START,      A_MENU_START);
+	}
 
+	g.local_player_count = 1;
 	g.pilot2 = 1;
+	g.pilot3 = 2;
+	g.pilot4 = 3;
 
 	game_set_scene(GAME_SCENE_INTRO);
 }
