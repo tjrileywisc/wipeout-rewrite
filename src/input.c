@@ -155,11 +155,18 @@ static uint8_t bindings_p[INPUT_MAX_PLAYERS][INPUT_LAYER_MAX][INPUT_BUTTON_MAX];
 
 static input_capture_callback_t capture_callback;
 static void *capture_user;
+static int menu_player = 0;
 
 static int32_t mouse_x;
 static int32_t mouse_y;
 
+void input_set_menu_player(int player) {
+	error_if(player < 0 || player >= INPUT_MAX_PLAYERS, "Invalid player %d", player);
+	menu_player = player;
+}
+
 void input_init(void) {
+	menu_player = 0;
 	for (int p = 0; p < INPUT_MAX_PLAYERS; p++) {
 		input_unbind_all_p(p, INPUT_LAYER_SYSTEM);
 		input_unbind_all_p(p, INPUT_LAYER_USER);
@@ -223,6 +230,7 @@ void input_set_button_state_p(button_t button, float state, int player) {
 	error_if(button < 0 || button >= INPUT_BUTTON_MAX, "Invalid input button %d", button);
 	error_if(player < 0 || player >= INPUT_MAX_PLAYERS, "Invalid player %d", player);
 
+	input_set_layer_button_state_for_player(player, INPUT_LAYER_SYSTEM, button, state);
 	input_set_layer_button_state_for_player(player, INPUT_LAYER_USER, button, state);
 }
 
@@ -288,7 +296,7 @@ void input_unbind_all(input_layer_t layer) {
 
 float input_state(uint8_t action) {
 	error_if(action >= INPUT_ACTION_MAX, "Invalid input action %d", action);
-	return actions_state[0][action];
+	return actions_state[menu_player][action];
 }
 
 float input_state_p(uint8_t action, int player) {
@@ -299,7 +307,7 @@ float input_state_p(uint8_t action, int player) {
 
 bool input_pressed(uint8_t action) {
 	error_if(action >= INPUT_ACTION_MAX, "Invalid input action %d", action);
-	return actions_pressed[0][action];
+	return actions_pressed[menu_player][action];
 }
 
 bool input_pressed_p(uint8_t action, int player) {
@@ -310,7 +318,7 @@ bool input_pressed_p(uint8_t action, int player) {
 
 bool input_released(uint8_t action) {
 	error_if(action >= INPUT_ACTION_MAX, "Invalid input action %d", action);
-	return actions_released[0][action];
+	return actions_released[menu_player][action];
 }
 
 bool input_released_p(uint8_t action, int player) {

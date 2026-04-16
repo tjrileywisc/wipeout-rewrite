@@ -738,12 +738,22 @@ static void page_pilot_init(menu_t *menu) {
 	}
 }
 
+// Menu-player control helpers: each pilot-N page acquires control for player N
+// on enter (init_func) and releases it on back (exit_func). Forward selections
+// reset to 0 before pushing the next page so subsequent pages default to P1.
+
+static void menu_player_set_0(void) { input_set_menu_player(0); }
+static void menu_player_set_1(void) { input_set_menu_player(1); }
+static void menu_player_set_2(void) { input_set_menu_player(2); }
+static void menu_player_set_3(void) { input_set_menu_player(3); }
+
 // Player 2 pilot selection (split screen only)
 
 static void button_pilot2_select(menu_t *menu, int data) {
 	g.pilot2 = data;
+	input_set_menu_player(0); // restore P1 for subsequent pages
 	if (g.local_player_count >= 3) {
-		page_pilot3_init(menu);
+		page_pilot3_init(menu); // init_func will set to player 2
 	} else {
 		page_circut_init(menu);
 	}
@@ -754,7 +764,9 @@ static void page_pilot2_draw(menu_t*, int data) {
 }
 
 static void page_pilot2_init(menu_t *menu) {
-	menu_page_t *page = menu_push(menu, "PLAYER 2 CHOOSE PILOT", page_pilot2_draw, NULL, NULL);
+	menu_page_t *page = menu_push(menu, "PLAYER 2 CHOOSE PILOT", page_pilot2_draw,
+		menu_player_set_1,   // init: P2 takes control
+		menu_player_set_0);  // exit (back): restore P1
 	flags_add(page->layout_flags, MENU_FIXED);
 	page->title_pos = vec2i(0, 30);
 	page->title_anchor = UI_POS_TOP | UI_POS_CENTER;
@@ -772,8 +784,9 @@ static void page_pilot2_init(menu_t *menu) {
 
 static void button_pilot3_select(menu_t *menu, int data) {
 	g.pilot3 = data;
+	input_set_menu_player(0); // restore P1 for subsequent pages
 	if (g.local_player_count >= 4) {
-		page_pilot4_init(menu);
+		page_pilot4_init(menu); // init_func will set to player 3
 	} else {
 		page_circut_init(menu);
 	}
@@ -784,7 +797,9 @@ static void page_pilot3_draw(menu_t*, int data) {
 }
 
 static void page_pilot3_init(menu_t *menu) {
-	menu_page_t *page = menu_push(menu, "PLAYER 3 CHOOSE PILOT", page_pilot3_draw, NULL, NULL);
+	menu_page_t *page = menu_push(menu, "PLAYER 3 CHOOSE PILOT", page_pilot3_draw,
+		menu_player_set_2,   // init: P3 takes control
+		menu_player_set_1);  // exit (back): restore P2
 	flags_add(page->layout_flags, MENU_FIXED);
 	page->title_pos = vec2i(0, 30);
 	page->title_anchor = UI_POS_TOP | UI_POS_CENTER;
@@ -801,6 +816,7 @@ static void page_pilot3_init(menu_t *menu) {
 
 static void button_pilot4_select(menu_t *menu, int data) {
 	g.pilot4 = data;
+	input_set_menu_player(0); // restore P1 for circuit selection
 	page_circut_init(menu);
 }
 
@@ -809,7 +825,9 @@ static void page_pilot4_draw(menu_t*, int data) {
 }
 
 static void page_pilot4_init(menu_t *menu) {
-	menu_page_t *page = menu_push(menu, "PLAYER 4 CHOOSE PILOT", page_pilot4_draw, NULL, NULL);
+	menu_page_t *page = menu_push(menu, "PLAYER 4 CHOOSE PILOT", page_pilot4_draw,
+		menu_player_set_3,   // init: P4 takes control
+		menu_player_set_2);  // exit (back): restore P3
 	flags_add(page->layout_flags, MENU_FIXED);
 	page->title_pos = vec2i(0, 30);
 	page->title_anchor = UI_POS_TOP | UI_POS_CENTER;
@@ -887,6 +905,8 @@ static void objects_unpack_imp(Object **dest_array, int len, Object *src) {
 
 void main_menu_init(void) {
 	g.is_attract_mode = false;
+	g.local_player_count = 1;
+	input_set_menu_player(0); // ensure P1 controls menus on (re)entry
 
 	ships_reset_exhaust_plumes();
 
