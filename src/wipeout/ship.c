@@ -569,7 +569,7 @@ void ship_update(ship_t *self) {
 
 	int exhaust_len;
 
-	if (self->pilot == g.pilot) {
+	if (self->pilot == g.pilot || self->pilot == g.pilot2 || self->pilot == g.pilot3 || self->pilot == g.pilot4) {
 		// get the z exhaust_len related to speed or thrust
 		exhaust_len = self->thrust_mag * 0.0625;
 		exhaust_len += self->speed * 0.00390625;
