@@ -672,10 +672,10 @@ void weapon_fire_equalizer(ship_t *ship) {
 	self->timer = WEAPON_EQUALIZER_DURATION;
 	self->model = weapon_assets.missile;
 	self->update_func = weapon_update_equalizer;
-	self->trail_particle = PARTICLE_TYPE_SMOKE;
+	self->trail_particle = PARTICLE_TYPE_NONE; // spawned manually with longer timer
 	self->track_hit_particle = PARTICLE_TYPE_FIRE_WHITE;
 	self->ship_hit_particle = PARTICLE_TYPE_FIRE;
-	self->drag = 0.25;
+	self->drag = 0.125;
 	weapon_set_trajectory(self);
 
 	// Target the current first-place racer
@@ -697,25 +697,69 @@ void weapon_update_equalizer(weapon_t *self) {
 		return;
 	}
 
-	// Home toward target at 100x racer speed (acceleration 52500 vs missile's 256)
-	vec3_t angular_velocity = vec3(0, 0, 0);
-	if (self->target) {
-		vec3_t dir = vec3_mulf(vec3_sub(self->target->position, self->position), 0.125 * 30 * system_tick());
-		float height = sqrt(dir.x * dir.x + dir.z * dir.z);
-		angular_velocity.y = -atan2(dir.x, dir.z) - self->angle.y;
-		angular_velocity.x = -atan2(dir.y, height) - self->angle.x;
+	// Navigate along the track like an AI ship, 4 sections ahead
+	section_t *section = self->section;
+	section_t *next_section = section;
+	for (int i = 0; i < 4; i++) {
+		next_section = next_section->next;
 	}
 
-	angular_velocity = vec3_wrap_angle(angular_velocity);
-	self->angle = vec3_add(self->angle, vec3_mulf(angular_velocity, 30 * system_tick() * 0.25));
-	self->angle = vec3_wrap_angle(self->angle);
+	// Normalize track direction and scale to 10x racer speed in weapon-space.
+	// AI ships use: acceleration = direction*speed + 0.5*correction, drag=0.125,
+	// position += velocity * 0.015625 * 30*tick.
+	// Weapons omit the 0.015625 factor, so weapon speed = AI speed / 0.015625 to
+	// match. 10x racer (~2100) → weapon-space speed = 2100*10 * 0.125 / (1/0.015625)
+	// ≈ 328. Using the same form as the AI keeps the correction balanced.
+	vec3_t track_dir = vec3_sub(next_section->center, section->center);
+	float gap_length = vec3_len(track_dir);
+	if (gap_length > 0) {
+		track_dir = vec3_mulf(track_dir, 1.0f / gap_length);
+	}
+	vec3_t best_path = vec3_project_to_ray(self->position, next_section->center, section->center);
+	vec3_t correction = vec3_mulf(vec3_sub(best_path, self->position), 0.5f);
+	self->acceleration = vec3_add(vec3_mulf(track_dir, 328.0f), correction);
 
-	self->acceleration.x = -sin(self->angle.y) * cos(self->angle.x) * 52500;
-	self->acceleration.y = -sin(self->angle.x) * 52500;
-	self->acceleration.z = cos(self->angle.y) * cos(self->angle.x) * 52500;
+	// Spawn long-lived smoke trail (5 seconds)
+	self->trail_spawn_timer += system_tick();
+	while (self->trail_spawn_timer > 0) {
+		vec3_t pos = vec3_sub(self->position, vec3_mulf(self->velocity, 30 * system_tick() * self->trail_spawn_timer));
+		vec3_t trail_vel = vec3(rand_float(-128, 128), rand_float(-128, 128), rand_float(-128, 128));
+		particles_spawn_timed(pos, PARTICLE_TYPE_SMOKE, trail_vel, 128, 5.0f);
+		self->trail_spawn_timer -= WEAPON_PARTICLE_SPAWN_RATE;
+	}
 
-	ship_t *ship = weapon_collides_with_ship(self);
+	// Orient model along direction of travel
+	float xy_vel = sqrt(self->velocity.x * self->velocity.x + self->velocity.z * self->velocity.z);
+	self->angle.x = -atan2(self->velocity.y, xy_vel);
+	self->angle.y = -atan2(self->velocity.x, self->velocity.z);
+
+	// Only collide with the first-place target; force hit when entering the same section
+	ship_t *ship = self->target;
+	bool hit = false;
 	if (ship) {
+		if (self->section == ship->section) {
+			for (int p = 0; p < 32; p++) {
+				vec3_t vel = vec3_add(
+					vec3(rand_float(-512, 512), rand_float(-512, 512), rand_float(-512, 512)),
+					vec3_mulf(ship->velocity, 0.25));
+				particles_spawn(self->position, self->ship_hit_particle, vel, 256);
+			}
+			hit = true;
+		} else {
+			float distance = vec3_len(vec3_sub(ship->position, self->position));
+			if (distance < 4096) {
+				for (int p = 0; p < 32; p++) {
+					vec3_t vel = vec3_add(
+						vec3(rand_float(-512, 512), rand_float(-512, 512), rand_float(-512, 512)),
+						vec3_mulf(ship->velocity, 0.25));
+					particles_spawn(self->position, self->ship_hit_particle, vel, 256);
+				}
+				hit = true;
+			}
+		}
+	}
+
+	if (hit) {
 		sfx_play_at(SFX_EXPLOSION_1, self->position, vec3(0,0,0), 1);
 		self->active = false;
 
