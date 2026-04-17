@@ -17,6 +17,7 @@
 
 static texture_list_t weapon_icon_textures;
 static uint16_t target_reticle;
+static uint16_t equalizer_icon_texture;
 
 typedef struct {
 	vec2i_t offset;
@@ -54,6 +55,22 @@ void hud_load(void) {
 	speedo_facia_texture = image_get_texture("wipeout/textures/speedo.tim");
 	target_reticle = image_get_texture_semi_trans("wipeout/textures/target2.tim");
 	weapon_icon_textures = image_get_compressed_textures("wipeout/common/wicons.cmp");
+
+	// Create horizontally flipped missile icon for the equalizer weapon
+	cmp_t *wicons_cmp = image_load_compressed("wipeout/common/wicons.cmp");
+	image_t *missile_img = image_load_from_bytes(wicons_cmp->entries[1], false);
+	for (uint32_t y = 0; y < missile_img->height; y++) {
+		for (uint32_t x = 0; x < missile_img->width / 2; x++) {
+			uint32_t left  = y * missile_img->width + x;
+			uint32_t right = y * missile_img->width + (missile_img->width - 1 - x);
+			rgba_t tmp = missile_img->pixels[left];
+			missile_img->pixels[left]  = missile_img->pixels[right];
+			missile_img->pixels[right] = tmp;
+		}
+	}
+	equalizer_icon_texture = render_texture_create(missile_img->width, missile_img->height, missile_img->pixels);
+	mem_temp_free(missile_img);
+	mem_temp_free(wicons_cmp);
 }
 
 static void hud_draw_speedo_bar(vec2i_t *pos, const speedo_bar_t *a, const speedo_bar_t *b, float f, rgba_t color_override) {
@@ -249,7 +266,9 @@ void hud_draw(ship_t *ship) {
 	if (ship->weapon_type != WEAPON_TYPE_NONE) {
 		vec2i_t pos = ui_scaled_pos(UI_POS_TOP | UI_POS_CENTER, vec2i(-16, 20));
 		vec2i_t size = ui_scaled(vec2i(32, 32));
-		uint16_t icon = texture_from_list(weapon_icon_textures, ship->weapon_type-1);
+		uint16_t icon = (ship->weapon_type == WEAPON_TYPE_EQUALIZER)
+			? equalizer_icon_texture
+			: texture_from_list(weapon_icon_textures, ship->weapon_type-1);
 		render_push_2d(pos, size, rgba(128,128,128,255), icon);
 	}
 

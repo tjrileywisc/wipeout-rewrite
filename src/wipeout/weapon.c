@@ -74,6 +74,9 @@ void weapon_update_shield(weapon_t *self);
 
 void weapon_fire_turbo(ship_t *ship);
 
+void weapon_fire_equalizer(ship_t *ship);
+void weapon_update_equalizer(weapon_t *self);
+
 void invert_shield_polys(Object *shield);
 
 void weapons_load(void) {
@@ -145,6 +148,7 @@ void weapons_fire(ship_t *ship, int weapon_type) {
 		case WEAPON_TYPE_EBOLT:     weapon_fire_ebolt(ship); break;
 		case WEAPON_TYPE_SHIELD:    weapon_fire_shield(ship); break;
 		case WEAPON_TYPE_TURBO:     weapon_fire_turbo(ship); break;
+		case WEAPON_TYPE_EQUALIZER: weapon_fire_equalizer(ship); break;
 		default: die("Invalid weapon type %d", weapon_type);
 	}
 	ship->weapon_type = WEAPON_TYPE_NONE;
@@ -656,6 +660,81 @@ void weapon_fire_turbo(ship_t *ship) {
 	if (ship->camera) {
 		sfx_t *sfx = sfx_play(SFX_MISSILE_FIRE);
 		sfx->pitch = 0.25;
+	}
+}
+
+void weapon_fire_equalizer(ship_t *ship) {
+	weapon_t *self = weapon_init(ship);
+	if (!self) {
+		return;
+	}
+
+	self->timer = WEAPON_EQUALIZER_DURATION;
+	self->model = weapon_assets.missile;
+	self->update_func = weapon_update_equalizer;
+	self->trail_particle = PARTICLE_TYPE_SMOKE;
+	self->track_hit_particle = PARTICLE_TYPE_FIRE_WHITE;
+	self->ship_hit_particle = PARTICLE_TYPE_FIRE;
+	self->drag = 0.25;
+	weapon_set_trajectory(self);
+
+	// Target the current first-place racer
+	for (int i = 0; i < NUM_PILOTS; i++) {
+		if (g.ships[i].position_rank == 1 && &g.ships[i] != ship) {
+			self->target = &g.ships[i];
+			break;
+		}
+	}
+
+	if (self->owner->camera) {
+		sfx_play(SFX_MISSILE_FIRE);
+	}
+}
+
+void weapon_update_equalizer(weapon_t *self) {
+	if (self->timer <= 0) {
+		self->active = false;
+		return;
+	}
+
+	// Home toward target at 100x racer speed (acceleration 52500 vs missile's 256)
+	vec3_t angular_velocity = vec3(0, 0, 0);
+	if (self->target) {
+		vec3_t dir = vec3_mulf(vec3_sub(self->target->position, self->position), 0.125 * 30 * system_tick());
+		float height = sqrt(dir.x * dir.x + dir.z * dir.z);
+		angular_velocity.y = -atan2(dir.x, dir.z) - self->angle.y;
+		angular_velocity.x = -atan2(dir.y, height) - self->angle.x;
+	}
+
+	angular_velocity = vec3_wrap_angle(angular_velocity);
+	self->angle = vec3_add(self->angle, vec3_mulf(angular_velocity, 30 * system_tick() * 0.25));
+	self->angle = vec3_wrap_angle(self->angle);
+
+	self->acceleration.x = -sin(self->angle.y) * cos(self->angle.x) * 52500;
+	self->acceleration.y = -sin(self->angle.x) * 52500;
+	self->acceleration.z = cos(self->angle.y) * cos(self->angle.x) * 52500;
+
+	ship_t *ship = weapon_collides_with_ship(self);
+	if (ship) {
+		sfx_play_at(SFX_EXPLOSION_1, self->position, vec3(0,0,0), 1);
+		self->active = false;
+
+		if (flags_not(ship->flags, SHIP_SHIELDED)) {
+			if (ship->camera) {
+				ship->velocity = vec3_sub(ship->velocity, vec3_mulf(ship->velocity, 0.75));
+				ship->angular_velocity.z += rand_float(-0.1, 0.1);
+				ship->turn_rate_from_hit = rand_float(-0.1, 0.1);
+				camera_set_shake(ship->camera, CAMERA_SHAKE_LONG);
+				if (ship->pilot == g.pilot) {
+					platform_force_feedback(1.0, 500);
+				}
+			}
+			else {
+				ship->speed = ship->speed * 0.03125;
+				ship->angular_velocity.z += 10 * M_PI;
+				ship->turn_rate_from_hit = rand_float(-M_PI, M_PI);
+			}
+		}
 	}
 }
 
