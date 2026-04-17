@@ -56,17 +56,16 @@ void hud_load(void) {
 	target_reticle = image_get_texture_semi_trans("wipeout/textures/target2.tim");
 	weapon_icon_textures = image_get_compressed_textures("wipeout/common/wicons.cmp");
 
-	// Create horizontally flipped missile icon for the equalizer weapon
+	// Create a blue-tinted missile icon for the equalizer weapon
 	cmp_t *wicons_cmp = image_load_compressed("wipeout/common/wicons.cmp");
 	image_t *missile_img = image_load_from_bytes(wicons_cmp->entries[1], false);
-	for (uint32_t y = 0; y < missile_img->height; y++) {
-		for (uint32_t x = 0; x < missile_img->width / 2; x++) {
-			uint32_t left  = y * missile_img->width + x;
-			uint32_t right = y * missile_img->width + (missile_img->width - 1 - x);
-			rgba_t tmp = missile_img->pixels[left];
-			missile_img->pixels[left]  = missile_img->pixels[right];
-			missile_img->pixels[right] = tmp;
-		}
+	uint32_t pixel_count = missile_img->width * missile_img->height;
+	for (uint32_t i = 0; i < pixel_count; i++) {
+		rgba_t *p = &missile_img->pixels[i];
+		uint8_t lum = (uint8_t)(((uint32_t)p->r + p->g + p->b) / 3);
+		p->r = lum / 4;
+		p->g = lum / 2;
+		p->b = lum;
 	}
 	equalizer_icon_texture = render_texture_create(missile_img->width, missile_img->height, missile_img->pixels);
 	mem_temp_free(missile_img);
