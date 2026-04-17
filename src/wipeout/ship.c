@@ -536,7 +536,8 @@ void ship_update(ship_t *self) {
 		if (self->camera) {
 			sfx_play(SFX_POWERUP);
 			float equalizer_prob = 0.0f;
-			if (self->position_rank > 1) {
+			bool equalizer_allowed = (g.race_type == RACE_TYPE_SPLIT_SCREEN || g.race_type == RACE_TYPE_NETWORK);
+			if (equalizer_allowed && self->position_rank > 1) {
 				float back_fraction = (NUM_PILOTS > 2)
 					? (float)(self->position_rank - 2) / (NUM_PILOTS - 2)
 					: 0.0f;
