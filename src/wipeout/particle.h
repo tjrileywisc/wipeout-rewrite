@@ -26,6 +26,7 @@ typedef struct particle_t {
 void particles_load(void);
 void particles_init(void);
 void particles_spawn(vec3_t position, uint16_t type, vec3_t velocity, int size);
+void particles_spawn_timed(vec3_t position, uint16_t type, vec3_t velocity, int size, float timer);
 void particles_draw(void);
 void particles_update(void);
 
