@@ -74,6 +74,9 @@ void weapon_update_shield(weapon_t *self);
 
 void weapon_fire_turbo(ship_t *ship);
 
+void weapon_fire_equalizer(ship_t *ship);
+void weapon_update_equalizer(weapon_t *self);
+
 void invert_shield_polys(Object *shield);
 
 void weapons_load(void) {
@@ -145,6 +148,7 @@ void weapons_fire(ship_t *ship, int weapon_type) {
 		case WEAPON_TYPE_EBOLT:     weapon_fire_ebolt(ship); break;
 		case WEAPON_TYPE_SHIELD:    weapon_fire_shield(ship); break;
 		case WEAPON_TYPE_TURBO:     weapon_fire_turbo(ship); break;
+		case WEAPON_TYPE_EQUALIZER: weapon_fire_equalizer(ship); break;
 		default: die("Invalid weapon type %d", weapon_type);
 	}
 	ship->weapon_type = WEAPON_TYPE_NONE;
@@ -656,6 +660,125 @@ void weapon_fire_turbo(ship_t *ship) {
 	if (ship->camera) {
 		sfx_t *sfx = sfx_play(SFX_MISSILE_FIRE);
 		sfx->pitch = 0.25;
+	}
+}
+
+void weapon_fire_equalizer(ship_t *ship) {
+	weapon_t *self = weapon_init(ship);
+	if (!self) {
+		return;
+	}
+
+	self->timer = WEAPON_EQUALIZER_DURATION;
+	self->model = weapon_assets.missile;
+	self->update_func = weapon_update_equalizer;
+	self->trail_particle = PARTICLE_TYPE_NONE; // spawned manually with longer timer
+	self->track_hit_particle = PARTICLE_TYPE_FIRE_WHITE;
+	self->ship_hit_particle = PARTICLE_TYPE_FIRE;
+	self->drag = 0.125;
+	weapon_set_trajectory(self);
+
+	// Target the current first-place racer
+	for (int i = 0; i < NUM_PILOTS; i++) {
+		if (g.ships[i].position_rank == 1 && &g.ships[i] != ship) {
+			self->target = &g.ships[i];
+			break;
+		}
+	}
+
+	if (self->owner->camera) {
+		sfx_play(SFX_MISSILE_FIRE);
+	}
+}
+
+void weapon_update_equalizer(weapon_t *self) {
+	if (self->timer <= 0) {
+		self->active = false;
+		return;
+	}
+
+	// Navigate along the track like an AI ship, 4 sections ahead
+	section_t *section = self->section;
+	section_t *next_section = section;
+	for (int i = 0; i < 4; i++) {
+		next_section = next_section->next;
+	}
+
+	// Normalize track direction and scale to 10x racer speed in weapon-space.
+	// AI ships use: acceleration = direction*speed + 0.5*correction, drag=0.125,
+	// position += velocity * 0.015625 * 30*tick.
+	// Weapons omit the 0.015625 factor, so weapon speed = AI speed / 0.015625 to
+	// match. 10x racer (~2100) → weapon-space speed = 2100*10 * 0.125 / (1/0.015625)
+	// ≈ 328. Using the same form as the AI keeps the correction balanced.
+	vec3_t track_dir = vec3_sub(next_section->center, section->center);
+	float gap_length = vec3_len(track_dir);
+	if (gap_length > 0) {
+		track_dir = vec3_mulf(track_dir, 1.0f / gap_length);
+	}
+	vec3_t best_path = vec3_project_to_ray(self->position, next_section->center, section->center);
+	vec3_t correction = vec3_mulf(vec3_sub(best_path, self->position), 0.5f);
+	self->acceleration = vec3_add(vec3_mulf(track_dir, 328.0f), correction);
+
+	// Spawn long-lived smoke trail (5 seconds)
+	self->trail_spawn_timer += system_tick();
+	while (self->trail_spawn_timer > 0) {
+		vec3_t pos = vec3_sub(self->position, vec3_mulf(self->velocity, 30 * system_tick() * self->trail_spawn_timer));
+		vec3_t trail_vel = vec3(rand_float(-128, 128), rand_float(-128, 128), rand_float(-128, 128));
+		particles_spawn_timed(pos, PARTICLE_TYPE_SMOKE, trail_vel, 128, 5.0f);
+		self->trail_spawn_timer -= WEAPON_PARTICLE_SPAWN_RATE;
+	}
+
+	// Orient model along direction of travel
+	float xy_vel = sqrt(self->velocity.x * self->velocity.x + self->velocity.z * self->velocity.z);
+	self->angle.x = -atan2(self->velocity.y, xy_vel);
+	self->angle.y = -atan2(self->velocity.x, self->velocity.z);
+
+	// Only collide with the first-place target; force hit when entering the same section
+	ship_t *ship = self->target;
+	bool hit = false;
+	if (ship) {
+		if (self->section == ship->section) {
+			for (int p = 0; p < 32; p++) {
+				vec3_t vel = vec3_add(
+					vec3(rand_float(-512, 512), rand_float(-512, 512), rand_float(-512, 512)),
+					vec3_mulf(ship->velocity, 0.25));
+				particles_spawn(self->position, self->ship_hit_particle, vel, 256);
+			}
+			hit = true;
+		} else {
+			float distance = vec3_len(vec3_sub(ship->position, self->position));
+			if (distance < 4096) {
+				for (int p = 0; p < 32; p++) {
+					vec3_t vel = vec3_add(
+						vec3(rand_float(-512, 512), rand_float(-512, 512), rand_float(-512, 512)),
+						vec3_mulf(ship->velocity, 0.25));
+					particles_spawn(self->position, self->ship_hit_particle, vel, 256);
+				}
+				hit = true;
+			}
+		}
+	}
+
+	if (hit) {
+		sfx_play_at(SFX_EXPLOSION_1, self->position, vec3(0,0,0), 1);
+		self->active = false;
+
+		if (flags_not(ship->flags, SHIP_SHIELDED)) {
+			if (ship->camera) {
+				ship->velocity = vec3_sub(ship->velocity, vec3_mulf(ship->velocity, 0.75));
+				ship->angular_velocity.z += rand_float(-0.1, 0.1);
+				ship->turn_rate_from_hit = rand_float(-0.1, 0.1);
+				camera_set_shake(ship->camera, CAMERA_SHAKE_LONG);
+				if (ship->pilot == g.pilot) {
+					platform_force_feedback(1.0, 500);
+				}
+			}
+			else {
+				ship->speed = ship->speed * 0.03125;
+				ship->angular_velocity.z += 10 * M_PI;
+				ship->turn_rate_from_hit = rand_float(-M_PI, M_PI);
+			}
+		}
 	}
 }
 

@@ -535,7 +535,18 @@ void ship_update(ship_t *self) {
 	) {
 		if (self->camera) {
 			sfx_play(SFX_POWERUP);
-			if (flags_is(self->flags, SHIP_SHIELDED)) {
+			float equalizer_prob = 0.0f;
+			bool equalizer_allowed = (g.race_type == RACE_TYPE_SPLIT_SCREEN || g.race_type == RACE_TYPE_NETWORK);
+			if (equalizer_allowed && self->position_rank > 1) {
+				float back_fraction = (NUM_PILOTS > 2)
+					? (float)(self->position_rank - 2) / (NUM_PILOTS - 2)
+					: 0.0f;
+				equalizer_prob = 0.01f + back_fraction * 0.01f;
+			}
+			if (rand_float(0, 1) < equalizer_prob) {
+				self->weapon_type = WEAPON_TYPE_EQUALIZER;
+			}
+			else if (flags_is(self->flags, SHIP_SHIELDED)) {
 				self->weapon_type = weapon_get_random_type(WEAPON_CLASS_PROJECTILE);
 			}
 			else {
