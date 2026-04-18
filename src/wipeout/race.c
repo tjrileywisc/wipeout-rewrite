@@ -97,11 +97,10 @@ static void race_draw_view(int pilot_idx, camera_t *camera, droid_t *droid) {
 static struct { float min_x, max_x, min_z, max_z; } minimap_bounds;
 
 static void race_minimap_init_bounds(void) {
-	section_t *s = g.track.sections;
-	minimap_bounds.min_x = minimap_bounds.max_x = s->center.x;
-	minimap_bounds.min_z = minimap_bounds.max_z = s->center.z;
+	minimap_bounds.min_x = minimap_bounds.max_x = g.track.sections[0].center.x;
+	minimap_bounds.min_z = minimap_bounds.max_z = g.track.sections[0].center.z;
 	for (int i = 1; i < g.track.section_count; i++) {
-		s = s->next;
+		section_t *s = &g.track.sections[i];
 		if (s->center.x < minimap_bounds.min_x) minimap_bounds.min_x = s->center.x;
 		if (s->center.x > minimap_bounds.max_x) minimap_bounds.max_x = s->center.x;
 		if (s->center.z < minimap_bounds.min_z) minimap_bounds.min_z = s->center.z;
@@ -109,15 +108,25 @@ static void race_minimap_init_bounds(void) {
 	}
 }
 
-static vec2_t minimap_world_to_screen(float wx, float wz, vec2i_t vp, int margin) {
-	float scale_x = (float)(vp.x - margin * 2) / (minimap_bounds.max_x - minimap_bounds.min_x);
-	float scale_z = (float)(vp.y - margin * 2) / (minimap_bounds.max_z - minimap_bounds.min_z);
-	float scale = scale_x < scale_z ? scale_x : scale_z;
-	float cx = (minimap_bounds.min_x + minimap_bounds.max_x) * 0.5f;
-	float cz = (minimap_bounds.min_z + minimap_bounds.max_z) * 0.5f;
+static float minimap_scale;
+static float minimap_cx, minimap_cz;
+
+static void race_minimap_compute_scale(vec2i_t vp, int margin) {
+	float range_x = minimap_bounds.max_x - minimap_bounds.min_x;
+	float range_z = minimap_bounds.max_z - minimap_bounds.min_z;
+	if (range_x < 1.0f) range_x = 1.0f;
+	if (range_z < 1.0f) range_z = 1.0f;
+	float scale_x = (float)(vp.x - margin * 2) / range_x;
+	float scale_z = (float)(vp.y - margin * 2) / range_z;
+	minimap_scale = scale_x < scale_z ? scale_x : scale_z;
+	minimap_cx = (minimap_bounds.min_x + minimap_bounds.max_x) * 0.5f;
+	minimap_cz = (minimap_bounds.min_z + minimap_bounds.max_z) * 0.5f;
+}
+
+static vec2_t minimap_world_to_screen(float wx, float wz, vec2i_t vp) {
 	return vec2(
-		vp.x * 0.5f + (wx - cx) * scale,
-		vp.y * 0.5f + (wz - cz) * scale
+		vp.x * 0.5f + (wx - minimap_cx) * minimap_scale,
+		vp.y * 0.5f + (wz - minimap_cz) * minimap_scale
 	);
 }
 
@@ -136,23 +145,6 @@ static void minimap_push_rect(vec2_t c, float half, rgba_t color) {
 	}}, RENDER_NO_TEXTURE);
 }
 
-static void minimap_push_segment(vec2_t a, vec2_t b, float half_w, rgba_t color) {
-	float dx = b.x - a.x, dy = b.y - a.y;
-	float len = sqrtf(dx * dx + dy * dy);
-	if (len < 0.5f) return;
-	float nx = -dy / len * half_w;
-	float ny =  dx / len * half_w;
-	render_push_tris((tris_t){.vertices = {
-		{{a.x + nx, a.y + ny, 0}, {0, 0}, color},
-		{{a.x - nx, a.y - ny, 0}, {0, 0}, color},
-		{{b.x + nx, b.y + ny, 0}, {0, 0}, color},
-	}}, RENDER_NO_TEXTURE);
-	render_push_tris((tris_t){.vertices = {
-		{{a.x - nx, a.y - ny, 0}, {0, 0}, color},
-		{{b.x - nx, b.y - ny, 0}, {0, 0}, color},
-		{{b.x + nx, b.y + ny, 0}, {0, 0}, color},
-	}}, RENDER_NO_TEXTURE);
-}
 
 static void race_draw_minimap(void) {
 	render_set_screen_position(vec2(0, 0));
@@ -160,16 +152,15 @@ static void race_draw_minimap(void) {
 
 	vec2i_t vp = render_size();
 	const int margin = 12;
+	race_minimap_compute_scale(vp, margin);
 
 	render_push_2d(vec2i(0, 0), vp, rgba(15, 15, 30, 255), RENDER_NO_TEXTURE);
 
 	rgba_t track_color = rgba(180, 180, 220, 255);
-	section_t *s = g.track.sections;
 	for (int i = 0; i < g.track.section_count; i++) {
-		vec2_t a = minimap_world_to_screen(s->center.x, s->center.z, vp, margin);
-		vec2_t b = minimap_world_to_screen(s->next->center.x, s->next->center.z, vp, margin);
-		minimap_push_segment(a, b, 2.0f, track_color);
-		s = s->next;
+		section_t *s = &g.track.sections[i];
+		vec2_t p = minimap_world_to_screen(s->center.x, s->center.z, vp);
+		minimap_push_rect(p, 2.0f, track_color);
 	}
 
 	rgba_t player_colors[4] = {
@@ -183,7 +174,7 @@ static void race_draw_minimap(void) {
 	for (int i = 0; i < NUM_PILOTS; i++) {
 		ship_t *ship = &g.ships[i];
 		if (flags_none(ship->flags, SHIP_RACING | SHIP_VISIBLE)) continue;
-		vec2_t pos = minimap_world_to_screen(ship->position.x, ship->position.z, vp, margin);
+		vec2_t pos = minimap_world_to_screen(ship->position.x, ship->position.z, vp);
 		if (ship->player_index >= 0) {
 			minimap_push_rect(pos, 4.0f, player_colors[ship->player_index]);
 		} else {
