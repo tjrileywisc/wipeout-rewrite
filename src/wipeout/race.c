@@ -161,9 +161,9 @@ static void race_draw_minimap(void) {
 	vec2i_t vp = render_size();
 	const int margin = 12;
 
-	render_push_2d(vec2i(0, 0), vp, rgba(15, 15, 30, 255), RENDER_NO_TEXTURE);
+	render_push_2d(vec2i(0, 0), vp, rgba(0, 0, 20, 180), RENDER_NO_TEXTURE);
 
-	rgba_t track_color = rgba(180, 180, 220, 255);
+	rgba_t track_color = rgba(60, 60, 100, 220);
 	section_t *s = g.track.sections;
 	for (int i = 0; i < g.track.section_count; i++) {
 		vec2_t a = minimap_world_to_screen(s->center.x, s->center.z, vp, margin);
@@ -173,16 +173,16 @@ static void race_draw_minimap(void) {
 	}
 
 	rgba_t player_colors[4] = {
-		rgba(  0, 255, 255, 255),  // P1 cyan
-		rgba(255, 255,   0, 255),  // P2 yellow
-		rgba(  0, 255, 100, 255),  // P3 green
+		rgba(  0, 200, 255, 255),  // P1 cyan
+		rgba(255, 200,   0, 255),  // P2 yellow
+		rgba( 80, 255, 120, 255),  // P3 green
 		rgba(255,  80,  80, 255),  // P4 red
 	};
-	rgba_t ai_color = rgba(200, 200, 200, 255);
+	rgba_t ai_color = rgba(160, 160, 160, 200);
 
 	for (int i = 0; i < NUM_PILOTS; i++) {
 		ship_t *ship = &g.ships[i];
-		if (flags_none(ship->flags, SHIP_RACING | SHIP_VISIBLE)) continue;
+		if (!flags_is(ship->flags, SHIP_RACING)) continue;
 		vec2_t pos = minimap_world_to_screen(ship->position.x, ship->position.z, vp, margin);
 		if (ship->player_index >= 0) {
 			minimap_push_rect(pos, 4.0f, player_colors[ship->player_index]);
