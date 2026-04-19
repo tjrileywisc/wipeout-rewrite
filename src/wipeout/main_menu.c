@@ -18,6 +18,9 @@ static void page_race_type_init(menu_t *menu);
 static void page_team_init(menu_t *menu);
 static void page_pilot_init(menu_t *menu);
 static void page_pilot2_init(menu_t *menu);
+static void page_pilot3_init(menu_t *menu);
+static void page_pilot4_init(menu_t *menu);
+static void page_player_count_init(menu_t *menu);
 static void page_circut_init(menu_t *menu);
 static void page_network_init(menu_t *menu);
 static void page_network_connected_init(menu_t *menu);
@@ -632,11 +635,17 @@ static void page_race_class_init(menu_t *menu) {
 // Race Type
 
 static void button_race_type_select(menu_t *menu, int data) {
-	g.is_split_screen = (data == RACE_TYPE_SPLIT_SCREEN);
-	g.race_type = g.is_split_screen ? RACE_TYPE_SINGLE : data;
+	if (data == RACE_TYPE_SPLIT_SCREEN) {
+		g.race_type = RACE_TYPE_SINGLE;
+		g.highscore_tab = HIGHSCORE_TAB_RACE;
+		page_player_count_init(menu);
+		return;
+	}
+	g.local_player_count = 1;
+	g.race_type = data;
 	g.highscore_tab = g.race_type == RACE_TYPE_TIME_TRIAL ? HIGHSCORE_TAB_TIME_TRIAL : HIGHSCORE_TAB_RACE;
 
-	if(g.race_type != RACE_TYPE_NETWORK) {
+	if (g.race_type != RACE_TYPE_NETWORK) {
 		page_race_class_init(menu);
 	} else {
 		page_network_init(menu);
@@ -700,7 +709,7 @@ static void page_team_init(menu_t *menu) {
 
 static void button_pilot_select(menu_t *menu, int data) {
 	g.pilot = data;
-	if (g.is_split_screen) {
+	if (g.local_player_count >= 2) {
 		page_pilot2_init(menu);
 	}
 	else if (g.race_type != RACE_TYPE_CHAMPIONSHIP) {
@@ -729,11 +738,25 @@ static void page_pilot_init(menu_t *menu) {
 	}
 }
 
+// Menu-player control helpers: each pilot-N page acquires control for player N
+// on enter (init_func) and releases it on back (exit_func). Forward selections
+// reset to 0 before pushing the next page so subsequent pages default to P1.
+
+static void menu_player_set_0(void) { input_set_menu_player(0); }
+static void menu_player_set_1(void) { input_set_menu_player(1); }
+static void menu_player_set_2(void) { input_set_menu_player(2); }
+static void menu_player_set_3(void) { input_set_menu_player(3); }
+
 // Player 2 pilot selection (split screen only)
 
 static void button_pilot2_select(menu_t *menu, int data) {
 	g.pilot2 = data;
-	page_circut_init(menu);
+	input_set_menu_player(0); // restore P1 for subsequent pages
+	if (g.local_player_count >= 3) {
+		page_pilot3_init(menu); // init_func will set to player 2
+	} else {
+		page_circut_init(menu);
+	}
 }
 
 static void page_pilot2_draw(menu_t*, int data) {
@@ -741,7 +764,9 @@ static void page_pilot2_draw(menu_t*, int data) {
 }
 
 static void page_pilot2_init(menu_t *menu) {
-	menu_page_t *page = menu_push(menu, "PLAYER 2 CHOOSE PILOT", page_pilot2_draw, NULL, NULL);
+	menu_page_t *page = menu_push(menu, "PLAYER 2 CHOOSE PILOT", page_pilot2_draw,
+		menu_player_set_1,   // init: P2 takes control
+		menu_player_set_0);  // exit (back): restore P1
 	flags_add(page->layout_flags, MENU_FIXED);
 	page->title_pos = vec2i(0, 30);
 	page->title_anchor = UI_POS_TOP | UI_POS_CENTER;
@@ -752,6 +777,86 @@ static void page_pilot2_init(menu_t *menu) {
 			menu_page_add_button(page, i, def.pilots[i].name, button_pilot2_select);
 		}
 	}
+}
+
+
+// Player 3 pilot selection
+
+static void button_pilot3_select(menu_t *menu, int data) {
+	g.pilot3 = data;
+	input_set_menu_player(0); // restore P1 for subsequent pages
+	if (g.local_player_count >= 4) {
+		page_pilot4_init(menu); // init_func will set to player 3
+	} else {
+		page_circut_init(menu);
+	}
+}
+
+static void page_pilot3_draw(menu_t*, int data) {
+	draw_model(models.pilots[def.pilots[data].logo_model], vec2(0, -0.2), vec3(0, 0, -10000), system_cycle_time());
+}
+
+static void page_pilot3_init(menu_t *menu) {
+	menu_page_t *page = menu_push(menu, "PLAYER 3 CHOOSE PILOT", page_pilot3_draw,
+		menu_player_set_2,   // init: P3 takes control
+		menu_player_set_1);  // exit (back): restore P2
+	flags_add(page->layout_flags, MENU_FIXED);
+	page->title_pos = vec2i(0, 30);
+	page->title_anchor = UI_POS_TOP | UI_POS_CENTER;
+	page->items_pos = vec2i(0, -110);
+	page->items_anchor = UI_POS_BOTTOM | UI_POS_CENTER;
+	for (unsigned int i = 0; i < (unsigned int)NUM_PILOTS; i++) {
+		if ((int)i != g.pilot && (int)i != g.pilot2) {
+			menu_page_add_button(page, i, def.pilots[i].name, button_pilot3_select);
+		}
+	}
+}
+
+// Player 4 pilot selection
+
+static void button_pilot4_select(menu_t *menu, int data) {
+	g.pilot4 = data;
+	input_set_menu_player(0); // restore P1 for circuit selection
+	page_circut_init(menu);
+}
+
+static void page_pilot4_draw(menu_t*, int data) {
+	draw_model(models.pilots[def.pilots[data].logo_model], vec2(0, -0.2), vec3(0, 0, -10000), system_cycle_time());
+}
+
+static void page_pilot4_init(menu_t *menu) {
+	menu_page_t *page = menu_push(menu, "PLAYER 4 CHOOSE PILOT", page_pilot4_draw,
+		menu_player_set_3,   // init: P4 takes control
+		menu_player_set_2);  // exit (back): restore P3
+	flags_add(page->layout_flags, MENU_FIXED);
+	page->title_pos = vec2i(0, 30);
+	page->title_anchor = UI_POS_TOP | UI_POS_CENTER;
+	page->items_pos = vec2i(0, -110);
+	page->items_anchor = UI_POS_BOTTOM | UI_POS_CENTER;
+	for (unsigned int i = 0; i < (unsigned int)NUM_PILOTS; i++) {
+		if ((int)i != g.pilot && (int)i != g.pilot2 && (int)i != g.pilot3) {
+			menu_page_add_button(page, i, def.pilots[i].name, button_pilot4_select);
+		}
+	}
+}
+
+// Player count selection (shown after choosing SPLIT SCREEN)
+
+static void button_player_count_select(menu_t *menu, int data) {
+	g.local_player_count = data;
+	page_race_class_init(menu);
+}
+
+static void page_player_count_init(menu_t *menu) {
+	menu_page_t *page = menu_push(menu, "SELECT PLAYER COUNT", NULL, NULL, NULL);
+	flags_add(page->layout_flags, MENU_FIXED);
+	page->title_pos = vec2i(0, 30);
+	page->title_anchor = UI_POS_TOP | UI_POS_CENTER;
+	page->items_pos = vec2i(0, -110);
+	page->items_anchor = UI_POS_BOTTOM | UI_POS_CENTER;
+	menu_page_add_button(page, 2, "2 PLAYERS", button_player_count_select);
+	menu_page_add_button(page, 3, "3 PLAYERS", button_player_count_select);
+	menu_page_add_button(page, 4, "4 PLAYERS", button_player_count_select);
 }
 
 
@@ -800,6 +905,8 @@ static void objects_unpack_imp(Object **dest_array, int len, Object *src) {
 
 void main_menu_init(void) {
 	g.is_attract_mode = false;
+	g.local_player_count = 1;
+	input_set_menu_player(0); // ensure P1 controls menus on (re)entry
 
 	ships_reset_exhaust_plumes();
 
