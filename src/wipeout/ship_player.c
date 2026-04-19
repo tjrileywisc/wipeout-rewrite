@@ -296,6 +296,31 @@ void ship_player_update_race(ship_t *self) {
 	if (input_pressed_p(A_FIRE, self->player_index) && self->weapon_type != WEAPON_TYPE_NONE) {
 		if (flags_not(self->flags, SHIP_SHIELDED)) {
 			weapons_fire(self, self->weapon_type);
+
+			// Warn when an equalizer weapon has been picked up
+			if(self->weapon_type == WEAPON_TYPE_EQUALIZER) {
+				sfx_play(SFX_VOICE_MISSILE);
+			}
+			else {
+				// Warn any human player directly ahead (within 10 sections)
+				for (int pi = 0; pi < NUM_PILOTS; pi++) {
+					ship_t *other = &g.ships[pi];
+					if (other == self || other->player_index < 0) continue;
+					int section_diff = other->total_section_num - self->total_section_num;
+					if (section_diff > 0 && section_diff <= 10) {
+						switch (self->weapon_type) {
+							case WEAPON_TYPE_ROCKET:  sfx_play(SFX_VOICE_ROCKETS);   break;
+							case WEAPON_TYPE_MISSILE: sfx_play(SFX_VOICE_MISSILE);   break;
+							case WEAPON_TYPE_EBOLT:   sfx_play(SFX_VOICE_SHOCKWAVE); break;
+							case WEAPON_TYPE_MINE:    sfx_play(SFX_VOICE_MINES);     break;
+							default: break;
+						}
+						break;
+					}
+				}
+			}
+
+
 		}
 		else {
 			sfx_play(SFX_MENU_MOVE);

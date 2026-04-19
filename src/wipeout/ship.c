@@ -542,7 +542,7 @@ void ship_update(ship_t *self) {
 				float back_fraction = (NUM_PILOTS > 2)
 					? (float)(self->position_rank - 2) / (NUM_PILOTS - 2)
 					: 0.0f;
-				equalizer_prob = 0.01f + back_fraction * 0.01f;
+				equalizer_prob = 0.02f + back_fraction * 0.01f;
 			}
 			if (rand_float(0, 1) < equalizer_prob) {
 				self->weapon_type = WEAPON_TYPE_EQUALIZER;
