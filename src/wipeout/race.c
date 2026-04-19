@@ -92,106 +92,6 @@ static void race_draw_view(int pilot_idx, camera_t *camera, droid_t *droid) {
 	}
 }
 
-// Minimap
-
-static struct { float min_x, max_x, min_z, max_z; } minimap_bounds;
-
-static void race_minimap_init_bounds(void) {
-	section_t *s = g.track.sections;
-	minimap_bounds.min_x = minimap_bounds.max_x = s->center.x;
-	minimap_bounds.min_z = minimap_bounds.max_z = s->center.z;
-	for (int i = 1; i < g.track.section_count; i++) {
-		s = s->next;
-		if (s->center.x < minimap_bounds.min_x) minimap_bounds.min_x = s->center.x;
-		if (s->center.x > minimap_bounds.max_x) minimap_bounds.max_x = s->center.x;
-		if (s->center.z < minimap_bounds.min_z) minimap_bounds.min_z = s->center.z;
-		if (s->center.z > minimap_bounds.max_z) minimap_bounds.max_z = s->center.z;
-	}
-}
-
-static vec2_t minimap_world_to_screen(float wx, float wz, vec2i_t vp, int margin) {
-	float scale_x = (float)(vp.x - margin * 2) / (minimap_bounds.max_x - minimap_bounds.min_x);
-	float scale_z = (float)(vp.y - margin * 2) / (minimap_bounds.max_z - minimap_bounds.min_z);
-	float scale = scale_x < scale_z ? scale_x : scale_z;
-	float cx = (minimap_bounds.min_x + minimap_bounds.max_x) * 0.5f;
-	float cz = (minimap_bounds.min_z + minimap_bounds.max_z) * 0.5f;
-	return vec2(
-		vp.x * 0.5f + (wx - cx) * scale,
-		vp.y * 0.5f + (wz - cz) * scale
-	);
-}
-
-static void minimap_push_rect(vec2_t c, float half, rgba_t color) {
-	float x0 = c.x - half, y0 = c.y - half;
-	float x1 = c.x + half, y1 = c.y + half;
-	render_push_tris((tris_t){.vertices = {
-		{{x0, y0, 0}, {0, 0}, color},
-		{{x1, y0, 0}, {0, 0}, color},
-		{{x0, y1, 0}, {0, 0}, color},
-	}}, RENDER_NO_TEXTURE);
-	render_push_tris((tris_t){.vertices = {
-		{{x1, y0, 0}, {0, 0}, color},
-		{{x1, y1, 0}, {0, 0}, color},
-		{{x0, y1, 0}, {0, 0}, color},
-	}}, RENDER_NO_TEXTURE);
-}
-
-static void minimap_push_segment(vec2_t a, vec2_t b, float half_w, rgba_t color) {
-	float dx = b.x - a.x, dy = b.y - a.y;
-	float len = sqrtf(dx * dx + dy * dy);
-	if (len < 0.5f) return;
-	float nx = -dy / len * half_w;
-	float ny =  dx / len * half_w;
-	render_push_tris((tris_t){.vertices = {
-		{{a.x + nx, a.y + ny, 0}, {0, 0}, color},
-		{{a.x - nx, a.y - ny, 0}, {0, 0}, color},
-		{{b.x + nx, b.y + ny, 0}, {0, 0}, color},
-	}}, RENDER_NO_TEXTURE);
-	render_push_tris((tris_t){.vertices = {
-		{{a.x - nx, a.y - ny, 0}, {0, 0}, color},
-		{{b.x - nx, b.y - ny, 0}, {0, 0}, color},
-		{{b.x + nx, b.y + ny, 0}, {0, 0}, color},
-	}}, RENDER_NO_TEXTURE);
-}
-
-static void race_draw_minimap(void) {
-	render_set_screen_position(vec2(0, 0));
-	render_set_view_2d();
-
-	vec2i_t vp = render_size();
-	const int margin = 12;
-
-	render_push_2d(vec2i(0, 0), vp, rgba(0, 0, 20, 180), RENDER_NO_TEXTURE);
-
-	rgba_t track_color = rgba(60, 60, 100, 220);
-	section_t *s = g.track.sections;
-	for (int i = 0; i < g.track.section_count; i++) {
-		vec2_t a = minimap_world_to_screen(s->center.x, s->center.z, vp, margin);
-		vec2_t b = minimap_world_to_screen(s->next->center.x, s->next->center.z, vp, margin);
-		minimap_push_segment(a, b, 2.0f, track_color);
-		s = s->next;
-	}
-
-	rgba_t player_colors[4] = {
-		rgba(  0, 200, 255, 255),  // P1 cyan
-		rgba(255, 200,   0, 255),  // P2 yellow
-		rgba( 80, 255, 120, 255),  // P3 green
-		rgba(255,  80,  80, 255),  // P4 red
-	};
-	rgba_t ai_color = rgba(160, 160, 160, 200);
-
-	for (int i = 0; i < NUM_PILOTS; i++) {
-		ship_t *ship = &g.ships[i];
-		if (!flags_is(ship->flags, SHIP_RACING)) continue;
-		vec2_t pos = minimap_world_to_screen(ship->position.x, ship->position.z, vp, margin);
-		if (ship->player_index >= 0) {
-			minimap_push_rect(pos, 4.0f, player_colors[ship->player_index]);
-		} else {
-			minimap_push_rect(pos, 2.5f, ai_color);
-		}
-	}
-}
-
 void race_update(void) {
 	if (is_paused) {
 		if (!active_menu) {
@@ -259,7 +159,7 @@ void race_update(void) {
 		if (g.local_player_count >= 4) {
 			race_draw_view(g.pilot4, &g.camera4, &g.droid4);
 		} else {
-			race_draw_minimap();
+			race_draw_view(-1, &g.spectator_camera, &g.droid);
 		}
 		render_reset_viewport();
 	}
@@ -329,7 +229,6 @@ void race_start(void) {
 		g.camera4.update_func = camera_update_race_intro;
 	}
 	ships_init(g.track.sections);
-	race_minimap_init_bounds();
 	droid_init(&g.droid, &g.ships[g.pilot]);
 	if (g.local_player_count >= 2) {
 		droid_init(&g.droid2, &g.ships[g.pilot2]);
