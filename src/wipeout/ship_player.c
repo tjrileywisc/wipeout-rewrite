@@ -58,17 +58,19 @@ void ship_player_update_intro_await_three(ship_t *self) {
 	ship_player_update_intro_general(self);
 
 	if (self->update_timer <= UPDATE_TIME_THREE) {
-		sfx_play(SFX_VOICE_COUNT_3);
+		if (self->player_index == 0) { sfx_play(SFX_VOICE_COUNT_3); }
 		self->update_func = ship_player_update_intro_await_two;
 	}
 }
 
 void ship_player_update_intro_await_two(ship_t *self) {
-	ship_player_update_intro_general(self);	
+	ship_player_update_intro_general(self);
 
 	if (self->update_timer <= UPDATE_TIME_TWO) {
-		scene_set_start_booms(1);
-		sfx_play(SFX_VOICE_COUNT_2);
+		if (self->player_index == 0) {
+			scene_set_start_booms(1);
+			sfx_play(SFX_VOICE_COUNT_2);
+		}
 		self->update_func = ship_player_update_intro_await_one;
 	}
 }
@@ -77,8 +79,10 @@ void ship_player_update_intro_await_one(ship_t *self) {
 	ship_player_update_intro_general(self);
 
 	if (self->update_timer <= UPDATE_TIME_ONE) {
-		scene_set_start_booms(2);
-		sfx_play(SFX_VOICE_COUNT_1);
+		if (self->player_index == 0) {
+			scene_set_start_booms(2);
+			sfx_play(SFX_VOICE_COUNT_1);
+		}
 		self->update_func = ship_player_update_intro_await_go;
 	}
 }
@@ -87,8 +91,10 @@ void ship_player_update_intro_await_go(ship_t *self) {
 	ship_player_update_intro_general(self);
 
 	if (self->update_timer <= UPDATE_TIME_GO) {
-		scene_set_start_booms(3);
-		sfx_play(SFX_VOICE_COUNT_GO);
+		if (self->player_index == 0) {
+			scene_set_start_booms(3);
+			sfx_play(SFX_VOICE_COUNT_GO);
+		}
 		
 		if (flags_is(self->flags, SHIP_RACING)) {
 			// Check for stall
@@ -290,6 +296,31 @@ void ship_player_update_race(ship_t *self) {
 	if (input_pressed_p(A_FIRE, self->player_index) && self->weapon_type != WEAPON_TYPE_NONE) {
 		if (flags_not(self->flags, SHIP_SHIELDED)) {
 			weapons_fire(self, self->weapon_type);
+
+			// Warn when an equalizer weapon has been picked up
+			if(self->weapon_type == WEAPON_TYPE_EQUALIZER) {
+				sfx_play(SFX_VOICE_MISSILE);
+			}
+			else {
+				// Warn any human player directly ahead (within 10 sections)
+				for (int pi = 0; pi < NUM_PILOTS; pi++) {
+					ship_t *other = &g.ships[pi];
+					if (other == self || other->player_index < 0) continue;
+					int section_diff = other->total_section_num - self->total_section_num;
+					if (section_diff > 0 && section_diff <= 10) {
+						switch (self->weapon_type) {
+							case WEAPON_TYPE_ROCKET:  sfx_play(SFX_VOICE_ROCKETS);   break;
+							case WEAPON_TYPE_MISSILE: sfx_play(SFX_VOICE_MISSILE);   break;
+							case WEAPON_TYPE_EBOLT:   sfx_play(SFX_VOICE_SHOCKWAVE); break;
+							case WEAPON_TYPE_MINE:    sfx_play(SFX_VOICE_MINES);     break;
+							default: break;
+						}
+						break;
+					}
+				}
+			}
+
+
 		}
 		else {
 			sfx_play(SFX_MENU_MOVE);

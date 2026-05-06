@@ -82,17 +82,13 @@ void ships_init(section_t *section) {
 		shuffle(ranks_to_pilots + 4, len(ranks_to_pilots)-5); // shuffle 4..len-1
 	}
 
-	// player is always last
-	for (unsigned int i = 0; i < len(ranks_to_pilots)-1; i++) {
-		if (ranks_to_pilots[i] == g.pilot) {
-			swap(ranks_to_pilots[i], ranks_to_pilots[i+1]);
-		}
-	}
-
-	// In split screen, pilot2 is second to last
-	if (g.is_split_screen) {
-		for (unsigned int i = 0; i < len(ranks_to_pilots)-2; i++) {
-			if (ranks_to_pilots[i] == g.pilot2) {
+	// Player pilots go at the back of the grid (last N slots for N players)
+	// Push them in reverse order so P1 ends up last, P2 second-to-last, etc.
+	int local_pilots[4] = {g.pilot, g.pilot2, g.pilot3, g.pilot4};
+	for (int p = 0; p < g.local_player_count; p++) {
+		int target_rank = (int)len(ranks_to_pilots) - 1 - p; // slot for this player
+		for (int i = 0; i < target_rank; i++) {
+			if (ranks_to_pilots[i] == local_pilots[p]) {
 				swap(ranks_to_pilots[i], ranks_to_pilots[i+1]);
 			}
 		}
@@ -120,11 +116,10 @@ void ships_init(section_t *section) {
 	}
 
 	// Assign cameras and player indices to player-controlled ships
-	g.ships[g.pilot].camera = &g.camera;
-	g.ships[g.pilot].player_index = 0;
-	if (g.is_split_screen) {
-		g.ships[g.pilot2].camera = &g.camera2;
-		g.ships[g.pilot2].player_index = 1;
+	camera_t *player_cam[] = {&g.camera, &g.camera2, &g.camera3, &g.camera4};
+	for (int p = 0; p < g.local_player_count; p++) {
+		g.ships[local_pilots[p]].camera = player_cam[p];
+		g.ships[local_pilots[p]].player_index = p;
 	}
 }
 
@@ -254,7 +249,13 @@ void ship_init(ship_t *self, section_t *section, int pilot, int inv_start_rank) 
 	self->update_timer = UPDATE_TIME_INITIAL;
 	self->position_rank = NUM_PILOTS - inv_start_rank;
 
-	if (pilot == g.pilot || (g.is_split_screen && pilot == g.pilot2)) {
+	// Check if this pilot is one of the local human players
+	bool is_local_player = (pilot == g.pilot);
+	if (g.local_player_count >= 2) { is_local_player |= (pilot == g.pilot2); }
+	if (g.local_player_count >= 3) { is_local_player |= (pilot == g.pilot3); }
+	if (g.local_player_count >= 4) { is_local_player |= (pilot == g.pilot4); }
+
+	if (is_local_player) {
 		self->update_func = ship_player_update_intro;
 		self->remote_thrust_max = 2900;
 		self->remote_thrust_mag = 46;
@@ -539,7 +540,18 @@ void ship_update(ship_t *self) {
 	) {
 		if (self->camera) {
 			sfx_play(SFX_POWERUP);
-			if (flags_is(self->flags, SHIP_SHIELDED)) {
+			float equalizer_prob = 0.0f;
+			bool equalizer_allowed = (g.race_type == RACE_TYPE_SPLIT_SCREEN || g.race_type == RACE_TYPE_NETWORK);
+			if (equalizer_allowed && self->position_rank > 1) {
+				float back_fraction = (NUM_PILOTS > 2)
+					? (float)(self->position_rank - 2) / (NUM_PILOTS - 2)
+					: 0.0f;
+				equalizer_prob = 0.02f + back_fraction * 0.01f;
+			}
+			if (rand_float(0, 1) < equalizer_prob) {
+				self->weapon_type = WEAPON_TYPE_EQUALIZER;
+			}
+			else if (flags_is(self->flags, SHIP_SHIELDED)) {
 				self->weapon_type = weapon_get_random_type(WEAPON_CLASS_PROJECTILE);
 			}
 			else {
@@ -561,7 +573,7 @@ void ship_update(ship_t *self) {
 
 	int exhaust_len;
 
-	if (self->pilot == g.pilot) {
+	if (self->pilot == g.pilot || self->pilot == g.pilot2 || self->pilot == g.pilot3 || self->pilot == g.pilot4) {
 		// get the z exhaust_len related to speed or thrust
 		exhaust_len = self->thrust_mag * 0.0625;
 		exhaust_len += self->speed * 0.00390625;
@@ -612,8 +624,12 @@ void ship_update(ship_t *self) {
 				self->weapon_type = WEAPON_TYPE_TURBO;
 			}
 
-			if (self->lap == NUM_LAPS && (self->pilot == g.pilot || (g.is_split_screen && self->pilot == g.pilot2))) {
-				race_end(self->pilot);
+			bool is_local = (self->pilot == g.pilot);
+			if (g.local_player_count >= 2) { is_local |= (self->pilot == g.pilot2); }
+			if (g.local_player_count >= 3) { is_local |= (self->pilot == g.pilot3); }
+			if (g.local_player_count >= 4) { is_local |= (self->pilot == g.pilot4); }
+			if (self->lap == NUM_LAPS && is_local) {
+				race_player_finished(self->pilot);
 			}
 		}
 	}
@@ -661,9 +677,10 @@ static bool vec3_is_on_face(vec3_t pos, track_face_t *face, float alpha) {
 void ship_resolve_wing_collision(ship_t *self, track_face_t *face, float direction) {
 	vec3_t collision_vector = vec3_sub(self->section->center, face->tris[0].vertices[2].pos);
 	float angle = vec3_angle(collision_vector, self->dir_forward);
-	self->velocity = vec3_reflect(self->velocity, face->normal, 2);
+	vec3_t v_normal = vec3_mulf(face->normal, vec3_dot(self->velocity, face->normal));
+	vec3_t v_tangent = vec3_sub(self->velocity, v_normal);
+	self->velocity = vec3_add(v_tangent, vec3_mulf(v_normal, -0.5));
 	self->position = vec3_sub(self->position, vec3_mulf(self->velocity, 0.015625)); // system_tick?
-	self->velocity = vec3_sub(self->velocity, vec3_mulf(self->velocity, 0.5));
 	self->velocity = vec3_add(self->velocity, vec3_mulf(face->normal, 4096.0)); // div by 4096?
 
 	float magnitude = (fabsf(angle) * self->speed) * 2 * M_PI / 4096.0; // (6 velocity shift, 12 angle shift?)
@@ -671,11 +688,11 @@ void ship_resolve_wing_collision(ship_t *self, track_face_t *face, float directi
 
 	vec3_t wing_pos;
 	if (direction > 0) {
-		self->angular_velocity.z += magnitude;
+		self->angular_velocity.z += magnitude * 0.25;
 		wing_pos = vec3_add(self->position, vec3_mulf(vec3_sub(self->dir_right, self->dir_forward), 256)); // >> 4??
 	}
 	else {
-		self->angular_velocity.z -= magnitude;	
+		self->angular_velocity.z -= magnitude * 0.25;
 		wing_pos = vec3_sub(self->position, vec3_mulf(vec3_sub(self->dir_right, self->dir_forward), 256)); // >> 4??
 	}
 
@@ -687,9 +704,10 @@ void ship_resolve_wing_collision(ship_t *self, track_face_t *face, float directi
 
 
 void ship_resolve_nose_collision(ship_t *self, track_face_t *face, float direction) {
-	self->velocity = vec3_reflect(self->velocity, face->normal, 2);
+	vec3_t v_normal = vec3_mulf(face->normal, vec3_dot(self->velocity, face->normal));
+	vec3_t v_tangent = vec3_sub(self->velocity, v_normal);
+	self->velocity = vec3_add(v_tangent, vec3_mulf(v_normal, -0.5));
 	self->position = vec3_sub(self->position, vec3_mulf(self->velocity, 0.015625)); // system_tick?
-	self->velocity = vec3_sub(self->velocity, vec3_mulf(self->velocity, 0.5));
 	self->velocity = vec3_add(self->velocity, vec3_mulf(face->normal, 4096)); // div by 4096?
 
 	float magnitude = ((self->speed * 0.0625) + 400) * 2 * M_PI / 4096.0;

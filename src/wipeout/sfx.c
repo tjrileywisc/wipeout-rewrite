@@ -210,13 +210,15 @@ sfx_t *sfx_reserve_loop(sfx_source_t source_index) {
 }
 
 void sfx_set_position(sfx_t *sfx, vec3_t pos, vec3_t vel, float volume) {
-	// In split-screen, use whichever camera is closer to the sound source
+	// Use whichever active player camera is closest to the sound source
+	camera_t *all_cams[] = {&g.camera, &g.camera2, &g.camera3, &g.camera4};
 	camera_t *cam = &g.camera;
-	if (g.is_split_screen) {
-		float d1 = vec3_len(vec3_sub(g.camera.position, pos));
-		float d2 = vec3_len(vec3_sub(g.camera2.position, pos));
-		if (d2 < d1) {
-			cam = &g.camera2;
+	float best_dist = vec3_len(vec3_sub(g.camera.position, pos));
+	for (int p = 1; p < g.local_player_count; p++) {
+		float d = vec3_len(vec3_sub(all_cams[p]->position, pos));
+		if (d < best_dist) {
+			best_dist = d;
+			cam = all_cams[p];
 		}
 	}
 
