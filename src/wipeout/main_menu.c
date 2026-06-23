@@ -873,7 +873,7 @@ static void button_circut_select(menu_t*, int data) {
 static void page_circut_additional_draw(menu_t *menu, int data) {}
 
 static void page_circut_additional_init(menu_t *menu) {
-	menu_page_t *page = menu_push(menu, "ADDITIONAL CIRCUTS", page_circut_additional_draw);
+	menu_page_t *page = menu_push(menu, "ADDITIONAL CIRCUTS", page_circut_additional_draw, NULL, NULL);
 	flags_add(page->layout_flags, MENU_FIXED);
 	page->title_pos = vec2i(0, 30);
 	page->title_anchor = UI_POS_TOP | UI_POS_CENTER;
