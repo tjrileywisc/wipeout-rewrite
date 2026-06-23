@@ -135,14 +135,6 @@ typedef enum {
 	DRAW_STATS_DEBUG
 } draw_stats_t;
 
-// How detailed are the stats? Just the FPS or draw internals
-typedef enum {
-	DRAW_STATS_OFF,
-	DRAW_STATS_FPS,
-	DRAW_STATS_DEBUG
-} draw_stats_t;
-
-
 // Game definitions
 
 typedef struct {
