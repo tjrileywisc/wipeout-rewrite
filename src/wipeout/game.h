@@ -67,7 +67,9 @@ enum race_class {
 enum race_type {
 	RACE_TYPE_CHAMPIONSHIP,
 	RACE_TYPE_SINGLE,
+	RACE_TYPE_NETWORK,
 	RACE_TYPE_TIME_TRIAL,
+	RACE_TYPE_SPLIT_SCREEN,
 	NUM_RACE_TYPES,
 };
 
@@ -126,6 +128,13 @@ enum circut {
 	CIRCUT_VELOCITAR,
 	NUM_CIRCUTS
 };
+// How detailed are the stats? Just the FPS or draw internals
+typedef enum {
+	DRAW_STATS_OFF,
+	DRAW_STATS_FPS,
+	DRAW_STATS_DEBUG
+} draw_stats_t;
+
 // How detailed are the stats? Just the FPS or draw internals
 typedef enum {
 	DRAW_STATS_OFF,
@@ -230,7 +239,7 @@ typedef struct {
 	int race_type;
 	int highscore_tab;
 	int team;
-	int pilot;
+	unsigned short pilot;
 	int circut;
 	bool is_attract_mode;
 	bool show_credits;
@@ -246,8 +255,20 @@ typedef struct {
 	pilot_points_t race_ranks[NUM_PILOTS];
 	pilot_points_t championship_ranks[NUM_PILOTS];
 
+	int local_player_count; // 1 = solo, 2/3/4 = split-screen
+	int pilot2;
+	int pilot3;
+	int pilot4;
+
 	camera_t camera;
+	camera_t camera2;
+	camera_t camera3;
+	camera_t camera4;
+	camera_t spectator_camera; // fixed start-line view used in 3-player mode
 	droid_t droid;
+	droid_t droid2;
+	droid_t droid3;
+	droid_t droid4;
 	ship_t ships[NUM_PILOTS];
 	track_t track;
 
@@ -282,6 +303,8 @@ typedef struct {
 	int screen_res;
 	int post_effect;
 	float screen_shake;
+	bool enable_force_feedback;
+	int network_interface;
 
 	uint32_t has_rapier_class;
 	uint32_t has_bonus_circuts;

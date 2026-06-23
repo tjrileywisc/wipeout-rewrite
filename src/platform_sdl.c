@@ -10,7 +10,9 @@ static uint64_t perf_freq = 0;
 static bool wants_to_exit = false;
 static SDL_Window *window;
 static SDL_AudioDeviceID audio_device;
-static SDL_GameController *gamepad;
+static SDL_GameController *gamepads[INPUT_MAX_PLAYERS];
+static bool force_feedback_supported = false;
+static bool force_feedback_enabled = false;
 static void (*audio_callback)(float *buffer, uint32_t len) = NULL;
 static char *path_assets = "";
 static char *path_userdata = "";
@@ -52,14 +54,29 @@ void platform_exit(void) {
 	wants_to_exit = true;
 }
 
-SDL_GameController *platform_find_gamepad(void) {
-	for (int i = 0; i < SDL_NumJoysticks(); i++) {
-		if (SDL_IsGameController(i)) {
-			return SDL_GameControllerOpen(i);
+static int platform_gamepad_player(SDL_JoystickID instance_id) {
+	for (int i = 0; i < INPUT_MAX_PLAYERS; i++) {
+		if (gamepads[i] && SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(gamepads[i])) == instance_id) {
+			return i;
 		}
 	}
+	return -1;
+}
 
-	return NULL;
+
+void platform_force_feedback(double strength, uint32_t duration) {
+	if(!gamepads[0]) {
+		return;
+	}
+	else if(!(force_feedback_enabled && force_feedback_supported)) {
+		return;
+	}
+
+	SDL_GameControllerRumble( gamepads[0], (uint16_t) (0xFFFF * strength), (uint16_t) (0xFFFF * strength), duration );
+}
+
+void platform_set_force_feedback(bool enabled) {
+	force_feedback_enabled = enabled;
 }
 
 
@@ -94,25 +111,42 @@ void platform_pump_events(void) {
 
 		// Gamepads connect/disconnect
 		else if (ev.type == SDL_CONTROLLERDEVICEADDED) {
-			gamepad = SDL_GameControllerOpen(ev.cdevice.which);
+			SDL_GameController *gp = SDL_GameControllerOpen(ev.cdevice.which);
+			for (int slot = 0; slot < INPUT_MAX_PLAYERS; slot++) {
+				if (!gamepads[slot]) {
+					gamepads[slot] = gp;
+					if (slot == 0 && SDL_GameControllerHasRumble(gp)) {
+						force_feedback_supported = true;
+					}
+					break;
+				}
+			}
 		}
 		else if (ev.type == SDL_CONTROLLERDEVICEREMOVED) {
-			if (gamepad && ev.cdevice.which == SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(gamepad))) {
-				SDL_GameControllerClose(gamepad);
-				gamepad = platform_find_gamepad();
+			for (int slot = 0; slot < INPUT_MAX_PLAYERS; slot++) {
+				if (gamepads[slot] && ev.cdevice.which == SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(gamepads[slot]))) {
+					SDL_GameControllerClose(gamepads[slot]);
+					gamepads[slot] = NULL;
+					break;
+				}
 			}
 		}
 
 		// Input Gamepad Buttons
 		else if (
-			ev.type == SDL_CONTROLLERBUTTONDOWN || 
+			ev.type == SDL_CONTROLLERBUTTONDOWN ||
 			ev.type == SDL_CONTROLLERBUTTONUP
 		) {
 			if (ev.cbutton.button < SDL_CONTROLLER_BUTTON_MAX) {
 				button_t button = platform_sdl_gamepad_map[ev.cbutton.button];
 				if (button != INPUT_INVALID) {
 					float state = ev.type == SDL_CONTROLLERBUTTONDOWN ? 1.0 : 0.0;
-					input_set_button_state(button, state);
+					int player = platform_gamepad_player(ev.cbutton.which);
+					if (player == 0) {
+						input_set_button_state(button, state);
+					} else if (player > 0) {
+						input_set_button_state_p(button, state, player);
+					}
 				}
 			}
 		}
@@ -120,22 +154,40 @@ void platform_pump_events(void) {
 		// Input Gamepad Axis
 		else if (ev.type == SDL_CONTROLLERAXISMOTION) {
 			float state = (float)ev.caxis.value / 32767.0;
+			int player = platform_gamepad_player(ev.caxis.which);
 
 			if (ev.caxis.axis < SDL_CONTROLLER_AXIS_MAX) {
 				int code = platform_sdl_axis_map[ev.caxis.axis];
-				if (
-					code == INPUT_GAMEPAD_L_TRIGGER || 
-					code == INPUT_GAMEPAD_R_TRIGGER
-				) {
-					input_set_button_state(code, state);
-				}
-				else if (state > 0) {
-					input_set_button_state(code, 0.0);
-					input_set_button_state(code+1, state);
-				}
-				else {
-					input_set_button_state(code, -state);
-					input_set_button_state(code+1, 0.0);
+				if (player == 0) {
+					if (
+						code == INPUT_GAMEPAD_L_TRIGGER ||
+						code == INPUT_GAMEPAD_R_TRIGGER
+					) {
+						input_set_button_state(code, state);
+					}
+					else if (state > 0) {
+						input_set_button_state(code, 0.0);
+						input_set_button_state(code+1, state);
+					}
+					else {
+						input_set_button_state(code, -state);
+						input_set_button_state(code+1, 0.0);
+					}
+				} else if (player > 0) {
+					if (
+						code == INPUT_GAMEPAD_L_TRIGGER ||
+						code == INPUT_GAMEPAD_R_TRIGGER
+					) {
+						input_set_button_state_p(code, state, player);
+					}
+					else if (state > 0) {
+						input_set_button_state_p(code, 0.0, player);
+						input_set_button_state_p(code+1, state, player);
+					}
+					else {
+						input_set_button_state_p(code, -state, player);
+						input_set_button_state_p(code+1, 0.0, player);
+					}
 				}
 			}
 		}
@@ -213,7 +265,7 @@ void platform_set_fullscreen(bool fullscreen) {
 	}
 }
 
-void platform_audio_callback(void* userdata, uint8_t* stream, int len) {
+void platform_audio_callback(void*, uint8_t* stream, int len) {
 	if (audio_callback) {
 		audio_callback((float *)stream, len/sizeof(float));
 	}
@@ -344,7 +396,7 @@ uint32_t platform_store_userdata(const char *name, void *bytes, int32_t len) {
 	#error "Unsupported renderer for platform SDL"
 #endif
 
-int main(int argc, char *argv[]) {
+int main(int, char**) {
 	SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_JOYSTICK | SDL_INIT_GAMECONTROLLER);
 
 	// Figure out the absolute asset and userdata paths. These may either be
@@ -389,8 +441,6 @@ int main(int argc, char *argv[]) {
 
 
 
-	gamepad = platform_find_gamepad();
-
 	perf_freq = SDL_GetPerformanceFrequency();
 
 	audio_device = SDL_OpenAudioDevice(NULL, 0, &(SDL_AudioSpec){
@@ -423,8 +473,10 @@ int main(int argc, char *argv[]) {
 
 	SDL_DestroyWindow(window);
 
-	if (gamepad) {
-		SDL_GameControllerClose(gamepad);
+	for (int i = 0; i < INPUT_MAX_PLAYERS; i++) {
+		if (gamepads[i]) {
+			SDL_GameControllerClose(gamepads[i]);
+		}
 	}
 
 	if (sdl_path_assets) {

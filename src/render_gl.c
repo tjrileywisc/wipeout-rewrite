@@ -353,6 +353,7 @@ static uint32_t tris_len = 0;
 
 static vec2i_t screen_size;
 static vec2i_t backbuffer_size;
+static vec2i_t current_viewport_size;
 
 static uint32_t atlas_map[ATLAS_SIZE] = {0};
 static GLuint atlas_texture = 0;
@@ -555,6 +556,7 @@ void render_set_resolution(render_resolution_t res) {
 
 	projection_mat_2d = render_setup_2d_projection_mat(backbuffer_size);
 	projection_mat_3d = render_setup_3d_projection_mat(backbuffer_size);
+	current_viewport_size = backbuffer_size;
 
 
 	// Use nearest texture min filter for 240p and 480p
@@ -574,12 +576,37 @@ void render_set_post_effect(render_post_effect_t post) {
 }
 
 vec2i_t render_size(void) {
+	return current_viewport_size;
+}
+
+vec2i_t render_backbuffer_size(void) {
 	return backbuffer_size;
+}
+
+void render_set_viewport(vec2i_t offset, vec2i_t size) {
+	render_flush();
+	current_viewport_size = size;
+	glEnable(GL_SCISSOR_TEST);
+	glScissor(offset.x, offset.y, size.x, size.y);
+	glViewport(offset.x, offset.y, size.x, size.y);
+	projection_mat_2d = render_setup_2d_projection_mat(size);
+	projection_mat_3d = render_setup_3d_projection_mat(size);
+}
+
+void render_reset_viewport(void) {
+	render_flush();
+	current_viewport_size = backbuffer_size;
+	glDisable(GL_SCISSOR_TEST);
+	glViewport(0, 0, backbuffer_size.x, backbuffer_size.y);
+	projection_mat_2d = render_setup_2d_projection_mat(backbuffer_size);
+	projection_mat_3d = render_setup_3d_projection_mat(backbuffer_size);
 }
 
 void render_frame_prepare(void) {
 	use_program(prg_game);
 	glBindFramebuffer(GL_FRAMEBUFFER, backbuffer);
+	glDisable(GL_SCISSOR_TEST);
+	current_viewport_size = backbuffer_size;
 	glViewport(0, 0, backbuffer_size.x, backbuffer_size.y);
 
 	glBindTexture(GL_TEXTURE_2D, atlas_texture);
@@ -597,6 +624,7 @@ void render_frame_prepare(void) {
 
 void render_frame_end(void) {
 	render_flush();
+	glDisable(GL_SCISSOR_TEST);
 
 	use_program(prg_post);
 
@@ -925,21 +953,21 @@ uint16_t render_texture_create(uint32_t tw, uint32_t th, rgba_t *pixels) {
 		}
 		
 		// Left border
-		for (int32_t y = 0; y < bh; y++) {
-			for (int32_t x = 0; x < ATLAS_BORDER; x++) {
+		for (uint32_t y = 0; y < bh; y++) {
+			for (uint32_t x = 0; x < ATLAS_BORDER; x++) {
 				pb[y * bw + x] = pixels[clamp(y-ATLAS_BORDER, 0, th-1) * tw];
 			}
 		}
 
 		// Right border
-		for (int32_t y = 0; y < bh; y++) {
-			for (int32_t x = 0; x < ATLAS_BORDER; x++) {
+		for (uint32_t y = 0; y < bh; y++) {
+			for (uint32_t x = 0; x < ATLAS_BORDER; x++) {
 				pb[y * bw + x + bw - ATLAS_BORDER] = pixels[tw - 1 + clamp(y-ATLAS_BORDER, 0, th-1) * tw];
 			}
 		}
 
 		// Texture
-		for (int32_t y = 0; y < th; y++) {
+		for (uint32_t y = 0; y < th; y++) {
 			memcpy(pb + bw * (y + ATLAS_BORDER) + ATLAS_BORDER, pixels + tw * y, tw * sizeof(rgba_t));
 		}
 	}
@@ -956,7 +984,6 @@ uint16_t render_texture_create(uint32_t tw, uint32_t th, rgba_t *pixels) {
 	textures_len++;
 	textures[texture_index] = (render_texture_t){ {x + ATLAS_BORDER, y + ATLAS_BORDER}, {tw, th} };
 
-	printf("inserted atlas texture (%3dx%3d) at (%3d,%3d)\n", tw, th, grid_x, grid_y);
 	return texture_index;
 }
 
@@ -965,7 +992,7 @@ vec2i_t render_texture_size(uint16_t texture_index) {
 	return textures[texture_index].size;
 }
 
-void render_texture_replace_pixels(int16_t texture_index, rgba_t *pixels) {
+void render_texture_replace_pixels(uint16_t texture_index, rgba_t *pixels) {
 	error_if(texture_index >= textures_len, "Invalid texture %d", texture_index);
 
 	render_texture_t *t = &textures[texture_index];
@@ -995,7 +1022,7 @@ void render_textures_reset(uint16_t len) {
 	}
 
 	// Replay all texture grid insertions up to the reset len
-	for (int i = 0; i < textures_len; i++) {
+	for (unsigned int i = 0; i < textures_len; i++) {
 		uint32_t grid_x = (textures[i].offset.x - ATLAS_BORDER) / ATLAS_GRID;
 		uint32_t grid_y = (textures[i].offset.y - ATLAS_BORDER) / ATLAS_GRID;
 		uint32_t grid_width = (textures[i].size.x + ATLAS_BORDER * 2 + ATLAS_GRID - 1) / ATLAS_GRID;

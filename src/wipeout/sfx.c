@@ -76,7 +76,7 @@ void sfx_load(void) {
 
 	uint32_t sample_index = 0;
 	int32_t history[2] = {0, 0};
-	for (int p = 0; p < vb_size;) {
+	for (unsigned int p = 0; p < vb_size;) {
 		uint8_t header = vb[p++];
 		uint8_t flags = vb[p++];
 		uint8_t shift = header & 0x0f;
@@ -210,12 +210,24 @@ sfx_t *sfx_reserve_loop(sfx_source_t source_index) {
 }
 
 void sfx_set_position(sfx_t *sfx, vec3_t pos, vec3_t vel, float volume) {
-	vec3_t relative_position = vec3_sub(g.camera.position, pos);
-	vec3_t relative_velocity = vec3_sub(g.camera.real_velocity, vel);
+	// Use whichever active player camera is closest to the sound source
+	camera_t *all_cams[] = {&g.camera, &g.camera2, &g.camera3, &g.camera4};
+	camera_t *cam = &g.camera;
+	float best_dist = vec3_len(vec3_sub(g.camera.position, pos));
+	for (int p = 1; p < g.local_player_count; p++) {
+		float d = vec3_len(vec3_sub(all_cams[p]->position, pos));
+		if (d < best_dist) {
+			best_dist = d;
+			cam = all_cams[p];
+		}
+	}
+
+	vec3_t relative_position = vec3_sub(cam->position, pos);
+	vec3_t relative_velocity = vec3_sub(cam->real_velocity, vel);
 	float distance = vec3_len(relative_position);
 
 	sfx->volume = clamp(scale(distance, 512, 32768, 1, 0), 0, 1) * volume;
-	sfx->pan = -sinf(atan2(g.camera.position.x - pos.x, g.camera.position.z - pos.z)+g.camera.angle.y);
+	sfx->pan = -sinf(atan2(cam->position.x - pos.x, cam->position.z - pos.z) + cam->angle.y);
 
 	// Doppler effect
 	float away = vec3_dot(relative_velocity, relative_position) / distance;
@@ -332,7 +344,7 @@ void sfx_stero_mix(float *buffer, uint32_t len) {
 
 	uint32_t music_src_index = music->sample_data_pos * music->qoa.channels;
 
-	for (int i = 0; i < len; i += 2) {
+	for (uint32_t i = 0; i < len; i += 2) {
 		float left = 0;
 		float right = 0;
 

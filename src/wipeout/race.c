@@ -29,6 +29,7 @@ static bool menu_is_scroll_text = false;
 static bool has_show_credits = false;
 static float attract_start_time;
 static menu_t *active_menu = NULL;
+static int players_finished = 0;
 
 void race_init(void) {
 	ingame_menus_load();
@@ -67,6 +68,30 @@ void race_init(void) {
 	is_paused = false;
 }
 
+static void race_draw_view(int pilot_idx, camera_t *camera, droid_t *droid) {
+	// 3D
+	render_set_view(camera->position, camera->angle);
+	render_set_screen_position(camera->shake);
+
+	render_set_cull_backface(false);
+	scene_draw(camera);
+	track_draw(camera);
+	render_set_cull_backface(true);
+
+	ships_draw(pilot_idx);  // -1 = spectator: no ship suppressed
+	droid_draw(droid);
+	weapons_draw();
+	particles_draw();
+
+	// 2D HUD — skipped for spectator view (pilot_idx == -1)
+	render_set_screen_position(vec2(0, 0));
+	render_set_view_2d();
+
+	if (pilot_idx >= 0 && flags_is(g.ships[pilot_idx].flags, SHIP_RACING)) {
+		hud_draw(&g.ships[pilot_idx]);
+	}
+}
+
 void race_update(void) {
 	if (is_paused) {
 		if (!active_menu) {
@@ -80,6 +105,20 @@ void race_update(void) {
 		ships_update();
 		droid_update(&g.droid, &g.ships[g.pilot]);
 		camera_update(&g.camera, &g.ships[g.pilot], &g.droid);
+		if (g.local_player_count >= 2) {
+			droid_update(&g.droid2, &g.ships[g.pilot2]);
+			camera_update(&g.camera2, &g.ships[g.pilot2], &g.droid2);
+		}
+		if (g.local_player_count >= 3) {
+			droid_update(&g.droid3, &g.ships[g.pilot3]);
+			camera_update(&g.camera3, &g.ships[g.pilot3], &g.droid3);
+			// Spectator camera tracks P1 from a fixed start-line vantage point
+			camera_update_spectator(&g.spectator_camera, &g.ships[g.pilot], NULL);
+		}
+		if (g.local_player_count >= 4) {
+			droid_update(&g.droid4, &g.ships[g.pilot4]);
+			camera_update(&g.camera4, &g.ships[g.pilot4], &g.droid4);
+		}
 		weapons_update();
 		particles_update();
 		scene_update();
@@ -101,34 +140,55 @@ void race_update(void) {
 		}
 	}
 
+	// Draw views
+	if (g.local_player_count >= 3) {
+		// 2x2 quadrant layout (3P uses bottom-right for spectator)
+		vec2i_t full = render_backbuffer_size();
+		vec2i_t q = vec2i(full.x / 2, full.y / 2); // quadrant size
+		// Top-left: P1
+		render_set_viewport(vec2i(0, full.y / 2), q);
+		race_draw_view(g.pilot, &g.camera, &g.droid);
+		// Top-right: P2
+		render_set_viewport(vec2i(full.x / 2, full.y / 2), q);
+		race_draw_view(g.pilot2, &g.camera2, &g.droid2);
+		// Bottom-left: P3
+		render_set_viewport(vec2i(0, 0), q);
+		race_draw_view(g.pilot3, &g.camera3, &g.droid3);
+		// Bottom-right: P4 or spectator camera pointed at start line
+		render_set_viewport(vec2i(full.x / 2, 0), q);
+		if (g.local_player_count >= 4) {
+			race_draw_view(g.pilot4, &g.camera4, &g.droid4);
+		} else {
+			race_draw_view(-1, &g.spectator_camera, &g.droid);
+		}
+		render_reset_viewport();
+	}
+	else if (g.local_player_count == 2) {
+		vec2i_t full = render_backbuffer_size();
+		vec2i_t half = vec2i(full.x, full.y / 2);
+		// P1: top half (GL origin is bottom-left, so top half starts at y = full.y/2)
+		render_set_viewport(vec2i(0, full.y / 2), half);
+		race_draw_view(g.pilot, &g.camera, &g.droid);
+		// P2: bottom half
+		render_set_viewport(vec2i(0, 0), half);
+		race_draw_view(g.pilot2, &g.camera2, &g.droid2);
+		render_reset_viewport();
+	}
+	else {
+		race_draw_view(g.pilot, &g.camera, &g.droid);
+	}
 
-	// Draw 3D
-	render_set_view(g.camera.position, g.camera.angle);
-	render_set_screen_position(g.camera.shake);
-
-	render_set_cull_backface(false);
-	scene_draw(&g.camera);
-	track_draw(&g.camera);
-	render_set_cull_backface(true);
-
-	ships_draw();
-	droid_draw(&g.droid);
-	weapons_draw();
-	particles_draw();
-
-	// Draw 2d
-	render_set_screen_position(vec2(0,0));
-	render_set_view_2d();
-
-	if (g.is_attract_mode && !active_menu) {
+	// 2D attract mode label (single player only)
+	if (g.local_player_count == 1 && g.is_attract_mode && !active_menu) {
+		render_set_screen_position(vec2(0, 0));
+		render_set_view_2d();
 		ui_draw_text("DEMO MODE", ui_scaled_pos(UI_POS_TOP | UI_POS_CENTER, vec2i(-56, 24)), UI_SIZE_8, UI_COLOR_ACCENT);
 	}
 
-	if (flags_is(g.ships[g.pilot].flags, SHIP_RACING)) {
-		hud_draw(&g.ships[g.pilot]);
-	}
-
+	// Menu overlay (full screen)
 	if (active_menu) {
+		render_set_screen_position(vec2(0, 0));
+		render_set_view_2d();
 		if (!menu_is_scroll_text) {
 			vec2i_t size = render_size();
 			render_push_2d(vec2i(0, 0), size, rgba(0, 0, 0, 128), RENDER_NO_TEXTURE);
@@ -143,17 +203,51 @@ void race_start(void) {
 	scene_init();
 	camera_init(&g.camera, g.track.sections);
 	g.camera.update_func = camera_update_race_intro;
+	if (g.local_player_count >= 2) {
+		camera_init(&g.camera2, g.track.sections);
+		g.camera2.update_func = camera_update_race_intro;
+	}
+	if (g.local_player_count >= 3) {
+		camera_init(&g.camera3, g.track.sections);
+		g.camera3.update_func = camera_update_race_intro;
+
+		// Position spectator camera at the start/finish line, slightly elevated
+		int start_pos = def.circuts[g.circut].settings[g.race_class].start_line_pos;
+		section_t *sec = g.track.sections;
+		for (int i = 0; i < start_pos; i++) { sec = sec->next; }
+		g.spectator_camera.position = vec3(sec->center.x, sec->center.y - 800, sec->center.z);
+		g.spectator_camera.shake = vec2(0, 0);
+		g.spectator_camera.shake_timer = 0;
+		g.spectator_camera.update_func = camera_update_spectator;
+		// Initial angle: face back down the track toward the grid
+		section_t *prev = sec->prev ? sec->prev : sec;
+		vec3_t back = vec3_sub(prev->center, sec->center);
+		g.spectator_camera.angle = vec3(0, -atan2(back.x, back.z), 0);
+	}
+	if (g.local_player_count >= 4) {
+		camera_init(&g.camera4, g.track.sections);
+		g.camera4.update_func = camera_update_race_intro;
+	}
 	ships_init(g.track.sections);
 	droid_init(&g.droid, &g.ships[g.pilot]);
+	if (g.local_player_count >= 2) {
+		droid_init(&g.droid2, &g.ships[g.pilot2]);
+	}
+	if (g.local_player_count >= 3) {
+		droid_init(&g.droid3, &g.ships[g.pilot3]);
+	}
+	if (g.local_player_count >= 4) {
+		droid_init(&g.droid4, &g.ships[g.pilot4]);
+	}
 	particles_init();
 	weapons_init();
 
-	for (int i = 0; i < len(g.race_ranks); i++) {
+	for (unsigned int i = 0; i < len(g.race_ranks); i++) {
 		g.race_ranks[i].points = 0;
 		g.race_ranks[i].pilot = i;
 	}
-	for (int i = 0; i < len(g.lap_times); i++) {
-		for (int j = 0; j < len(g.lap_times[i]); j++) {
+	for (unsigned int i = 0; i < len(g.lap_times); i++) {
+		for (unsigned int j = 0; j < len(g.lap_times[i]); j++) {
 			g.lap_times[i][j] = 0;
 		}
 	}
@@ -161,6 +255,7 @@ void race_start(void) {
 	g.is_new_lap_record = false;
 	g.best_lap = 0;
 	g.race_time = 0;
+	players_finished = 0;
 }
 
 void race_restart(void) {
@@ -182,17 +277,68 @@ static bool sort_points_compare(pilot_points_t *pa, pilot_points_t *pb) {
 	return (pa->points < pb->points);
 }
 
+static camera_t *camera_for_pilot(int pilot) {
+	if (pilot == g.pilot)  return &g.camera;
+	if (pilot == g.pilot2) return &g.camera2;
+	if (pilot == g.pilot3) return &g.camera3;
+	if (pilot == g.pilot4) return &g.camera4;
+	return &g.camera;
+}
+
+static void race_release_player(int pilot_idx, camera_t *cam) {
+	flags_rm(g.ships[pilot_idx].flags, SHIP_RACING);
+	g.ships[pilot_idx].remote_thrust_max = 3160;
+	g.ships[pilot_idx].remote_thrust_mag = 32;
+	g.ships[pilot_idx].speed = 3160;
+	cam->update_func = camera_update_attract_random;
+}
+
+void race_player_finished(int pilot) {
+	// Release this player's ship and camera now so they stop racing
+	race_release_player(pilot, camera_for_pilot(pilot));
+	players_finished++;
+
+	// Wait for all local players to cross the finish line
+	if (players_finished < g.local_player_count) {
+		return;
+	}
+
+	race_end();
+}
+
 void race_end(void) {
+	// Release any players who haven't finished yet (e.g. championship game-over)
 	race_release_control();
 
-	g.race_position = g.ships[g.pilot].position_rank;
+	// Find the best-performing local player: lowest total race time, best lap,
+	// and best finish position across all human players.
+	int local_pilots[4] = {g.pilot, g.pilot2, g.pilot3, g.pilot4};
 
+	g.race_position = g.ships[g.pilot].position_rank;
 	g.race_time = 0;
 	g.best_lap = g.lap_times[g.pilot][0];
 	for (int i = 0; i < NUM_LAPS; i++) {
 		g.race_time += g.lap_times[g.pilot][i];
 		if (g.lap_times[g.pilot][i] < g.best_lap) {
 			g.best_lap = g.lap_times[g.pilot][i];
+		}
+	}
+
+	for (int p = 1; p < g.local_player_count; p++) {
+		int pilot = local_pilots[p];
+		float total = 0;
+		for (int i = 0; i < NUM_LAPS; i++) { total += g.lap_times[pilot][i]; }
+
+		// Best lap across all players
+		for (int i = 0; i < NUM_LAPS; i++) {
+			if (g.lap_times[pilot][i] > 0 && g.lap_times[pilot][i] < g.best_lap) {
+				g.best_lap = g.lap_times[pilot][i];
+			}
+		}
+		// Best race time and position (using player with lowest total)
+		if (total > 0 && total < g.race_time) {
+			g.race_time = total;
+			g.race_position = g.ships[pilot].position_rank;
 		}
 	}
 
@@ -211,11 +357,11 @@ void race_end(void) {
 	}
 
 	if (g.race_type == RACE_TYPE_CHAMPIONSHIP) {
-		for (int i = 0; i < len(def.race_points_for_rank); i++) {
+		for (unsigned int i = 0; i < len(def.race_points_for_rank); i++) {
 			g.race_ranks[i].points = def.race_points_for_rank[i];
 
 			// Find the pilot for this race rank in the championship table
-			for (int j = 0; j < len(g.championship_ranks); j++) {
+			for (unsigned int j = 0; j < len(g.championship_ranks); j++) {
 				if (g.race_ranks[i].pilot == g.championship_ranks[j].pilot) {
 					g.championship_ranks[j].points += def.race_points_for_rank[i];
 					break;
@@ -266,11 +412,10 @@ void race_next(void) {
 }
 
 void race_release_control(void) {
-	flags_rm(g.ships[g.pilot].flags, SHIP_RACING);
-	g.ships[g.pilot].remote_thrust_max = 3160;
-	g.ships[g.pilot].remote_thrust_mag = 32;
-	g.ships[g.pilot].speed = 3160;
-	g.camera.update_func = camera_update_attract_random;
+	race_release_player(g.pilot, &g.camera);
+	if (g.local_player_count >= 2) { race_release_player(g.pilot2, &g.camera2); }
+	if (g.local_player_count >= 3) { race_release_player(g.pilot3, &g.camera3); }
+	if (g.local_player_count >= 4) { race_release_player(g.pilot4, &g.camera4); }
 }
 
 void race_pause(void) {

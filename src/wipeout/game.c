@@ -31,9 +31,11 @@ const game_def_t def = {
 	},
 
 	.race_types = {
-		[RACE_TYPE_CHAMPIONSHIP] = {.name = "CHAMPIONSHIP RACE"},
-		[RACE_TYPE_SINGLE]       = {.name = "SINGLE RACE"},
-		[RACE_TYPE_TIME_TRIAL]   = {.name = "TIME TRIAL"},
+		[RACE_TYPE_CHAMPIONSHIP]  = {.name = "CHAMPIONSHIP RACE"},
+		[RACE_TYPE_SINGLE]        = {.name = "SINGLE RACE"},
+		[RACE_TYPE_NETWORK]       = {.name = "NETWORK"},
+		[RACE_TYPE_TIME_TRIAL]    = {.name = "TIME TRIAL"},
+		[RACE_TYPE_SPLIT_SCREEN]  = {.name = "SPLIT SCREEN"},
 	},
 
 	.pilots = {
@@ -594,6 +596,8 @@ save_t save = {
 	.fullscreen = false,
 	.screen_res = 0,
 	.post_effect = 0,
+	.enable_force_feedback = false,
+	.network_interface = 0,
 
 	.has_rapier_class = true,  // for testing; should be false in prod
 	.has_bonus_circuts = true, // for testing; should be false in prod
@@ -875,7 +879,6 @@ void game_init(void) {
 	sfx_music_mode(SFX_MUSIC_PAUSED);
 	sfx_music_play(rand_int(0, len(def.music)));
 
-
 	// System binds; always fixed
 	// Keyboard
 	input_bind(INPUT_LAYER_SYSTEM, INPUT_KEY_UP, A_MENU_UP);
@@ -920,7 +923,7 @@ void game_init(void) {
 	
 
 	// User defined, loaded from the save struct
-	for (int action = 0; action < len(save.buttons); action++) {
+	for (unsigned int action = 0; action < len(save.buttons); action++) {
 		if (save.buttons[action][0] != INPUT_INVALID) {
 			input_bind(INPUT_LAYER_USER, save.buttons[action][0], action);
 		}
@@ -929,6 +932,45 @@ void game_init(void) {
 		}
 	}
 
+	// P1 left-stick racing controls (supplemental to save.buttons)
+	input_bind(INPUT_LAYER_USER, INPUT_GAMEPAD_L_STICK_UP,    A_UP);
+	input_bind(INPUT_LAYER_USER, INPUT_GAMEPAD_L_STICK_DOWN,  A_DOWN);
+	input_bind(INPUT_LAYER_USER, INPUT_GAMEPAD_L_STICK_LEFT,  A_LEFT);
+	input_bind(INPUT_LAYER_USER, INPUT_GAMEPAD_L_STICK_RIGHT, A_RIGHT);
+
+	// Gamepad bindings for P2-P4 (all mirror default P1 gamepad layout)
+	for (int p = 1; p < INPUT_MAX_PLAYERS; p++) {
+		input_bind_p(p, INPUT_LAYER_USER, INPUT_GAMEPAD_DPAD_UP,       A_UP);
+		input_bind_p(p, INPUT_LAYER_USER, INPUT_GAMEPAD_DPAD_DOWN,     A_DOWN);
+		input_bind_p(p, INPUT_LAYER_USER, INPUT_GAMEPAD_DPAD_LEFT,     A_LEFT);
+		input_bind_p(p, INPUT_LAYER_USER, INPUT_GAMEPAD_DPAD_RIGHT,    A_RIGHT);
+		input_bind_p(p, INPUT_LAYER_USER, INPUT_GAMEPAD_L_SHOULDER,    A_BRAKE_LEFT);
+		input_bind_p(p, INPUT_LAYER_USER, INPUT_GAMEPAD_R_SHOULDER,    A_BRAKE_RIGHT);
+		input_bind_p(p, INPUT_LAYER_USER, INPUT_GAMEPAD_A,             A_THRUST);
+		input_bind_p(p, INPUT_LAYER_USER, INPUT_GAMEPAD_X,             A_FIRE);
+		input_bind_p(p, INPUT_LAYER_USER, INPUT_GAMEPAD_Y,             A_CHANGE_VIEW);
+		input_bind_p(p, INPUT_LAYER_USER, INPUT_GAMEPAD_L_STICK_UP,    A_UP);
+		input_bind_p(p, INPUT_LAYER_USER, INPUT_GAMEPAD_L_STICK_DOWN,  A_DOWN);
+		input_bind_p(p, INPUT_LAYER_USER, INPUT_GAMEPAD_L_STICK_LEFT,  A_LEFT);
+		input_bind_p(p, INPUT_LAYER_USER, INPUT_GAMEPAD_L_STICK_RIGHT, A_RIGHT);
+		input_bind_p(p, INPUT_LAYER_SYSTEM, INPUT_GAMEPAD_DPAD_UP,       A_MENU_UP);
+		input_bind_p(p, INPUT_LAYER_SYSTEM, INPUT_GAMEPAD_DPAD_DOWN,     A_MENU_DOWN);
+		input_bind_p(p, INPUT_LAYER_SYSTEM, INPUT_GAMEPAD_DPAD_LEFT,     A_MENU_LEFT);
+		input_bind_p(p, INPUT_LAYER_SYSTEM, INPUT_GAMEPAD_DPAD_RIGHT,    A_MENU_RIGHT);
+		input_bind_p(p, INPUT_LAYER_SYSTEM, INPUT_GAMEPAD_L_STICK_UP,    A_MENU_UP);
+		input_bind_p(p, INPUT_LAYER_SYSTEM, INPUT_GAMEPAD_L_STICK_DOWN,  A_MENU_DOWN);
+		input_bind_p(p, INPUT_LAYER_SYSTEM, INPUT_GAMEPAD_L_STICK_LEFT,  A_MENU_LEFT);
+		input_bind_p(p, INPUT_LAYER_SYSTEM, INPUT_GAMEPAD_L_STICK_RIGHT, A_MENU_RIGHT);
+		input_bind_p(p, INPUT_LAYER_SYSTEM, INPUT_GAMEPAD_A,             A_MENU_SELECT);
+		input_bind_p(p, INPUT_LAYER_SYSTEM, INPUT_GAMEPAD_B,             A_MENU_BACK);
+		input_bind_p(p, INPUT_LAYER_SYSTEM, INPUT_GAMEPAD_X,             A_MENU_BACK);
+		input_bind_p(p, INPUT_LAYER_SYSTEM, INPUT_GAMEPAD_START,         A_MENU_START);
+	}
+
+	g.local_player_count = 1;
+	g.pilot2 = 1;
+	g.pilot3 = 2;
+	g.pilot4 = 3;
 
 	game_set_scene(GAME_SCENE_INTRO);
 }
@@ -939,7 +981,7 @@ void game_set_scene(game_scene_t scene) {
 }
 
 void game_reset_championship(void) {
-	for (int i = 0; i < len(g.championship_ranks); i++) {
+	for (unsigned int i = 0; i < len(g.championship_ranks); i++) {
 		g.championship_ranks[i].points = 0;
 		g.championship_ranks[i].pilot = i;
 	}

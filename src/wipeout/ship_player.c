@@ -58,17 +58,19 @@ void ship_player_update_intro_await_three(ship_t *self) {
 	ship_player_update_intro_general(self);
 
 	if (self->update_timer <= UPDATE_TIME_THREE) {
-		sfx_t *sfx = sfx_play(SFX_VOICE_COUNT_3);
+		if (self->player_index == 0) { sfx_play(SFX_VOICE_COUNT_3); }
 		self->update_func = ship_player_update_intro_await_two;
 	}
 }
 
 void ship_player_update_intro_await_two(ship_t *self) {
-	ship_player_update_intro_general(self);	
+	ship_player_update_intro_general(self);
 
 	if (self->update_timer <= UPDATE_TIME_TWO) {
-		scene_set_start_booms(1);
-		sfx_t *sfx = sfx_play(SFX_VOICE_COUNT_2);
+		if (self->player_index == 0) {
+			scene_set_start_booms(1);
+			sfx_play(SFX_VOICE_COUNT_2);
+		}
 		self->update_func = ship_player_update_intro_await_one;
 	}
 }
@@ -77,8 +79,10 @@ void ship_player_update_intro_await_one(ship_t *self) {
 	ship_player_update_intro_general(self);
 
 	if (self->update_timer <= UPDATE_TIME_ONE) {
-		scene_set_start_booms(2);
-		sfx_t *sfx = sfx_play(SFX_VOICE_COUNT_1);
+		if (self->player_index == 0) {
+			scene_set_start_booms(2);
+			sfx_play(SFX_VOICE_COUNT_1);
+		}
 		self->update_func = ship_player_update_intro_await_go;
 	}
 }
@@ -87,8 +91,10 @@ void ship_player_update_intro_await_go(ship_t *self) {
 	ship_player_update_intro_general(self);
 
 	if (self->update_timer <= UPDATE_TIME_GO) {
-		scene_set_start_booms(3);
-		sfx_t *sfx = sfx_play(SFX_VOICE_COUNT_GO);
+		if (self->player_index == 0) {
+			scene_set_start_booms(3);
+			sfx_play(SFX_VOICE_COUNT_GO);
+		}
 		
 		if (flags_is(self->flags, SHIP_RACING)) {
 			// Check for stall
@@ -117,8 +123,8 @@ void ship_player_update_intro_general(ship_t *self) {
 	self->position.y = self->temp_target.y + sinf(self->update_timer * 80.0 * 30.0 * M_PI * 2.0 / 4096.0) * 32;
 
 	// Thrust
-	if (input_state(A_THRUST)) {
-		self->thrust_mag += input_state(A_THRUST) * SHIP_THRUST_RATE * system_tick();
+	if (input_state_p(A_THRUST, self->player_index)) {
+		self->thrust_mag += input_state_p(A_THRUST, self->player_index) * SHIP_THRUST_RATE * system_tick();
 	}
 	else {
 		self->thrust_mag -= SHIP_THRUST_RATE * system_tick();
@@ -127,13 +133,13 @@ void ship_player_update_intro_general(ship_t *self) {
 	self->thrust_mag = clamp(self->thrust_mag, 0, self->thrust_max);
 
 	// View
-	if (input_pressed(A_CHANGE_VIEW)) {
+	if (input_pressed_p(A_CHANGE_VIEW, self->player_index)) {
 		if (flags_not(self->flags, SHIP_VIEW_INTERNAL)) {
-			g.camera.update_func = camera_update_race_internal;
+			self->camera->update_func = camera_update_race_internal;
 			flags_add(self->flags, SHIP_VIEW_INTERNAL);
 		}
 		else {
-			g.camera.update_func = camera_update_race_external;
+			self->camera->update_func = camera_update_race_external;
 			flags_rm(self->flags, SHIP_VIEW_INTERNAL);
 		}
 	}
@@ -175,35 +181,35 @@ void ship_player_update_race(ship_t *self) {
 
 
 	// Turning
-	// For analog input we set a turn_target (exponentiated by the analog_response 
-	// curve) and stop adding to angular acceleration once we exceed that target. 
-	// For digital input (0|1) the powf() and multiplication with turn_rate_max 
+	// For analog input we set a turn_target (exponentiated by the analog_response
+	// curve) and stop adding to angular acceleration once we exceed that target.
+	// For digital input (0|1) the powf() and multiplication with turn_rate_max
 	// will have no influence on the original behavior.
 	self->angular_acceleration = vec3(0, 0, 0);
 
-	if (input_state(A_LEFT)) {
+	if (input_state_p(A_LEFT, self->player_index)) {
 		if (self->angular_velocity.y < 0) {
 			self->angular_acceleration.y += self->turn_rate * 2;
 		}
 		else {
-			float turn_target = powf(input_state(A_LEFT), save.analog_response);
+			float turn_target = powf(input_state_p(A_LEFT, self->player_index), save.analog_response);
 			if (turn_target * self->turn_rate_max > self->angular_velocity.y) {
 				self->angular_acceleration.y += self->turn_rate;
 			}
 		}
 	}
-	else if (input_state(A_RIGHT)) {
+	else if (input_state_p(A_RIGHT, self->player_index)) {
 		if (self->angular_velocity.y > 0) {
 			self->angular_acceleration.y -= self->turn_rate * 2;
 		}
 		else {
-			float turn_target = powf(input_state(A_RIGHT), save.analog_response);
-			if (turn_target * -self->turn_rate_max < self->angular_velocity.y) {	
+			float turn_target = powf(input_state_p(A_RIGHT, self->player_index), save.analog_response);
+			if (turn_target * -self->turn_rate_max < self->angular_velocity.y) {
 				self->angular_acceleration.y -= self->turn_rate;
 			}
 		}
 	}
-	
+
 	if (flags_is(self->flags, SHIP_ELECTROED)) {
 		self->ebolt_effect_timer += system_tick();
 
@@ -211,7 +217,7 @@ void ship_player_update_race(ship_t *self) {
 		if (self->ebolt_effect_timer > 0.1) {
 			self->ebolt_effect_timer -= 0.1;
 			if (flags_is(self->flags, SHIP_VIEW_INTERNAL)) {
-				camera_set_shake(&g.camera, CAMERA_SHAKE_SHORT);
+				camera_set_shake(self->camera, CAMERA_SHAKE_SHORT);
 			}
 			self->angular_velocity.y += rand_float(-0.5, 0.5);
 
@@ -221,8 +227,8 @@ void ship_player_update_race(ship_t *self) {
 		}
 	}
 
-	self->angular_acceleration.x += input_state(A_DOWN) * SHIP_PITCH_ACCEL;
-	self->angular_acceleration.x -= input_state(A_UP) * SHIP_PITCH_ACCEL;
+	self->angular_acceleration.x += input_state_p(A_DOWN, self->player_index) * SHIP_PITCH_ACCEL;
+	self->angular_acceleration.x -= input_state_p(A_UP, self->player_index) * SHIP_PITCH_ACCEL;
 
 	// Handle Stall
 	if (self->update_timer > 0) {
@@ -237,8 +243,8 @@ void ship_player_update_race(ship_t *self) {
 	}
 
 	// Thrust
-	if (input_state(A_THRUST)) {
-		self->thrust_mag += input_state(A_THRUST) * SHIP_THRUST_RATE * system_tick();
+	if (input_state_p(A_THRUST, self->player_index)) {
+		self->thrust_mag += input_state_p(A_THRUST, self->player_index) * SHIP_THRUST_RATE * system_tick();
 	}
 	else {
 		self->thrust_mag -= SHIP_THRUST_FALLOFF * system_tick();
@@ -246,7 +252,7 @@ void ship_player_update_race(ship_t *self) {
 	self->thrust_mag = clamp(self->thrust_mag, 0, self->current_thrust_max);
 
 	// Brake
-	if (input_state(A_BRAKE_RIGHT))	{
+	if (input_state_p(A_BRAKE_RIGHT, self->player_index)) {
 		self->brake_right += SHIP_BRAKE_RATE * system_tick();
 	}
 	else if (self->brake_right > 0) {
@@ -254,7 +260,7 @@ void ship_player_update_race(ship_t *self) {
 	}
 	self->brake_right = clamp(self->brake_right, 0, 256);
 
-	if (input_state(A_BRAKE_LEFT))	{
+	if (input_state_p(A_BRAKE_LEFT, self->player_index)) {
 		self->brake_left += SHIP_BRAKE_RATE * system_tick();
 	}
 	else if (self->brake_left > 0) {
@@ -263,13 +269,13 @@ void ship_player_update_race(ship_t *self) {
 	self->brake_left = clamp(self->brake_left, 0, 256);
 
 	// View
-	if (input_pressed(A_CHANGE_VIEW)) {
+	if (input_pressed_p(A_CHANGE_VIEW, self->player_index)) {
 		if (flags_not(self->flags, SHIP_VIEW_INTERNAL)) {
-			g.camera.update_func = camera_update_race_internal;
+			self->camera->update_func = camera_update_race_internal;
 			flags_add(self->flags, SHIP_VIEW_INTERNAL);
 		}
 		else {
-			g.camera.update_func = camera_update_race_external;
+			self->camera->update_func = camera_update_race_external;
 			flags_rm(self->flags, SHIP_VIEW_INTERNAL);
 		}
 	}
@@ -284,9 +290,34 @@ void ship_player_update_race(ship_t *self) {
 	// Fire
 	// self->weapon_type = WEAPON_TYPE_MISSILE; // Test weapon
 
-	if (input_pressed(A_FIRE) && self->weapon_type != WEAPON_TYPE_NONE) {
+	if (input_pressed_p(A_FIRE, self->player_index) && self->weapon_type != WEAPON_TYPE_NONE) {
 		if (flags_not(self->flags, SHIP_SHIELDED)) {
 			weapons_fire(self, self->weapon_type);
+
+			// Warn when an equalizer weapon has been picked up
+			if(self->weapon_type == WEAPON_TYPE_EQUALIZER) {
+				sfx_play(SFX_VOICE_MISSILE);
+			}
+			else {
+				// Warn any human player directly ahead (within 10 sections)
+				for (int pi = 0; pi < NUM_PILOTS; pi++) {
+					ship_t *other = &g.ships[pi];
+					if (other == self || other->player_index < 0) continue;
+					int section_diff = other->total_section_num - self->total_section_num;
+					if (section_diff > 0 && section_diff <= 10) {
+						switch (self->weapon_type) {
+							case WEAPON_TYPE_ROCKET:  sfx_play(SFX_VOICE_ROCKETS);   break;
+							case WEAPON_TYPE_MISSILE: sfx_play(SFX_VOICE_MISSILE);   break;
+							case WEAPON_TYPE_EBOLT:   sfx_play(SFX_VOICE_SHOCKWAVE); break;
+							case WEAPON_TYPE_MINE:    sfx_play(SFX_VOICE_MINES);     break;
+							default: break;
+						}
+						break;
+					}
+				}
+			}
+
+
 		}
 		else {
 			sfx_play(SFX_MENU_MOVE);
@@ -492,10 +523,10 @@ void ship_player_update_rescue(ship_t *self) {
 		flags_rm(self->flags, SHIP_VIEW_REMOTE);
 
 		if (flags_is(self->flags, SHIP_VIEW_INTERNAL)) {
-			g.camera.update_func = camera_update_race_internal;
+			self->camera->update_func = camera_update_race_internal;
 		}
 		else {
-			g.camera.update_func = camera_update_race_external;
+			self->camera->update_func = camera_update_race_external;
 		}
 	}
 }
@@ -535,7 +566,7 @@ ship_t *ship_player_find_target(ship_t *self) {
 	int shortest_distance = 256;
 	ship_t *nearest_ship = NULL;
 
-	for (int i = 0; i < len(g.ships); i++) {
+	for (long unsigned int i = 0; i < len(g.ships); i++) {
 		ship_t *other = &g.ships[i];
 		if (self == other) {
 			continue;
