@@ -16,14 +16,12 @@ vec3_t vec3_wrap_angle(vec3_t a) {
 }
 
 float vec3_angle(vec3_t a, vec3_t b) {
-	float magnitude = sqrt(
-		(a.x * a.x + a.y * a.y + a.z * a.z) * 
-		(b.x * b.x + b.y * b.y + b.z * b.z)
-	);
-	float cosine = (magnitude == 0.0F)
+	float magnitude = vec3_len(a) * vec3_len(b);
+
+	float cosine = (magnitude == 0)
 		? 1
 		: vec3_dot(a, b) / magnitude;
-	return acos(clamp(cosine, -1, 1));
+	return acosf(clamp(cosine, -1, 1));
 }
 
 vec3_t vec3_transform(vec3_t a, mat4_t *mat) {
@@ -64,6 +62,14 @@ vec3_t vec3_reflect(vec3_t incidence, vec3_t normal, float f) {
 	return vec3_add(incidence, vec3_mulf(normal, vec3_dot(normal, vec3_mulf(incidence, -1)) * f));
 }
 
+vec3_t vec3_rand(float maxlen) {
+	vec3_t v;
+	do {
+		v = vec3(rand_float(-1, 1), rand_float(-1, 1), rand_float(-1, 1));
+	} while (vec3_len_sq(v) > 1);
+	return vec3_mulf(v, maxlen);
+}
+
 void mat4_set_translation(mat4_t *mat, vec3_t pos) {
 	mat->cols[3][0] = pos.x;
 	mat->cols[3][1] = pos.y;
@@ -71,12 +77,12 @@ void mat4_set_translation(mat4_t *mat, vec3_t pos) {
 }
 
 void mat4_set_yaw_pitch_roll(mat4_t *mat, vec3_t rot) {
-	float sx = sin( rot.x);
-	float sy = sin(-rot.y);
-	float sz = sin(-rot.z);
-	float cx = cos( rot.x);
-	float cy = cos(-rot.y);
-	float cz = cos(-rot.z);
+	float sx = sinf( rot.x);
+	float sy = sinf(-rot.y);
+	float sz = sinf(-rot.z);
+	float cx = cosf( rot.x);
+	float cy = cosf(-rot.y);
+	float cz = cosf(-rot.z);
 
 	mat->cols[0][0] = cy * cz + sx * sy * sz;
 	mat->cols[1][0] = cz * sx * sy - cy * sz;
@@ -90,12 +96,12 @@ void mat4_set_yaw_pitch_roll(mat4_t *mat, vec3_t rot) {
 }
 
 void mat4_set_roll_pitch_yaw(mat4_t *mat, vec3_t rot) {
-	float sx = sin( rot.x);
-	float sy = sin(-rot.y);
-	float sz = sin(-rot.z);
-	float cx = cos( rot.x);
-	float cy = cos(-rot.y);
-	float cz = cos(-rot.z);
+	float sx = sinf( rot.x);
+	float sy = sinf(-rot.y);
+	float sz = sinf(-rot.z);
+	float cx = cosf( rot.x);
+	float cy = cosf(-rot.y);
+	float cz = cosf(-rot.z);
 
 	mat->cols[0][0] = cy * cz - sx * sy * sz;
 	mat->cols[1][0] = -cx * sz;

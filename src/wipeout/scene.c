@@ -50,11 +50,36 @@ void scene_move_oil_pump(Object *obj);
 void scene_update_aurora_borealis(void);
 
 void scene_load(const char *base_path, float sky_y_offset) {
-	texture_list_t scene_textures = image_get_compressed_textures(get_path(base_path, "scene.cmp"));
-	scene_objects = objects_load(get_path(base_path, "scene.prm"), scene_textures);
+	bool multiplayer = false;
+	if (def.circuts[g.circut].release == GAME_WIPEOUT_64) {
+		// Wipeout 64's skies appear to be rendered in a way reminiscent of
+		// Mario 64, rather than using an actual model. There is a 'sky.prm'
+		// model present in the Wipeout files, but it is a red herring - it's
+		// apparently corrupt and inaccurate to the final game's rendering.
+		// As such, we use a placeholder. TODO: make a custom skybox model,
+		// or reimplement Wipeout 64's sky rendering.
+		texture_list_t sky_textures = image_get_compressed_textures(get_path("wipeout/track01/", "sky.cmp"));
+		sky_object = objects_load(get_path("wipeout/track01/", "sky.prm"), sky_textures);
+
+		// Wipeout 64 splits its scenery into "common" scenery and
+		// "multiplayer" / "singleplayer" specific scenery.
+		// We simply glue the latter to the end of the former.
+		texture_list_t scene_textures = image_get_compressed_textures(get_path(base_path, "sceneCom.cmp"));
+		scene_objects = objects_load(get_path(base_path, "sceneCom.prm"), scene_textures);
+
+		Object *obj = scene_objects;
+		while (obj->next) obj = obj->next;
+
+		texture_list_t scene_extra_textures = image_get_compressed_textures(get_path(base_path, multiplayer ? "sceneMul.cmp" : "sceneSin.cmp"));
+		obj->next = objects_load(get_path(base_path, multiplayer ? "sceneMul.prm" : "sceneSin.prm"), scene_extra_textures);
+	} else {
+		texture_list_t sky_textures = image_get_compressed_textures(get_path(base_path, "sky.cmp"));
+		sky_object = objects_load(get_path(base_path, "sky.prm"), sky_textures);
+
+		texture_list_t scene_textures = image_get_compressed_textures(get_path(base_path, "scene.cmp"));
+		scene_objects = objects_load(get_path(base_path, "scene.prm"), scene_textures);
+	}
 	
-	texture_list_t sky_textures = image_get_compressed_textures(get_path(base_path, "sky.cmp"));
-	sky_object = objects_load(get_path(base_path, "sky.prm") , sky_textures);
 	sky_offset = vec3(0, sky_y_offset, 0);
 
 	// Collect all objects that need to be updated each frame
@@ -149,21 +174,16 @@ void scene_set_start_booms(int light_index) {
 	
 	int lights_len = 1;
 	rgba_t color = rgba(0, 0, 0, 0);
-
-	if (light_index == 0) { // reset all 3
-		lights_len = 3;
-		color = rgba(0x20, 0x20, 0x20, 0xff);
+	switch (light_index) {
+		case 0:
+			// reset all 3
+			lights_len = 3;
+			color = rgba(0x20, 0x20, 0x20, 0xff);
+			break;
+		case 1: color = rgba(0xff, 0x00, 0x00, 0xff); break;
+		case 2: color = rgba(0xff, 0x80, 0x00, 0xff); break;
+		case 3: color = rgba(0x00, 0xff, 0x00, 0xff); break;
 	}
-	else if (light_index == 1) {
-		color = rgba(0xff, 0x00, 0x00, 0xff);
-	}
-	else if (light_index == 2) {
-		color = rgba(0xff, 0x80, 0x00, 0xff);
-	}
-	else if (light_index == 3) {
-		color = rgba(0x00, 0xff, 0x00, 0xff);
-	}
-
 	for (int i = 0; i < start_booms_len; i++) {
 		Prm libPoly = {.primitive = start_booms[i]->primitives};
 
@@ -173,9 +193,7 @@ void scene_set_start_booms(int light_index) {
 
 		for (int j = 0; j < lights_len; j++) {
 			for (int v = 0; v < 4; v++) {
-				libPoly.gt4->color[v].r = color.r;
-				libPoly.gt4->color[v].g = color.g;
-				libPoly.gt4->color[v].b = color.b;
+				libPoly.gt4->color[v] = color;
 			}
 			libPoly.gt4 += 1;
 		}
@@ -184,18 +202,16 @@ void scene_set_start_booms(int light_index) {
 
 
 void scene_pulsate_red_light(Object *obj) {
-	uint8_t r = clamp(sin(system_cycle_time() * M_PI * 2) * 128 + 128, 0, 255);
+	uint8_t r = clamp(sinf(system_cycle_time() * M_PI * 2) * 128 + 128, 0, 255);
 	Prm libPoly = {.primitive = obj->primitives};
 
 	for (int v = 0; v < 4; v++) {
-		libPoly.gt4->color[v].r = r;
-		libPoly.gt4->color[v].g = 0x00;
-		libPoly.gt4->color[v].b = 0x00;
+		libPoly.gt4->color[v] = rgba(r,0,0,0xFF);
 	}
 }
 
 void scene_move_oil_pump(Object *pump) {
-	mat4_set_yaw_pitch_roll(&pump->mat, vec3(sin(system_cycle_time() * 0.125 * M_PI * 2), 0, 0));
+	mat4_set_yaw_pitch_roll(&pump->mat, vec3(sinf(system_cycle_time() * 0.125 * M_PI * 2), 0, 0));
 }
 
 void scene_init_aurora_borealis(void) {
@@ -236,31 +252,27 @@ void scene_init_aurora_borealis(void) {
 	}
 }
 
+rgba_t scene_aurora_color_from_coordinate(int16_t coord, float phase) {
+	return rgba(
+		 (sinf(coord * phase) * 64.0) + 190,
+		 (sinf(coord * (phase + 0.054)) * 64.0) + 190,
+		 (sinf(coord * (phase + 0.039)) * 64.0) + 190,
+		 0xFF
+	);
+}
+
 void scene_update_aurora_borealis(void) {
 	float phase = system_time() / 30.0;
 	for (int i = 0; i < 80; i++) {
 		int16_t *coords = aurora_borealis.coords[i];
-
+		GT4  *primitive = aurora_borealis.primitives[i];
 		if (aurora_borealis.grey_coords[i] != -2) {
-			aurora_borealis.primitives[i]->color[0].r = (sin(coords[0] * phase) * 64.0) + 190;
-			aurora_borealis.primitives[i]->color[0].g = (sin(coords[0] * (phase + 0.054)) * 64.0) + 190;
-			aurora_borealis.primitives[i]->color[0].b = (sin(coords[0] * (phase + 0.039)) * 64.0) + 190;
-		}
-		if (aurora_borealis.grey_coords[i] != -2) {
-			aurora_borealis.primitives[i]->color[1].r = (sin(coords[1] * phase) * 64.0) + 190;
-			aurora_borealis.primitives[i]->color[1].g = (sin(coords[1] * (phase + 0.054)) * 64.0) + 190;
-			aurora_borealis.primitives[i]->color[1].b = (sin(coords[1] * (phase + 0.039)) * 64.0) + 190;
+			primitive->color[0] = scene_aurora_color_from_coordinate(coords[0], phase);
+			primitive->color[1] = scene_aurora_color_from_coordinate(coords[1], phase);
 		}
 		if (aurora_borealis.grey_coords[i] != -1) {
-			aurora_borealis.primitives[i]->color[2].r = (sin(coords[2] * phase) * 64.0) + 190;
-			aurora_borealis.primitives[i]->color[2].g = (sin(coords[2] * (phase + 0.054)) * 64.0) + 190;
-			aurora_borealis.primitives[i]->color[2].b = (sin(coords[2] * (phase + 0.039)) * 64.0) + 190;
-		}
-
-		if (aurora_borealis.grey_coords[i] != -1) {
-			aurora_borealis.primitives[i]->color[3].r = (sin(coords[3] * phase) * 64.0) + 190;
-			aurora_borealis.primitives[i]->color[3].g = (sin(coords[3] * (phase + 0.054)) * 64.0) + 190;
-			aurora_borealis.primitives[i]->color[3].b = (sin(coords[3] * (phase + 0.039)) * 64.0) + 190;
+			primitive->color[2] = scene_aurora_color_from_coordinate(coords[2], phase);
+			primitive->color[3] = scene_aurora_color_from_coordinate(coords[3], phase);
 		}
 	}
 }

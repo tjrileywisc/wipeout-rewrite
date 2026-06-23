@@ -38,6 +38,12 @@ typedef struct {
 typedef union {
 	float m[16];
 	float cols[4][4];
+	struct {
+		union {
+			vec3_t vec3;
+			vec4_t vec4;
+		} right, down, forward, translation;
+	} basis;
 } mat4_t;
 
 typedef struct {
@@ -151,8 +157,12 @@ static inline vec3_t vec3_divf(vec3_t a, float f) {
 	);
 }
 
+static inline float vec3_len_sq(vec3_t a) {
+	return a.x * a.x + a.y * a.y + a.z * a.z;
+}
+
 static inline float vec3_len(vec3_t a) {
-	return sqrt(a.x * a.x + a.y * a.y + a.z * a.z);
+	return sqrtf(vec3_len_sq(a));
 }
 
 static inline vec3_t vec3_cross(vec3_t a, vec3_t b) {
@@ -221,7 +231,7 @@ static inline vec3_t vec3_normalize(vec3_t a) {
 }
 
 static inline float wrap_angle(float a) {
-	a = fmod(a + M_PI, M_PI * 2);
+	a = fmodf(a + M_PI, M_PI * 2);
 	if (a < 0) {
 		a += M_PI * 2;
 	}
@@ -239,6 +249,7 @@ vec3_t vec3_normalize(vec3_t a);
 vec3_t vec3_project_to_ray(vec3_t p, vec3_t r0, vec3_t r1);
 float vec3_distance_to_plane(vec3_t p, vec3_t plane_pos, vec3_t plane_normal);
 vec3_t vec3_reflect(vec3_t incidence, vec3_t normal, float f);
+vec3_t vec3_rand(float maxlen);
 
 float wrap_angle(float a);
 

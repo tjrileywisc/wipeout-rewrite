@@ -25,8 +25,15 @@ void droid_load(void) {
 void droid_init(droid_t *droid, ship_t *ship) {
 	droid->section = g.track.sections;
 
+	void *start = droid->section;
 	while (flags_not(droid->section->flags, SECTION_JUMP)) {
 		droid->section = droid->section->next;
+		// Prevent hang on tracks without jumps.
+		// Such tracks exist in Wipeout 2097 and potentially 64.
+		if (droid->section == start) {
+			droid->section = NULL;
+			break;
+		};
 	}
 
 	droid->position = vec3_add(ship->position, vec3(0, -200, 0));
@@ -48,61 +55,36 @@ void droid_draw(droid_t *droid) {
 	droid->cycle_timer += system_tick() * M_PI * 2;
 
 	Prm prm = {.primitive = droid_model->primitives};
-	int rf = sin(droid->cycle_timer) * 127 + 128;
-	int gf = sin(droid->cycle_timer + 0.2) * 127 + 128;
-	int bf = sin(droid->cycle_timer * 0.5 + 0.1) * 127 + 128;
-
-	int r, g, b;
+	int rf = sinf(droid->cycle_timer) * 127 + 128;
+	int gf = sinf(droid->cycle_timer + 0.2) * 127 + 128;
+	int bf = sinf(droid->cycle_timer * 0.5 + 0.1) * 127 + 128;
 
 	for (int i = 0; i < 11; i++) {
+		rgba_t color;
+
 		if (i < 2) {
-			r = 40;
-			g = gf;
-			b = 40;
+			color = rgba(40,gf,40,0xFF);
 		}
 		else if (i < 6) {
-			r = bf >> 1;
-			b = bf;
-			g = bf >> 1;
+			color = rgba(bf >> 1, bf, bf >> 1, 0xFF);
 		}
 		else {
-			r = rf;
-			b = 40;
-			g = 40;
+			color = rgba(rf, 40, 40, 0xFF);
 		}
 
 		switch (prm.f3->type) {
 			case PRM_TYPE_GT3:
-				prm.gt3->color[0].r = r;
-				prm.gt3->color[0].g = g;
-				prm.gt3->color[0].b = b;
-
-				prm.gt3->color[1].r = r;
-				prm.gt3->color[1].g = g;
-				prm.gt3->color[1].b = b;
-
-				prm.gt3->color[2].r = r;
-				prm.gt3->color[2].g = g;
-				prm.gt3->color[2].b = b;
+				prm.gt3->color[0] =
+				prm.gt3->color[1] =
+				prm.gt3->color[2] = color;
 				prm.gt3++;
 				break;
 
 			case PRM_TYPE_GT4:
-				prm.gt4->color[0].r = r;
-				prm.gt4->color[0].g = g;
-				prm.gt4->color[0].b = b;
-
-				prm.gt4->color[1].r = r;
-				prm.gt4->color[1].g = g;
-				prm.gt4->color[1].b = b;
-
-				prm.gt4->color[2].r = r;
-				prm.gt4->color[2].g = g;
-				prm.gt4->color[2].b = b;
-
-				prm.gt4->color[3].r = 40;
-				prm.gt4->color[3].g = 40;
-				prm.gt4->color[3].b = 40;
+				prm.gt4->color[0] =
+				prm.gt4->color[1] =
+				prm.gt4->color[2] = color;
+				prm.gt4->color[3] = rgba(40,40,40,0xFF);
 				prm.gt4++;
 				break;
 		}
@@ -131,16 +113,14 @@ void droid_update_intro(droid_t *droid, ship_t*) {
 	droid->update_timer -= system_tick();
 
 	if (droid->update_timer < DROID_UPDATE_TIME_INTRO_3) {
-		droid->acceleration.x = (-sin(droid->angle.y) * cos(droid->angle.x)) * 0.25 * 4096.0;
+		droid->acceleration = vec3_mulf(droid->mat.basis.forward.vec3, 0.25 * 4096.0);
 		droid->acceleration.y = 0;
-		droid->acceleration.z = (cos(droid->angle.y) * cos(droid->angle.x)) * 0.25 * 4096.0;
 		droid->angular_velocity.y = 0;
 	}
 
 	else if (droid->update_timer < DROID_UPDATE_TIME_INTRO_2) {
-		droid->acceleration.x = (-sin(droid->angle.y) * cos(droid->angle.x)) * 0.125 * 4096.0;
+		droid->acceleration = vec3_mulf(droid->mat.basis.forward.vec3, 0.125 * 4096.0);
 		droid->acceleration.y = -140;
-		droid->acceleration.z = (cos(droid->angle.y) * cos(droid->angle.x)) * 0.125 * 4096.0;
 		droid->angular_velocity.y = (-8.0 / 4096.0) * M_PI * 2 * 30;
 	}
 
@@ -150,6 +130,14 @@ void droid_update_intro(droid_t *droid, ship_t*) {
 	}
 
 	if (droid->update_timer <= 0) {
+		// When there are no jumps in the level, the droid stops updating
+		// as soon as the intro completes.
+		if (!droid->section) {
+			// Zeroing these is not strictly needed but seems like a good idea
+			droid->velocity = droid->acceleration = droid->angular_velocity = vec3(0,0,0);
+			droid->update_func = droid_update_nothing;
+			return;
+		}
 		droid->update_timer = DROID_UPDATE_TIME_INITIAL;
 		droid->update_func = droid_update_idle;
 		droid->position.x = droid->section->center.x;
@@ -186,9 +174,8 @@ void droid_update_idle(droid_t *droid, ship_t *ship) {
 		droid->angular_velocity.y = quickest_turn * 30.0 / 64.0;
 	}
 
-	droid->acceleration.x = (-sin(droid->angle.y) * cos(droid->angle.x)) * 0.125 * 4096;
+	droid->acceleration = vec3_mulf(droid->mat.basis.forward.vec3, 0.125 * 4096.0);
 	droid->acceleration.y = target_vector.y / 64.0;
-	droid->acceleration.z = (cos(droid->angle.y) * cos(droid->angle.x)) * 0.125 * 4096;
 
 	if (flags_is(ship->flags, SHIP_IN_RESCUE)) {
 		flags_add(droid->sfx_tractor->flags, SFX_PLAY);
@@ -259,3 +246,5 @@ void droid_update_rescue(droid_t *droid, ship_t *ship) {
 		}
 	}
 }
+
+void droid_update_nothing(droid_t *droid, ship_t *ship) {}

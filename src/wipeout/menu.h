@@ -5,7 +5,7 @@
 #include "ui.h"
 
 #define MENU_PAGES_MAX 10
-#define MENU_ENTRIES_MAX 16
+#define MENU_ENTRIES_MAX 32
 
 typedef enum {
 	MENU_ENTRY_BUTTON,

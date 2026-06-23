@@ -30,7 +30,7 @@ void ship_ai_update_intro(ship_t *self) {
 }
 
 void ship_ai_update_intro_await_go(ship_t *self) {
-	self->position.y = self->temp_target.y + sin(self->update_timer * (80.0 + self->pilot * 3.0) * 30.0 * M_PI * 2.0 / 4096.0) * 32;
+	self->position.y = self->temp_target.y + sinf(self->update_timer * (80.0 + self->pilot * 3.0) * 30.0 * M_PI * 2.0 / 4096.0) * 32;
 
 	self->update_timer -= system_tick();
 	if (self->update_timer <= UPDATE_TIME_GO) {
@@ -124,7 +124,7 @@ void ship_ai_update_race(ship_t *self) {
 	if (self->ebolt_timer > 0) {
 		self->ebolt_timer -= system_tick();
 	}
-	if (self->ebolt_timer <= 0) {
+	else {
 		flags_rm(self->flags, SHIP_ELECTROED);
 	}
 
@@ -247,32 +247,25 @@ void ship_ai_update_race(ship_t *self) {
 							if (chance < 48) {
 								self->update_strat_func = ship_ai_strat_block;
 							}
-							else if ((chance >= 40) && (chance < 54)) {
+							else {
 								self->update_strat_func = ship_ai_strat_avoid;
 								flags_rm(self->flags, SHIP_OVERTAKEN);
+								
 								if (flags_not(self->flags, SHIP_SHIELDED) && flags_is(self->flags, SHIP_RACING)) {
-									sfx_play(SFX_VOICE_ROCKETS);
-									self->weapon_type = WEAPON_TYPE_ROCKET;
-									weapons_fire_delayed(self, self->weapon_type);
-								}
-							}
-							else if ((chance >= 54) && (chance < 60)) {
-								self->update_strat_func = ship_ai_strat_avoid;
-								flags_rm(self->flags, SHIP_OVERTAKEN);
-								if (flags_not(self->flags, SHIP_SHIELDED) && flags_is(self->flags, SHIP_RACING)) {
-									sfx_play(SFX_VOICE_MISSILE);
-									self->weapon_type = WEAPON_TYPE_MISSILE;
-									self->weapon_target = &g.ships[g.pilot];
-									weapons_fire_delayed(self, self->weapon_type);
-								}
-							}
-							else if ((chance >= 60) && (chance < 64)) {
-								self->update_strat_func = ship_ai_strat_avoid;
-								flags_rm(self->flags, SHIP_OVERTAKEN);
-								if (flags_not(self->flags, SHIP_SHIELDED) && flags_is(self->flags, SHIP_RACING)) {
-									sfx_play(SFX_VOICE_SHOCKWAVE);
-									self->weapon_type = WEAPON_TYPE_EBOLT;
-									self->weapon_target = &g.ships[g.pilot];
+									if (chance < 54) {
+										sfx_play(SFX_VOICE_ROCKETS);
+										self->weapon_type = WEAPON_TYPE_ROCKET;
+									}
+									else if (chance < 60) {
+										sfx_play(SFX_VOICE_MISSILE);
+										self->weapon_type = WEAPON_TYPE_MISSILE;
+										self->weapon_target = &g.ships[g.pilot];
+									}
+									else {
+										sfx_play(SFX_VOICE_SHOCKWAVE);
+										self->weapon_type = WEAPON_TYPE_EBOLT;
+										self->weapon_target = &g.ships[g.pilot];
+									}
 									weapons_fire_delayed(self, self->weapon_type);
 								}
 							}
@@ -400,18 +393,11 @@ void ship_ai_update_race(ship_t *self) {
 		section = self->section->prev;
 
 		for (int i = 0; i < 4; i++) {
-			if (section->junction) {
-				if (flags_is(section->junction->flags, SECTION_JUNCTION_START)) {
-					if (flags_is(self->flags, SHIP_JUNCTION_LEFT)) {
-						section = section->junction;
-					}
-					else {
-						section = section->next;
-					}
-				}
-				else {
-					section = section->next;
-				}
+			if (section->junction &&
+				flags_is(section->junction->flags, SECTION_JUNCTION_START) &&
+				flags_is(self->flags, SHIP_JUNCTION_LEFT)
+			) {
+				section = section->junction;
 			}
 			else {
 				section = section->next;
@@ -461,9 +447,7 @@ void ship_ai_update_race(ship_t *self) {
 		vec3_t face_point = face->tris[0].vertices[0].pos;
 		float height = vec3_distance_to_plane(self->position, face_point, face->normal);
 
-		if (height < 50) {
-			height = 50;
-		}
+		height = fmaxf(height, 50);
 
 		self->acceleration = vec3_add(self->acceleration, vec3_mulf(vec3_sub(
 			vec3_mulf(face->normal, (SHIP_TRACK_FLOAT * SHIP_TRACK_MAGNET) / height),
@@ -472,7 +456,7 @@ void ship_ai_update_race(ship_t *self) {
 		self->velocity = vec3_add(self->velocity, vec3_mulf(self->acceleration, 30 * system_tick()));
 
 
-		float xy_dist = sqrt(track_target.x * track_target.x + track_target.z * track_target.z);
+		float xy_dist = vec3_len(vec3_mul(track_target, vec3(1,0,1)));
 
 		self->angular_velocity.x = wrap_angle(-atan2(track_target.y, xy_dist) - self->angle.x) * (1.0/16.0) * 30;
 		self->angular_velocity.y = (wrap_angle(-atan2(track_target.x, track_target.z) - self->angle.y) * (1.0/16.0)) * 30 + self->turn_rate_from_hit;
@@ -530,7 +514,7 @@ void ship_ai_update_race(ship_t *self) {
 		if (self->ebolt_effect_timer > 0.1) {
 			self->ebolt_effect_timer -= 0.1;
 
-			self->position = vec3_add(self->position, vec3(rand_float(-20, 20), rand_float(-20, 20), rand_float(-20, 20)));
+			self->position = vec3_add(self->position, vec3_rand(20));
 
 			if (rand_int(0, 10) == 0) {
 				self->speed -= self->speed * 0.5;

@@ -120,7 +120,7 @@ void ship_player_update_intro_await_go(ship_t *self) {
 
 void ship_player_update_intro_general(ship_t *self) {
 	self->update_timer -= system_tick();
-	self->position.y = self->temp_target.y + sin(self->update_timer * 80.0 * 30.0 * M_PI * 2.0 / 4096.0) * 32;
+	self->position.y = self->temp_target.y + sinf(self->update_timer * 80.0 * 30.0 * M_PI * 2.0 / 4096.0) * 32;
 
 	// Thrust
 	if (input_state_p(A_THRUST, self->player_index)) {
@@ -157,24 +157,21 @@ void ship_player_update_race(ship_t *self) {
 	if (self->ebolt_timer > 0) {
 		self->ebolt_timer -= system_tick();
 	}
-
-	if (self->ebolt_timer <= 0) {
+	else {
 		flags_rm(self->flags, SHIP_ELECTROED);
 	}
 
 	if (self->revcon_timer > 0) {
 		self->revcon_timer -= system_tick();
 	}
-
-	if (self->revcon_timer <= 0) {
+	else {
 		flags_rm(self->flags, SHIP_REVCONNED);
 	}
 
 	if (self->special_timer > 0) {
 		self->special_timer -= system_tick();
 	}
-
-	if (self->special_timer <= 0) {
+	else {
 		flags_rm(self->flags, SHIP_SPECIALED);
 	}
 
@@ -225,7 +222,7 @@ void ship_player_update_race(ship_t *self) {
 			self->angular_velocity.y += rand_float(-0.5, 0.5);
 
 			if (rand_int(0, 10) == 0) { // approx once per second
-				self->thrust_mag -= self->thrust_mag * 0.25;
+				self->thrust_mag *= 0.75;
 			}
 		}
 	}
@@ -331,9 +328,9 @@ void ship_player_update_race(ship_t *self) {
 	// Physics
 
 	// Calculate thrust vector along principle axis of ship
-	self->thrust = vec3_mulf(self->dir_forward, self->thrust_mag * 64);
+	self->thrust = vec3_mulf(self->mat.basis.forward.vec3, self->thrust_mag * 64);
 	self->speed = vec3_len(self->velocity);
-	vec3_t forward_velocity = vec3_mulf(self->dir_forward, self->speed);
+	vec3_t forward_velocity = vec3_mulf(self->mat.basis.forward.vec3, self->speed);
 
 	// SECTION_JUMP
 	if (flags_is(self->section->flags, SECTION_JUMP)) {
@@ -396,9 +393,7 @@ void ship_player_update_race(ship_t *self) {
 			self->velocity = vec3_add(self->velocity, vec3_mulf(face->normal, 64.0 * 30 * system_tick()));
 		}
 
-		if (height < 50) {
-			height = 50;
-		}
+		height = fmaxf(height, 50);
 
 		// Calculate acceleration
 		float brake = (self->brake_left + self->brake_right);
@@ -414,7 +409,8 @@ void ship_player_update_race(ship_t *self) {
 		self->acceleration = vec3_sub(self->acceleration, vec3_divf(self->velocity, resistance));
 
 		// Burying the nose in the track? Move it out!
-		vec3_t nose_pos = vec3_add(self->position, vec3_mulf(self->dir_forward, 128));
+		// Why is it 128 units in front? ship_nose() puts it at 512...
+		vec3_t nose_pos = vec3_transform(vec3(0, 0, 128), &self->mat);
 		float nose_height = vec3_distance_to_plane(nose_pos,face_point, face->normal);
 		if (nose_height < 600) {
 			self->angular_acceleration.x += NTSC_ACCELERATION(ANGLE_NORM_TO_RADIAN(FIXED_TO_FLOAT((height - nose_height + 5) * (1.0/16.0))));

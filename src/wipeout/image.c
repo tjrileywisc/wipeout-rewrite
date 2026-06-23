@@ -51,6 +51,9 @@ image_t *image_load_from_bytes(uint8_t *bytes, bool transparent) {
 	uint32_t type = get_i32_le(bytes, &p);
 	rgba_t palette[256];
 
+	// Wipeout 64 compatibility
+	type &= 0xF;
+
 	if (
 		type == TIM_TYPE_PALETTED_4_BPP ||
 		type == TIM_TYPE_PALETTED_8_BPP
@@ -287,7 +290,7 @@ texture_list_t image_get_compressed_textures(char *name) {
 	cmp_t *cmp = image_load_compressed(name);
 	texture_list_t list = {.start = render_textures_len(), .len = cmp->len};
 
-	for (unsigned int i = 0; i < cmp->len; i++) {
+	for (int i = 0; i < cmp->len; i++) {
 		image_t *image = image_load_from_bytes(cmp->entries[i], false);
 
 		// char png_name[1024] = {0};

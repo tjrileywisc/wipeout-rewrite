@@ -4,10 +4,9 @@
 
 # game data
 /wipeout/
-/save.dat
-gamecontrollerdb.txt
+/wipeout2/
+/wipeout64/
 
-# build artifacts
 /build/
 .cache
 coverage-report/

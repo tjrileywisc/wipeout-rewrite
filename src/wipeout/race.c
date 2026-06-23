@@ -52,7 +52,7 @@ void race_init(void) {
 	if (g.is_attract_mode) {
 		attract_start_time = system_time();
 
-		for (unsigned int i = 0; i < len(g.ships); i++) {
+		for (int i = 0; i < len(g.ships); i++) {
 			flags_rm(g.ships[i].flags, SHIP_VIEW_INTERNAL);
 			flags_rm(g.ships[i].flags, SHIP_RACING);
 		}
@@ -379,7 +379,7 @@ void race_next(void) {
 
 	// Championship complete
 	if (
-		(save.has_bonus_circuts && next_circut >= NUM_CIRCUTS) ||
+		(save.has_bonus_circuts && next_circut >= NUM_WIPEOUT_CIRCUTS) ||
 		(!save.has_bonus_circuts && next_circut >= NUM_NON_BONUS_CIRCUTS)
 	) {
 		if (g.race_class == RACE_CLASS_RAPIER) {

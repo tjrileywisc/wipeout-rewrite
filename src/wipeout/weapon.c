@@ -12,10 +12,6 @@
 #include "particle.h"
 #include "camera.h"
 
-extern int32_t ctrlNeedTargetIcon;
-extern int ctrlnearShip;
-int16_t Shielded = 0;
-
 typedef struct weapon_t {
 	float timer;
 	ship_t *owner;
@@ -194,7 +190,7 @@ void weapons_update(void) {
 				weapon->trail_spawn_timer += system_tick();
 				while (weapon->trail_spawn_timer > 0) {
 					vec3_t pos = vec3_sub(weapon->position, vec3_mulf(weapon->velocity, 30 * system_tick() * weapon->trail_spawn_timer));
-					vec3_t velocity = vec3(rand_float(-128, 128), rand_float(-128, 128), rand_float(-128, 128));
+					vec3_t velocity = vec3_rand(128);
 					particles_spawn(pos, weapon->trail_particle, velocity, 128);
 					weapon->trail_spawn_timer -= WEAPON_PARTICLE_SPAWN_RATE;
 				}
@@ -204,7 +200,7 @@ void weapons_update(void) {
 			weapon->section = track_nearest_section(weapon->position, vec3(1,1,1), weapon->section, NULL);
 			if (weapon_collides_with_track(weapon)) {
 				for (int p = 0; p < 32; p++) {
-					vec3_t velocity = vec3(rand_float(-512, 512), rand_float(-512, 512), rand_float(-512, 512));
+					vec3_t velocity = vec3_rand(512);
 					particles_spawn(weapon->position, weapon->track_hit_particle, velocity, 256);
 				}
 				sfx_play_at(SFX_EXPLOSION_2, weapon->position, vec3(0,0,0), 1);
@@ -242,7 +238,8 @@ void weapon_set_trajectory(weapon_t *self) {
 	track_face_t *face = track_section_get_base_face(ship->section);
 
 	vec3_t face_point = face->tris[0].vertices[0].pos;
-	vec3_t target = vec3_add(ship->position, vec3_mulf(ship->dir_forward, 64));
+	vec3_t target = vec3_transform(vec3(0,0,64), &ship->mat);
+	
 	float target_height = vec3_distance_to_plane(target, face_point, face->normal);
 	float ship_height = vec3_distance_to_plane(target, face_point, face->normal);
 
@@ -257,7 +254,7 @@ void weapon_follow_target(weapon_t *self) {
 	vec3_t angular_velocity = vec3(0, 0, 0);
 	if (self->target) {
 		vec3_t dir = vec3_mulf(vec3_sub(self->target->position, self->position), 0.125 * 30 * system_tick());
-		float height = sqrt(dir.x * dir.x + dir.z * dir.z);
+		float height = vec3_len(vec3_mul(dir, vec3(1,0,1)));
 		angular_velocity.y = -atan2(dir.x, dir.z) - self->angle.y;
 		angular_velocity.x = -atan2(dir.y, height) - self->angle.x;
 	}
@@ -266,9 +263,9 @@ void weapon_follow_target(weapon_t *self) {
 	self->angle = vec3_add(self->angle, vec3_mulf(angular_velocity, 30 * system_tick() * 0.25));
 	self->angle = vec3_wrap_angle(self->angle);
 
-	self->acceleration.x = -sin(self->angle.y) * cos(self->angle.x) * 256;
-	self->acceleration.y = -sin(self->angle.x) * 256;
-	self->acceleration.z = cos(self->angle.y) * cos(self->angle.x) * 256;
+	mat4_t rotation_matrix;
+	mat4_set_yaw_pitch_roll(&rotation_matrix, self->angle);
+	self->acceleration = vec3_mulf(rotation_matrix.basis.forward.vec3, 256);
 }
 
 ship_t *weapon_collides_with_ship(weapon_t *self) {
@@ -281,7 +278,7 @@ ship_t *weapon_collides_with_ship(weapon_t *self) {
 		float distance = vec3_len(vec3_sub(ship->position, self->position));
 		if (distance < 512) {
 			for (int p = 0; p < 32; p++) {
-				vec3_t velocity = vec3(rand_float(-512, 512), rand_float(-512, 512), rand_float(-512, 512));
+				vec3_t velocity = vec3_rand(512);
 				velocity = vec3_add(velocity, vec3_mulf(ship->velocity, 0.25));
 				particles_spawn(self->position, self->ship_hit_particle, velocity, 256);
 			}
@@ -355,19 +352,13 @@ void weapon_update_mine_wait_for_release(weapon_t *self) {
 void weapon_update_mine_lights(weapon_t *self, int index) {
 	Prm prm = {.primitive = self->model->primitives};
 
-	uint8_t r = sin(system_cycle_time() * M_PI * 2 + index * 0.66) * 128 + 128;
+	uint8_t r = sinf(system_cycle_time() * M_PI * 2 + index * 0.66) * 128 + 128;
 	for (int i = 0; i < 8; i++) {
 		switch (prm.primitive->type) {
 		case PRM_TYPE_GT3:
-			prm.gt3->color[0].r = 230;
-			prm.gt3->color[1].r = r;
-			prm.gt3->color[2].r = r;
-			prm.gt3->color[0].g = 0;
-			prm.gt3->color[1].g = 0x40;
-			prm.gt3->color[2].g = 0x40;
-			prm.gt3->color[0].b = 0;
-			prm.gt3->color[1].b = 0;
-			prm.gt3->color[2].b = 0;
+			prm.gt3->color[0] = rgba(230, 0,    0, 0xFF);
+			prm.gt3->color[1] = rgba(r,   0x40, 0, 0xFF);
+			prm.gt3->color[2] = rgba(r,   0x40, 0, 0xFF);
 			prm.gt3 += 1;
 			break;
 		}
@@ -599,54 +590,28 @@ void weapon_update_shield(weapon_t *self) {
 		case PRM_TYPE_G3 :
 			coords = poly.g3->coords;
 
-			col0 = sin(color_timer * coords[0]) * 127 + 128;
-			col1 = sin(color_timer * coords[1]) * 127 + 128;
-			col2 = sin(color_timer * coords[2]) * 127 + 128;
+			col0 = sinf(color_timer * coords[0]) * 127 + 128;
+			col1 = sinf(color_timer * coords[1]) * 127 + 128;
+			col2 = sinf(color_timer * coords[2]) * 127 + 128;
 
-			poly.g3->color[0].r = col0;
-			poly.g3->color[0].g = col0;
-			poly.g3->color[0].b = 255;
-			poly.g3->color[0].a = shield_alpha;
-
-			poly.g3->color[1].r = col1;
-			poly.g3->color[1].g = col1;
-			poly.g3->color[1].b = 255;
-			poly.g3->color[1].a = shield_alpha;
-
-			poly.g3->color[2].r = col2;
-			poly.g3->color[2].g = col2;
-			poly.g3->color[2].b = 255;
-			poly.g3->color[2].a = shield_alpha;
+			poly.g3->color[0] = rgba(col0, col0, 255, shield_alpha);
+			poly.g3->color[1] = rgba(col1, col1, 255, shield_alpha);
+			poly.g3->color[2] = rgba(col2, col2, 255, shield_alpha);
 			poly.g3 += 1;
 			break;
 
 		case PRM_TYPE_G4 :
 			coords = poly.g4->coords;
 
-			col0 = sin(color_timer * coords[0]) * 127 + 128;
-			col1 = sin(color_timer * coords[1]) * 127 + 128;
-			col2 = sin(color_timer * coords[2]) * 127 + 128;
-			col3 = sin(color_timer * coords[3]) * 127 + 128;
+			col0 = sinf(color_timer * coords[0]) * 127 + 128;
+			col1 = sinf(color_timer * coords[1]) * 127 + 128;
+			col2 = sinf(color_timer * coords[2]) * 127 + 128;
+			col3 = sinf(color_timer * coords[3]) * 127 + 128;
 
-			poly.g4->color[0].r = col0;
-			poly.g4->color[0].g = col0;
-			poly.g4->color[0].b = 255;
-			poly.g4->color[0].a = shield_alpha;
-
-			poly.g4->color[1].r = col1;
-			poly.g4->color[1].g = col1;
-			poly.g4->color[1].b = 255;
-			poly.g4->color[1].a = shield_alpha;
-
-			poly.g4->color[2].r = col2;
-			poly.g4->color[2].g = col2;
-			poly.g4->color[2].b = 255;
-			poly.g4->color[2].a = shield_alpha;
-
-			poly.g4->color[3].r = col3;
-			poly.g4->color[3].g = col3;
-			poly.g4->color[3].b = 255;
-			poly.g4->color[3].a = shield_alpha;
+			poly.g4->color[0] = rgba(col0, col0, 255, shield_alpha);
+			poly.g4->color[1] = rgba(col1, col1, 255, shield_alpha);
+			poly.g4->color[2] = rgba(col2, col2, 255, shield_alpha);
+			poly.g4->color[3] = rgba(col3, col3, 255, shield_alpha);
 			poly.g4 += 1;
 			break;
 		}
@@ -655,7 +620,7 @@ void weapon_update_shield(weapon_t *self) {
 
 
 void weapon_fire_turbo(ship_t *ship) {
-	ship->velocity = vec3_add(ship->velocity, vec3_mulf(ship->dir_forward, 39321)); // unitVecNose.vx) << 3) * FR60) / 50
+	ship->velocity = vec3_add(ship->velocity, vec3_mulf(ship->mat.basis.forward.vec3, 39321)); // unitVecNose.vx) << 3) * FR60) / 50
 	
 	if (ship->camera) {
 		sfx_t *sfx = sfx_play(SFX_MISSILE_FIRE);

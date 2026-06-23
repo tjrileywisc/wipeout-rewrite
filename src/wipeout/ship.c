@@ -318,10 +318,7 @@ void ship_init_exhaust_plume(ship_t *self) {
 				indices[indices_len++] = prm.ft3->coords[2];
 
 				flags_add(prm.ft3->flag, PRM_TRANSLUCENT);
-				prm.ft3->color.r = 180;
-				prm.ft3->color.g = 97 ;
-				prm.ft3->color.b = 120;
-				prm.ft3->color.a = 140;
+				prm.ft3->color = rgba(180,97,120,140);
 			}
 			prm.ft3 += 1;
 			break;
@@ -355,10 +352,7 @@ void ship_init_exhaust_plume(ship_t *self) {
 
 				flags_add(prm.gt3->flag, PRM_TRANSLUCENT);
 				for (int j = 0; j < 3; j++) {
-					prm.gt3->color[j].r = 180;
-					prm.gt3->color[j].g = 97 ;
-					prm.gt3->color[j].b = 120;
-					prm.gt3->color[j].a = 140;
+					prm.gt3->color[j] = rgba(180,97,120,140);
 				}
 			}
 			prm.gt3 += 1;
@@ -416,14 +410,10 @@ void ship_init_exhaust_plume(ship_t *self) {
 	}
 }
 
-void ship_reset_exhaust_plume(ship_t* self)
-{
+void ship_reset_exhaust_plume(ship_t* self) {
 	for (int i = 0; i < 3; i++) {
-		if (self->exhaust_plume[i].v != NULL) {
-			self->exhaust_plume[i].v->z = self->exhaust_plume[i].initial.z;
-			self->exhaust_plume[i].v->x = self->exhaust_plume[i].initial.x;
-			self->exhaust_plume[i].v->y = self->exhaust_plume[i].initial.y;
-		}
+		if (self->exhaust_plume[i].v)
+			*self->exhaust_plume[i].v = self->exhaust_plume[i].initial;
 	}
 }
 
@@ -436,9 +426,9 @@ void ship_draw_shadow(ship_t *self) {
 	track_face_t *face = track_section_get_base_face(self->section);
 
 	vec3_t face_point = face->tris[0].vertices[0].pos;
-	vec3_t nose = vec3_add(self->position, vec3_mulf(self->dir_forward, 384));
-	vec3_t wngl = vec3_sub(vec3_sub(self->position, vec3_mulf(self->dir_right, 256)), vec3_mulf(self->dir_forward, 384));
-	vec3_t wngr = vec3_sub(vec3_add(self->position, vec3_mulf(self->dir_right, 256)), vec3_mulf(self->dir_forward, 384));
+	vec3_t nose = vec3_transform(vec3( 0,   0,  384), &self->mat);
+	vec3_t wngl = vec3_transform(vec3(-256, 0, -384), &self->mat);
+	vec3_t wngr = vec3_transform(vec3( 256, 0, -384), &self->mat);
 
 	nose = vec3_sub(nose, vec3_mulf(face->normal, vec3_distance_to_plane(nose, face_point, face->normal)));
 	wngl = vec3_sub(wngl, vec3_mulf(face->normal, vec3_distance_to_plane(wngl, face_point, face->normal)));
@@ -467,27 +457,6 @@ void ship_draw_shadow(ship_t *self) {
 }
 
 void ship_update(ship_t *self) {
-
-	// Set Unit vectors of this ship
-	float sx = sin(self->angle.x);
-	float cx = cos(self->angle.x);
-	float sy = sin(self->angle.y);
-	float cy = cos(self->angle.y);
-	float sz = sin(self->angle.z);
-	float cz = cos(self->angle.z);
-
-	self->dir_forward.x = -(sy * cx);
-	self->dir_forward.y = - sx;
-	self->dir_forward.z =  (cy * cx);
-
-	self->dir_right.x =  (cy * cz) + (sy * sz * sx);
-	self->dir_right.y = -(sz * cx);
-	self->dir_right.z =  (sy * cz) - (cy * sx * sz);
-
-	self->dir_up.x = (cy * sz) - (sy * sx * cz);
-	self->dir_up.y = -(cx * cz);
-	self->dir_up.z = (sy * sz) + (cy * sx * cz);
-
 	self->prev_section = self->section;
 
 	// To find the nearest section to the ship, the original source de-emphasizes
@@ -638,20 +607,19 @@ void ship_update(ship_t *self) {
 }
 
 vec3_t ship_cockpit(ship_t *self) {
-	return vec3_add(self->position, vec3_mulf(self->dir_up, 128));
+	return vec3_transform(vec3(0, -128, 0), &self->mat);
 }
 
 vec3_t ship_nose(ship_t *self) {
-	return vec3_add(self->position, vec3_mulf(self->dir_forward, 512));
-	
+	return vec3_transform(vec3(0, 0, 512), &self->mat);
 }
 
 vec3_t ship_wing_left(ship_t *self) {
-	return vec3_sub(vec3_sub(self->position, vec3_mulf(self->dir_right, 256)), vec3_mulf(self->dir_forward, 256));
+	return vec3_transform(vec3(-256, 0, -256), &self->mat);
 }
 
 vec3_t ship_wing_right(ship_t *self) {
-	return vec3_sub(vec3_add(self->position, vec3_mulf(self->dir_right, 256)), vec3_mulf(self->dir_forward, 256));
+	return vec3_transform(vec3(256, 0, -256), &self->mat);
 }
 
 static bool vec3_is_on_face(vec3_t pos, track_face_t *face, float alpha) {
@@ -672,24 +640,23 @@ static bool vec3_is_on_face(vec3_t pos, track_face_t *face, float alpha) {
 
 void ship_resolve_wing_collision(ship_t *self, track_face_t *face, float direction) {
 	vec3_t collision_vector = vec3_sub(self->section->center, face->tris[0].vertices[2].pos);
-	float angle = vec3_angle(collision_vector, self->dir_forward);
-	vec3_t v_normal = vec3_mulf(face->normal, vec3_dot(self->velocity, face->normal));
-	vec3_t v_tangent = vec3_sub(self->velocity, v_normal);
-	self->velocity = vec3_add(v_tangent, vec3_mulf(v_normal, -0.5));
+	float angle = vec3_angle(collision_vector, self->mat.basis.forward.vec3);
+	self->velocity = vec3_reflect(self->velocity, face->normal, 2);
 	self->position = vec3_sub(self->position, vec3_mulf(self->velocity, 0.015625)); // system_tick?
+	self->velocity = vec3_sub(self->velocity, vec3_mulf(self->velocity, 0.5));
 	self->velocity = vec3_add(self->velocity, vec3_mulf(face->normal, 4096.0)); // div by 4096?
 
 	float magnitude = (fabsf(angle) * self->speed) * 2 * M_PI / 4096.0; // (6 velocity shift, 12 angle shift?)
-	platform_force_feedback(magnitude, 500);
-
+  platform_force_feedback(magnitude, 500);
+  
 	vec3_t wing_pos;
 	if (direction > 0) {
-		self->angular_velocity.z += magnitude * 0.25;
-		wing_pos = vec3_add(self->position, vec3_mulf(vec3_sub(self->dir_right, self->dir_forward), 256)); // >> 4??
+		self->angular_velocity.z += magnitude;
+		wing_pos = ship_wing_right(self);
 	}
 	else {
-		self->angular_velocity.z -= magnitude * 0.25;
-		wing_pos = vec3_sub(self->position, vec3_mulf(vec3_sub(self->dir_right, self->dir_forward), 256)); // >> 4??
+		self->angular_velocity.z -= magnitude;	
+		wing_pos = ship_wing_left(self);
 	}
 
 	if (self->last_impact_time > 0.2) {
@@ -700,9 +667,11 @@ void ship_resolve_wing_collision(ship_t *self, track_face_t *face, float directi
 
 
 void ship_resolve_nose_collision(ship_t *self, track_face_t *face, float direction) {
-	vec3_t v_normal = vec3_mulf(face->normal, vec3_dot(self->velocity, face->normal));
-	vec3_t v_tangent = vec3_sub(self->velocity, v_normal);
-	self->velocity = vec3_add(v_tangent, vec3_mulf(v_normal, -0.5));
+	vec3_t collision_vector = vec3_sub(self->section->center, face->tris[0].vertices[2].pos);
+	// TODO: In the PSX original, nose collisions change depending on the angle to the wall,
+	// but here this variable goes unused.
+	float angle = vec3_angle(collision_vector, self->mat.basis.forward.vec3);
+	self->velocity = vec3_reflect(self->velocity, face->normal, 2);
 	self->position = vec3_sub(self->position, vec3_mulf(self->velocity, 0.015625)); // system_tick?
 	self->velocity = vec3_add(self->velocity, vec3_mulf(face->normal, 4096)); // div by 4096?
 
@@ -731,7 +700,7 @@ void ship_collide_with_track(ship_t *self, track_face_t *face) {
 
 	trackPtr = self->section->next;
 	vec3_t direction = vec3_sub(trackPtr->center, self->section->center);
-	float down_track = vec3_dot(direction, self->dir_forward);
+	float down_track = vec3_dot(direction, self->mat.basis.forward.vec3);
 
 	if (down_track < 0) {
 		flags_rm(self->flags, SHIP_DIRECTION_FORWARD);
@@ -914,8 +883,7 @@ void ship_collide_with_track(ship_t *self, track_face_t *face) {
 
 
 bool ship_intersects_ship(ship_t *self, ship_t *other) {
-	// Get 4 points of collision model relative to the
-	// camera
+	// Get 4 points of collision model in world space
 	vec3_t a = vec3_transform(other->collision_model->vertices[0], &other->mat);
 	vec3_t b = vec3_transform(other->collision_model->vertices[1], &other->mat);
 	vec3_t c = vec3_transform(other->collision_model->vertices[2], &other->mat);
@@ -942,36 +910,18 @@ bool ship_intersects_ship(ship_t *self, ship_t *other) {
 		int16_t *indices;
 		switch (poly.primitive->type) {
 			case PRM_TYPE_F3:
-				indices = poly.f3->coords;
-				p1 =  vec3_transform(self->collision_model->vertices[indices[0]], &self->mat);
-				p2 =  vec3_transform(self->collision_model->vertices[indices[1]], &self->mat);
-				p3 =  vec3_transform(self->collision_model->vertices[indices[2]], &self->mat);
-				poly.f3++;
-				break;
+				indices = poly.f3++->coords;  break;
 			case PRM_TYPE_G3:
-				indices = poly.g3->coords;
-				p1 =  vec3_transform(self->collision_model->vertices[indices[0]], &self->mat);
-				p2 =  vec3_transform(self->collision_model->vertices[indices[1]], &self->mat);
-				p3 =  vec3_transform(self->collision_model->vertices[indices[2]], &self->mat);
-				poly.g3++;
-				break;
+				indices = poly.g3++->coords;  break;
 			case PRM_TYPE_FT3:
-				indices = poly.ft3->coords;
-				p1 =  vec3_transform(self->collision_model->vertices[indices[0]], &self->mat);
-				p2 =  vec3_transform(self->collision_model->vertices[indices[1]], &self->mat);
-				p3 =  vec3_transform(self->collision_model->vertices[indices[2]], &self->mat);
-				poly.ft3++;
-				break;
+				indices = poly.ft3++->coords; break;
 			case PRM_TYPE_GT3:
-				indices = poly.gt3->coords;
-				p1 =  vec3_transform(self->collision_model->vertices[indices[0]], &self->mat);
-				p2 =  vec3_transform(self->collision_model->vertices[indices[1]], &self->mat);
-				p3 =  vec3_transform(self->collision_model->vertices[indices[2]], &self->mat);
-				poly.gt3++;
-				break;
-			default:
-				break;
+				indices = poly.gt3++->coords; break;
+			default: die("Can't happen?");
 		}
+		p1 =  vec3_transform(self->collision_model->vertices[indices[0]], &self->mat);
+		p2 =  vec3_transform(self->collision_model->vertices[indices[1]], &self->mat);
+		p3 =  vec3_transform(self->collision_model->vertices[indices[2]], &self->mat);
 
 		// Find polyGon line vectors
 		vec3_t p1p2 = vec3_sub(p2, p1);
