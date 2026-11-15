@@ -114,11 +114,7 @@ int network_get_client_socket(void) {
 #endif
 
 
-#if defined(WIN32)
-    SOCKET new_socket = INVALID_SOCKET;
-#else
     int new_socket = INVALID_SOCKET;
-#endif
 
     struct addrinfo hints, *res;
     memset(&hints, 0, sizeof hints);
@@ -159,10 +155,15 @@ int network_get_client_socket(void) {
 
     // Set receive timeout
     // TODO: can this fail?
+#if defined(WIN32)
+    DWORD timeout = CLIENT_SOCKET_TIMEOUT; // winsock expects milliseconds
+    setsockopt(new_socket, SOL_SOCKET, SO_RCVTIMEO, (const char *)&timeout, sizeof(timeout));
+#else
     struct timeval timeout;
     timeout.tv_sec = CLIENT_SOCKET_TIMEOUT / 1000; // convert milliseconds to seconds
     timeout.tv_usec = 0;
     setsockopt(new_socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+#endif
 
     return new_socket;
 }
@@ -345,8 +346,8 @@ void network_get_my_ip(char *subnet, size_t len) {
     connect(sockfd, (struct sockaddr *)&dest, sizeof(dest));
 
     struct sockaddr_in local;
-    len = sizeof(local);
-    getsockname(sockfd, (struct sockaddr *)&local, &len);
+    socklen_t local_len = sizeof(local);
+    getsockname(sockfd, (struct sockaddr *)&local, &local_len);
 
     strncpy(subnet, inet_ntoa(local.sin_addr), len);
 
