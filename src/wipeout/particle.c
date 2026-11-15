@@ -54,6 +54,10 @@ void particles_draw(void) {
 }
 
 void particles_spawn(vec3_t position, uint16_t type, vec3_t velocity, int size) {
+	particles_spawn_timed(position, type, velocity, size, rand_float(0.75, 1.0));
+}
+
+void particles_spawn_timed(vec3_t position, uint16_t type, vec3_t velocity, int size, float timer) {
 	if (particles_active == PARTICLES_MAX) {
 		return;
 	}
@@ -63,7 +67,7 @@ void particles_spawn(vec3_t position, uint16_t type, vec3_t velocity, int size) 
 	p->texture = texture_from_list(particle_textures, type);
 	p->position = position;
 	p->velocity = velocity;
-	p->timer = rand_float(0.75, 1.0);
+	p->timer = timer;
 	p->size.x = size;
 	p->size.y = size;
 }

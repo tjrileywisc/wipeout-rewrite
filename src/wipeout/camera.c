@@ -65,13 +65,13 @@ void camera_update_race_external(camera_t *camera, ship_t *ship, droid_t *droid)
 	camera->angle = vec3_mul(ship->angle, vec3(1,1,0));
 }
 
-void camera_update_race_internal(camera_t *camera, ship_t *ship, droid_t *droid) {
+void camera_update_race_internal(camera_t *camera, ship_t *ship, droid_t*) {
 	camera->section = ship->section;
 	camera->position = ship_cockpit(ship);
 	camera->angle = vec3_mul(ship->angle, vec3(1,1,save.internal_roll));
 }
 
-void camera_update_race_intro(camera_t *camera, ship_t *ship, droid_t *droid) {
+void camera_update_race_intro(camera_t *camera, ship_t *ship, droid_t*) {
 	// Set to final position
 	vec3_t pos = vec3_transform(vec3(0,0,-1024), &ship->mat);
 	pos.y -= 200;
@@ -170,6 +170,15 @@ void camera_update_attract_random(camera_t *camera, ship_t *ship, droid_t *droid
 	camera->update_func = attract_options[rand() % len(attract_options)];
 
 	(camera->update_func)(camera, ship, droid);
+}
+
+void camera_update_spectator(camera_t *camera, ship_t *ship, droid_t *droid) {
+	(void)droid;
+	// Stay at fixed position; rotate to track the provided ship
+	vec3_t target = vec3_sub(ship->position, camera->position);
+	float horiz = sqrt(target.x * target.x + target.z * target.z);
+	camera->angle.x = -atan2(target.y, horiz);
+	camera->angle.y = -atan2(target.x, target.z);
 }
 
 void camera_set_shake(camera_t *camera, float duration) {

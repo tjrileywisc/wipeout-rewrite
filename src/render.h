@@ -45,6 +45,10 @@ void render_frame_end(void);
 // render_stats_t owned by the renderer
 const render_stats_t* render_frame_get_stats(void);
 
+void render_set_viewport(vec2i_t offset, vec2i_t size);
+void render_reset_viewport(void);
+vec2i_t render_backbuffer_size(void);
+
 void render_set_view(vec3_t pos, vec3_t angles);
 void render_set_view_2d(void);
 void render_set_model_mat(mat4_t *m);
@@ -63,7 +67,7 @@ void render_push_2d_tile(vec2i_t pos, vec2i_t uv_offset, vec2i_t uv_size, vec2i_
 
 uint16_t render_texture_create(uint32_t width, uint32_t height, rgba_t *pixels);
 vec2i_t render_texture_size(uint16_t texture_index);
-void render_texture_replace_pixels(int16_t texture_index, rgba_t *pixels);
+void render_texture_replace_pixels(uint16_t texture_index, rgba_t *pixels);
 uint16_t render_textures_len(void);
 void render_textures_reset(uint16_t len);
 void render_textures_dump(const char *path);

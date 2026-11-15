@@ -1,15 +1,17 @@
 {
   "name": "wipeout-rewrite",
   "version-string": "1.0.0",
-  "builtin-baseline": "0fa8459cf3a7caca7adc58f992bc32ff13630684",
+  "builtin-baseline": "120deac3062162151622ca4860575a33844ba10b",
   "dependencies": [
+    "cmocka",
+    "sdl2",
+    "glew",
+    "sokol",
+    "stb",
     {
-      "name": "sdl2",
-      "version>=": "2.26.5"
+      "name": "protobuf-c",
+      "features": ["tools"]
     },
-    {
-      "name": "glew",
-      "version>=": "2.2.0#3"
-    }
+    "pkgconf"
   ]
 }

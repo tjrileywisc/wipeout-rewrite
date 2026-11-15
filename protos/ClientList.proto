@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package wipeout;
+
+message ClientInfo {
+    string name = 1;
+    string ip   = 2;
+}
+
+message ClientList {
+    repeated ClientInfo clients = 1;
+}
