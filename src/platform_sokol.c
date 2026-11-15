@@ -19,7 +19,7 @@
 #include <sokol_app.h>
 #include "input.h"
 
-// FIXME: we should figure out the actual path where the executabe resides,
+// FIXME: we should figure out the actual path where the executable resides,
 // instead of just assuming it's in the pwd
 #ifdef PATH_ASSETS
 	static const char *path_assets = TOSTRING(PATH_ASSETS);
@@ -273,6 +273,11 @@ void platform_force_feedback(double strength, uint32_t duration) {
 void platform_set_force_feedback(bool enable) {
 	// Sokol does not support haptic feedback
 	(void)enable; // avoid unused variable warning
+}
+
+bool platform_asset_exists(const char *name) {
+	char *path = strcat(strcpy(temp_path, path_assets), name);
+	return file_exists(path);
 }
 
 FILE *platform_open_asset(const char *name, const char *mode) {
