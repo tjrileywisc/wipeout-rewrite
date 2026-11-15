@@ -30,6 +30,7 @@ void race_init(void) {
 	ingame_menus_load();
 	menu_is_scroll_text = false;
 
+	g.circuit;
 	const circuit_settings_t *cs = &def.circuits[g.circuit].settings[g.race_class];
 	track_load(cs->path);
 	scene_load(cs->path, cs->sky_y_offset);
@@ -207,7 +208,7 @@ void race_start(void) {
 		g.camera3.update_func = camera_update_race_intro;
 
 		// Position spectator camera at the start/finish line, slightly elevated
-		int start_pos = def.circuts[g.circut].settings[g.race_class].start_line_pos;
+		int start_pos = def.circuits[g.circuit].settings[g.race_class].start_line_pos;
 		section_t *sec = g.track.sections;
 		for (int i = 0; i < start_pos; i++) { sec = sec->next; }
 		g.spectator_camera.position = vec3(sec->center.x, sec->center.y - 800, sec->center.z);
