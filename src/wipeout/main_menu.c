@@ -701,7 +701,7 @@ static void page_team_init(menu_t *menu) {
 static void button_pilot_select(menu_t *menu, int data) {
 	g.pilot = data;
 	if (g.race_type != RACE_TYPE_CHAMPIONSHIP) {
-		page_circut_init(menu);
+		page_circuit_init(menu);
 	}
 	else {
 		g.circuit = 0;
@@ -743,7 +743,7 @@ static void button_pilot2_select(menu_t *menu, int data) {
 	if (g.local_player_count >= 3) {
 		page_pilot3_init(menu); // init_func will set to player 2
 	} else {
-		page_circut_init(menu);
+		page_circuit_init(menu);
 	}
 }
 
@@ -776,7 +776,7 @@ static void button_pilot3_select(menu_t *menu, int data) {
 	if (g.local_player_count >= 4) {
 		page_pilot4_init(menu); // init_func will set to player 3
 	} else {
-		page_circut_init(menu);
+		page_circuit_init(menu);
 	}
 }
 
@@ -805,7 +805,7 @@ static void page_pilot3_init(menu_t *menu) {
 static void button_pilot4_select(menu_t *menu, int data) {
 	g.pilot4 = data;
 	input_set_menu_player(0); // restore P1 for circuit selection
-	page_circut_init(menu);
+	page_circuit_init(menu);
 }
 
 static void page_pilot4_draw(menu_t*, int data) {
@@ -851,15 +851,15 @@ static void page_player_count_init(menu_t *menu) {
 // -----------------------------------------------------------------------------
 // Circuit
 
-static void button_circut_select(menu_t *menu, int data) {
-	g.circut = data;
+static void button_circuit_select(menu_t *menu, int data) {
+	g.circuit = data;
 	game_set_scene(GAME_SCENE_RACE);
 }
 
 static void page_circuit_additional_draw(menu_t *menu, int data) {}
 
-static void page_circut_additional_init(menu_t *menu) {
-	menu_page_t *page = menu_push(menu, "ADDITIONAL CIRCUTS", page_circut_additional_draw);
+static void page_circuit_additional_init(menu_t *menu) {
+	menu_page_t *page = menu_push(menu, "ADDITIONAL CIRCUITS", page_circuit_additional_draw, NULL, NULL);
 	flags_add(page->layout_flags, MENU_FIXED);
 	page->title_pos = vec2i(0, 30);
 	page->title_anchor = UI_POS_TOP | UI_POS_CENTER;
@@ -886,8 +886,8 @@ static void page_circuit_draw(menu_t *menu, int data) {
 	render_push_2d(scaled_pos, scaled_size, rgba(128, 128, 128, 255), texture_from_list(track_images, data));
 }
 
-static void page_circut_init(menu_t *menu) {
-	menu_page_t *page = menu_push(menu, "SELECT RACING CIRCUT", page_circut_draw);
+static void page_circuit_init(menu_t *menu) {
+	menu_page_t *page = menu_push(menu, "SELECT RACING CIRCUIT", page_circuit_draw, NULL, NULL);
 	flags_add(page->layout_flags, MENU_FIXED);
 	page->title_pos = vec2i(0, 30);
 	page->title_anchor = UI_POS_TOP | UI_POS_CENTER;
