@@ -402,6 +402,12 @@ void render_textures_reset(uint16_t len) {
 
 void render_textures_dump(const char *path) {}
 
+void render_set_texture_upscale(bool enabled) {}
+
+bool render_texture_upscale(void) {
+	return false;
+}
+
 
 
 // Rasterizer ------------------------------------------------------------------

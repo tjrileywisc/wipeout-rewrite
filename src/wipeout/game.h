@@ -45,6 +45,8 @@ typedef enum {
 	A_MENU_SELECT,
 	A_MENU_START,
 	A_MENU_QUIT,
+
+	A_TOGGLE_TEXTURE_UPSCALE,
 } action_t;
 
 
@@ -306,6 +308,10 @@ typedef struct {
 
 	char highscores_name[4];
 	highscores_t highscores[NUM_RACE_CLASSES][NUM_CIRCUITS][NUM_HIGHSCORE_TABS];
+
+	// Added after the first release of the save format; must stay last so
+	// older (shorter) save files can still be loaded
+	int texture_upscale;
 } save_t;
 
 

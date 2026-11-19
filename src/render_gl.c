@@ -29,6 +29,7 @@
 #include "render.h"
 #include "mem.h"
 #include "utils.h"
+#include "xbr.h"
 
 
 #define ATLAS_SIZE 64
@@ -356,7 +357,18 @@ static vec2i_t backbuffer_size;
 static vec2i_t current_viewport_size;
 
 static uint32_t atlas_map[ATLAS_SIZE] = {0};
-static GLuint atlas_texture = 0;
+
+// The atlas is kept at native resolution and, when textures are upscaled, at
+// the upscaled resolution too, so the two can be switched at runtime. Texture
+// offsets, sizes and uvs are all unscaled; the shader normalizes uvs, so only
+// uploads need to know about the scale.
+#define ATLAS_NATIVE 0
+#define ATLAS_UPSCALED 1
+static GLuint atlas_textures[2] = {0};
+static uint32_t atlas_scales[2] = {1, 1};
+static bool atlas_mipmap_is_dirty[2] = {false, false};
+static uint32_t atlas_count = 1;
+static uint32_t atlas_current = ATLAS_NATIVE;
 static render_blend_mode_t blend_mode = RENDER_BLEND_NORMAL;
 
 static mat4_t projection_mat_2d = mat4_identity();
@@ -368,7 +380,6 @@ static mat4_t view_mat = mat4_identity();
 
 static render_texture_t textures[TEXTURES_MAX];
 static uint32_t textures_len = 0;
-static bool texture_mipmap_is_dirty = false;
 
 static render_resolution_t render_res;
 static GLuint backbuffer = 0;
@@ -392,7 +403,26 @@ static void render_flush(void);
 // 	puts(message);
 // }
 
-void render_init(vec2i_t screen_size) {	
+static void atlas_create(uint32_t index, uint32_t scale) {
+	glGenTextures(1, &atlas_textures[index]);
+	glBindTexture(GL_TEXTURE_2D, atlas_textures[index]);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, RENDER_USE_MIPMAPS ? GL_LINEAR_MIPMAP_LINEAR : GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+	float anisotropy = 0;
+	glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &anisotropy);
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, anisotropy);
+
+	uint32_t tw = ATLAS_SIZE * ATLAS_GRID * scale;
+	uint32_t th = ATLAS_SIZE * ATLAS_GRID * scale;
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, tw, th, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+	atlas_scales[index] = scale;
+	printf("atlas texture %5d (%dx%d, scale %d)\n", atlas_textures[index], tw, th, scale);
+}
+
+void render_init(vec2i_t screen_size) {
 	#if defined(__APPLE__) && defined(__MACH__)
 		// OSX
 		// (nothing to do here)
@@ -407,23 +437,23 @@ void render_init(vec2i_t screen_size) {
 	// glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, NULL, GL_TRUE);
 
 
-	// Atlas Texture
+	// Atlas Textures
 
-	glGenTextures(1, &atlas_texture);
-	glBindTexture(GL_TEXTURE_2D, atlas_texture);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, RENDER_USE_MIPMAPS ? GL_LINEAR_MIPMAP_LINEAR : GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	// Use the largest texture scale the GPU can fit the atlas in
+	GLint max_texture_size = 0;
+	glGetIntegerv(GL_MAX_TEXTURE_SIZE, &max_texture_size);
+	uint32_t scale = RENDER_TEXTURE_SCALE;
+	while (scale > 1 && ATLAS_SIZE * ATLAS_GRID * scale > (uint32_t)max_texture_size) {
+		scale /= 2;
+	}
 
-	float anisotropy = 0;
-	glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &anisotropy);
-	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, anisotropy);
-
-	uint32_t tw = ATLAS_SIZE * ATLAS_GRID;
-	uint32_t th = ATLAS_SIZE * ATLAS_GRID;
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, tw, th, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-	printf("atlas texture %5d\n", atlas_texture);
+	atlas_create(ATLAS_NATIVE, 1);
+	if (scale > 1) {
+		atlas_create(ATLAS_UPSCALED, scale);
+		atlas_count = 2;
+		atlas_current = ATLAS_UPSCALED;
+	}
+	glBindTexture(GL_TEXTURE_2D, atlas_textures[atlas_current]);
 	
 
 	// Tris buffer
@@ -560,13 +590,16 @@ void render_set_resolution(render_resolution_t res) {
 
 
 	// Use nearest texture min filter for 240p and 480p
-	glBindTexture(GL_TEXTURE_2D, atlas_texture);
-	if (res == RENDER_RES_NATIVE) {
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, RENDER_USE_MIPMAPS ? GL_LINEAR_MIPMAP_LINEAR : GL_LINEAR);
+	for (uint32_t i = 0; i < atlas_count; i++) {
+		glBindTexture(GL_TEXTURE_2D, atlas_textures[i]);
+		if (res == RENDER_RES_NATIVE) {
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, RENDER_USE_MIPMAPS ? GL_LINEAR_MIPMAP_LINEAR : GL_LINEAR);
+		}
+		else {
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		}
 	}
-	else {
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	}
+	glBindTexture(GL_TEXTURE_2D, atlas_textures[atlas_current]);
 	glViewport(0, 0, backbuffer_size.x, backbuffer_size.y);
 }
 
@@ -609,7 +642,7 @@ void render_frame_prepare(void) {
 	current_viewport_size = backbuffer_size;
 	glViewport(0, 0, backbuffer_size.x, backbuffer_size.y);
 
-	glBindTexture(GL_TEXTURE_2D, atlas_texture);
+	glBindTexture(GL_TEXTURE_2D, atlas_textures[atlas_current]);
 	glUniform2f(prg_game->uniform.screen, 0, 0);
 	glEnable(GL_DEPTH_TEST);
 	glDepthMask(true);
@@ -669,9 +702,15 @@ void render_flush(void) {
 		return;
 	}
 
-	if (texture_mipmap_is_dirty) {
+	// The bound texture isn't always the atlas (e.g. for the post effect pass
+	// in render_frame_end), so bind it explicitly to generate its mipmaps
+	if (atlas_mipmap_is_dirty[atlas_current]) {
+		GLint bound_texture = 0;
+		glGetIntegerv(GL_TEXTURE_BINDING_2D, &bound_texture);
+		glBindTexture(GL_TEXTURE_2D, atlas_textures[atlas_current]);
 		glGenerateMipmap(GL_TEXTURE_2D);
-		texture_mipmap_is_dirty = false;
+		glBindTexture(GL_TEXTURE_2D, bound_texture);
+		atlas_mipmap_is_dirty[atlas_current] = false;
 	}
 
 	running_stats.num_tris += tris_len;
@@ -938,48 +977,66 @@ uint16_t render_texture_create(uint32_t tw, uint32_t th, rgba_t *pixels) {
 		atlas_map[cx] = grid_y + grid_height;
 	}
 
-	// Add the border pixels for this texture
-	rgba_t *pb = mem_temp_alloc(sizeof(rgba_t) * bw * bh);
-
-	if (tw && th) {
-		// Top border
-		for (int32_t y = 0; y < ATLAS_BORDER; y++) {
-			memcpy(pb + bw * y + ATLAS_BORDER, pixels, tw * sizeof(rgba_t));
-		}
-
-		// Bottom border
-		for (int32_t y = 0; y < ATLAS_BORDER; y++) {
-			memcpy(pb + bw * (bh - ATLAS_BORDER + y) + ATLAS_BORDER, pixels + tw * (th-1), tw * sizeof(rgba_t));
-		}
-		
-		// Left border
-		for (uint32_t y = 0; y < bh; y++) {
-			for (uint32_t x = 0; x < ATLAS_BORDER; x++) {
-				pb[y * bw + x] = pixels[clamp(y-ATLAS_BORDER, 0, th-1) * tw];
-			}
-		}
-
-		// Right border
-		for (uint32_t y = 0; y < bh; y++) {
-			for (uint32_t x = 0; x < ATLAS_BORDER; x++) {
-				pb[y * bw + x + bw - ATLAS_BORDER] = pixels[tw - 1 + clamp(y-ATLAS_BORDER, 0, th-1) * tw];
-			}
-		}
-
-		// Texture
-		for (uint32_t y = 0; y < th; y++) {
-			memcpy(pb + bw * (y + ATLAS_BORDER) + ATLAS_BORDER, pixels + tw * y, tw * sizeof(rgba_t));
-		}
-	}
-
 	uint32_t x = grid_x * ATLAS_GRID;
 	uint32_t y = grid_y * ATLAS_GRID;
-	glBindTexture(GL_TEXTURE_2D, atlas_texture);
-	glTexSubImage2D(GL_TEXTURE_2D, 0, x, y, bw, bh, GL_RGBA, GL_UNSIGNED_BYTE, pb);
-	mem_temp_free(pb);
 
+	for (uint32_t i = 0; i < atlas_count; i++) {
+		// Upscale the texture to the atlas scale
+		uint32_t s = atlas_scales[i];
+		uint32_t sw = tw * s;
+		uint32_t sh = th * s;
+		uint32_t sborder = ATLAS_BORDER * s;
+		uint32_t sbw = bw * s;
+		uint32_t sbh = bh * s;
+		rgba_t *sp = pixels;
+		if (s > 1 && tw && th) {
+			sp = malloc(sizeof(rgba_t) * sw * sh);
+			xbr_scale(pixels, tw, th, sp, s);
+		}
 
-	texture_mipmap_is_dirty = RENDER_USE_MIPMAPS;
+		// Add the border pixels for this texture
+		rgba_t *pb = malloc(sizeof(rgba_t) * sbw * sbh);
+
+		if (tw && th) {
+			// Top border
+			for (uint32_t by = 0; by < sborder; by++) {
+				memcpy(pb + sbw * by + sborder, sp, sw * sizeof(rgba_t));
+			}
+
+			// Bottom border
+			for (uint32_t by = 0; by < sborder; by++) {
+				memcpy(pb + sbw * (sbh - sborder + by) + sborder, sp + sw * (sh-1), sw * sizeof(rgba_t));
+			}
+
+			// Left border
+			for (uint32_t by = 0; by < sbh; by++) {
+				for (uint32_t bx = 0; bx < sborder; bx++) {
+					pb[by * sbw + bx] = sp[clamp(by-sborder, 0, sh-1) * sw];
+				}
+			}
+
+			// Right border
+			for (uint32_t by = 0; by < sbh; by++) {
+				for (uint32_t bx = 0; bx < sborder; bx++) {
+					pb[by * sbw + bx + sbw - sborder] = sp[sw - 1 + clamp(by-sborder, 0, sh-1) * sw];
+				}
+			}
+
+			// Texture
+			for (uint32_t by = 0; by < sh; by++) {
+				memcpy(pb + sbw * (by + sborder) + sborder, sp + sw * by, sw * sizeof(rgba_t));
+			}
+		}
+
+		glBindTexture(GL_TEXTURE_2D, atlas_textures[i]);
+		glTexSubImage2D(GL_TEXTURE_2D, 0, x * s, y * s, sbw, sbh, GL_RGBA, GL_UNSIGNED_BYTE, pb);
+		free(pb);
+		if (sp != pixels) {
+			free(sp);
+		}
+		atlas_mipmap_is_dirty[i] = RENDER_USE_MIPMAPS;
+	}
+	glBindTexture(GL_TEXTURE_2D, atlas_textures[atlas_current]);
 	uint16_t texture_index = textures_len;
 	textures_len++;
 	textures[texture_index] = (render_texture_t){ {x + ATLAS_BORDER, y + ATLAS_BORDER}, {tw, th} };
@@ -998,8 +1055,40 @@ void render_texture_replace_pixels(uint16_t texture_index, rgba_t *pixels) {
 	error_if(texture_index >= textures_len, "Invalid texture %d", texture_index);
 
 	render_texture_t *t = &textures[texture_index];
-	glBindTexture(GL_TEXTURE_2D, atlas_texture);
-	glTexSubImage2D(GL_TEXTURE_2D, 0, t->offset.x, t->offset.y, t->size.x, t->size.y, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+	for (uint32_t i = 0; i < atlas_count; i++) {
+		uint32_t s = atlas_scales[i];
+		uint32_t sw = t->size.x * s;
+		uint32_t sh = t->size.y * s;
+
+		// This is called every frame for the intro video, so it gets a cheap
+		// nearest neighbour upscale instead of xBR
+		rgba_t *sp = pixels;
+		if (s > 1) {
+			sp = malloc(sizeof(rgba_t) * sw * sh);
+			for (uint32_t y = 0; y < sh; y++) {
+				for (uint32_t x = 0; x < sw; x++) {
+					sp[y * sw + x] = pixels[(y / s) * t->size.x + x / s];
+				}
+			}
+		}
+
+		glBindTexture(GL_TEXTURE_2D, atlas_textures[i]);
+		glTexSubImage2D(GL_TEXTURE_2D, 0, t->offset.x * s, t->offset.y * s, sw, sh, GL_RGBA, GL_UNSIGNED_BYTE, sp);
+		if (sp != pixels) {
+			free(sp);
+		}
+	}
+	glBindTexture(GL_TEXTURE_2D, atlas_textures[atlas_current]);
+}
+
+void render_set_texture_upscale(bool enabled) {
+	render_flush();
+	atlas_current = enabled && atlas_count > 1 ? ATLAS_UPSCALED : ATLAS_NATIVE;
+	glBindTexture(GL_TEXTURE_2D, atlas_textures[atlas_current]);
+}
+
+bool render_texture_upscale(void) {
+	return atlas_current == ATLAS_UPSCALED;
 }
 
 uint16_t render_textures_len(void) {
@@ -1036,8 +1125,8 @@ void render_textures_reset(uint16_t len) {
 }
 
 void render_textures_dump(const char *path) {
-	int width = ATLAS_SIZE * ATLAS_GRID;
-	int height = ATLAS_SIZE * ATLAS_GRID;
+	int width = ATLAS_SIZE * ATLAS_GRID * atlas_scales[atlas_current];
+	int height = ATLAS_SIZE * ATLAS_GRID * atlas_scales[atlas_current];
 	rgba_t *pixels = malloc(sizeof(rgba_t) * width * height);
 	glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
 	stbi_write_png(path, width, height, 4, pixels, 0);

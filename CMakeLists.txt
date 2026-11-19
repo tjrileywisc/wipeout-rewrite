@@ -114,6 +114,7 @@ set(common_src
 	src/system.c
 	src/types.c
 	src/utils.c
+	src/xbr.c
 
 	packaging/windows/wipeout.exe.manifest
 	packaging/windows/wipeout.rc

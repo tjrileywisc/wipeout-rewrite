@@ -430,12 +430,19 @@ static void toggle_screen_shake(menu_t *menu, int data) {
 	save.is_dirty = true;
 }
 
+static void toggle_texture_upscale(menu_t*, int data) {
+	render_set_texture_upscale(data);
+	save.texture_upscale = data;
+	save.is_dirty = true;
+}
+
 static const char *opts_roll[] = {"0", "10", "20", "30", "40", "50", "60", "70", "80", "90", "100"};
 static const char *opts_ui_sizes[] = {"AUTO", "1X", "2X", "3X", "4X"};
 static const char *opts_draw_stats[] = {"OFF", "FPS", "DEBUG"};
 static const char *opts_res[] = {"NATIVE", "240P", "480P"};
 static const char *opts_post[] = {"NONE", "CRT EFFECT"};
 static const char *opts_screen_shake[] = {"DISABLED", "REDUCED", "FULL"};
+static const char *opts_texture_upscale[] = {"OFF", "XBR"};
 
 static void page_options_video_init(menu_t *menu) {
 	menu_page_t *page = menu_push(menu, "VIDEO OPTIONS", NULL, NULL, NULL);
@@ -455,6 +462,7 @@ static void page_options_video_init(menu_t *menu) {
 	menu_page_add_toggle(page, save.draw_stats, "DRAW STATS", opts_draw_stats, len(opts_draw_stats), toggle_draw_stats);
 	menu_page_add_toggle(page, save.screen_res, "SCREEN RESOLUTION", opts_res, len(opts_res), toggle_res);
 	menu_page_add_toggle(page, save.post_effect, "POST PROCESSING", opts_post, len(opts_post), toggle_post);
+	menu_page_add_toggle(page, save.texture_upscale, "TEXTURE UPSCALING", opts_texture_upscale, len(opts_texture_upscale), toggle_texture_upscale);
 }
 
 // -----------------------------------------------------------------------------
