@@ -828,6 +828,7 @@ static game_scene_t scene_current = GAME_SCENE_NONE;
 static game_scene_t scene_next = GAME_SCENE_NONE;
 static int global_textures_len = 0;
 static void *global_mem_mark = 0;
+static double notification_until = 0;
 
 void game_init(void) {
 	error_if(!platform_asset_exists("wipeout/track01/"), "Wipeout game content missing. Check your wipeout/ directory.\n");
@@ -847,9 +848,12 @@ void game_init(void) {
 	uint32_t size;
 	save_t *save_file = (save_t *)platform_load_userdata("save.dat", &size);
 	if (save_file) {
-		if (size == sizeof(save_t) && save_file->magic == SAVE_DATA_MAGIC) {
+		// Save files from before texture_upscale was added end right before
+		// it; the field then keeps its default
+		bool size_ok = size == sizeof(save_t) || size == offsetof(save_t, texture_upscale);
+		if (size_ok && save_file->magic == SAVE_DATA_MAGIC) {
 			printf("load save data success\n");
-			memcpy(&save, save_file, sizeof(save_t));
+			memcpy(&save, save_file, size);
 		}
 		else {
 			printf("unexpected size/magic for save data\n");
@@ -860,6 +864,7 @@ void game_init(void) {
 	platform_set_fullscreen(save.fullscreen);
 	render_set_resolution(save.screen_res);
 	render_set_post_effect(save.post_effect);
+	render_set_texture_upscale(save.texture_upscale);
 
 	srand((int)(platform_now() * 100));
 	
@@ -901,6 +906,8 @@ void game_init(void) {
 	input_bind(INPUT_LAYER_SYSTEM, INPUT_KEY_X, A_MENU_SELECT);
 	input_bind(INPUT_LAYER_SYSTEM, INPUT_KEY_RETURN, A_MENU_START);
 	input_bind(INPUT_LAYER_SYSTEM, INPUT_KEY_ESCAPE, A_MENU_QUIT);
+
+	input_bind(INPUT_LAYER_SYSTEM, INPUT_KEY_TAB, A_TOGGLE_TEXTURE_UPSCALE);
 
 	// Gamepad
 	input_bind(INPUT_LAYER_SYSTEM, INPUT_GAMEPAD_DPAD_UP, A_MENU_UP);
@@ -1009,8 +1016,26 @@ void game_update(void) {
 		}
 	}
 
+	// Keyboard input is always recorded for player 0
+	if (input_pressed_p(A_TOGGLE_TEXTURE_UPSCALE, 0)) {
+		render_set_texture_upscale(!render_texture_upscale());
+		save.texture_upscale = render_texture_upscale();
+		save.is_dirty = true;
+		notification_until = platform_now() + 3.0;
+	}
+
 	if (scene_current != GAME_SCENE_NONE) {
 		game_scenes[scene_current].update();
+	}
+
+	if (platform_now() < notification_until) {
+		render_reset_viewport();
+		render_set_view_2d();
+		ui_draw_text_centered(
+			render_texture_upscale() ? "UPSCALING ON" : "UPSCALING OFF",
+			ui_scaled_pos(UI_POS_BOTTOM | UI_POS_CENTER, vec2i(0, -24)),
+			UI_SIZE_8, UI_COLOR_DEFAULT
+		);
 	}
 
 	// Fullscreen might have been toggled through alt+enter

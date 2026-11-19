@@ -27,6 +27,18 @@ typedef struct {
 
 #define RENDER_USE_MIPMAPS 1
 
+// Textures are upscaled by this factor with xBR when they are created. The
+// texture atlas is allocated at this scale, so 4 needs an 8192x8192 atlas
+// (~340mb of video memory with mipmaps). The renderer falls back to a lower
+// scale if the GPU doesn't support textures that large.
+#if !defined(RENDER_TEXTURE_SCALE)
+	#if defined(__EMSCRIPTEN__) || defined(USE_GLES2)
+		#define RENDER_TEXTURE_SCALE 1
+	#else
+		#define RENDER_TEXTURE_SCALE 4
+	#endif
+#endif
+
 #define RENDER_FADEOUT_NEAR 48000.0
 #define RENDER_FADEOUT_FAR 64000.0
 
@@ -71,5 +83,10 @@ void render_texture_replace_pixels(uint16_t texture_index, rgba_t *pixels);
 uint16_t render_textures_len(void);
 void render_textures_reset(uint16_t len);
 void render_textures_dump(const char *path);
+
+// Switch between the upscaled and native resolution textures. Has no effect
+// if textures aren't upscaled.
+void render_set_texture_upscale(bool enabled);
+bool render_texture_upscale(void);
 
 #endif

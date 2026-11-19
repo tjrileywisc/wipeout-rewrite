@@ -121,6 +121,7 @@ COMMON_SRC = \
 	src/wipeout/particle.c \
 	src/wipeout/sfx.c \
 	src/utils.c \
+	src/xbr.c \
 	src/types.c \
 	src/system.c \
 	src/mem.c \
