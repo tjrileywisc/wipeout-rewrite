@@ -56,6 +56,7 @@ struct menu_t {
 };
 
 
+bool blink(void);
 void menu_reset(menu_t *menu);
 menu_page_t *menu_push(menu_t *menu, char *title, void(*draw_func)(menu_t *, int), void(*init_func)(), void(*exit_func)());
 menu_page_t *menu_confirm(menu_t *menu, char *title, char *subtitle, char *yes, char *no, void(*confirm_func)(menu_t *, int));

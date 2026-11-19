@@ -33,7 +33,6 @@ const game_def_t def = {
 		[RACE_TYPE_SINGLE]        = {.name = "SINGLE RACE"},
 		[RACE_TYPE_NETWORK]       = {.name = "NETWORK"},
 		[RACE_TYPE_TIME_TRIAL]    = {.name = "TIME TRIAL"},
-		[RACE_TYPE_SPLIT_SCREEN]  = {.name = "SPLIT SCREEN"},
 	},
 
 	.pilots = {
