@@ -29,6 +29,7 @@ static void page_options_highscores_init(menu_t *menu);
 static uint16_t background;
 static texture_list_t track_images;
 static menu_t *main_menu;
+static int split_screen_preview_pilots[2];
 
 static struct {
 	Object *race_classes[2];
@@ -85,7 +86,10 @@ static void button_quit(menu_t *menu, int) {
 static void page_main_draw(menu_t*, int data) {
 	switch (data) {
 		case 0: draw_model(g.ships[0].model, vec2(0, -0.1), vec3(0, 0, -700), system_cycle_time()); break;
-		case 1: draw_model(models.misc.single_race, vec2(0, -0.2), vec3(0, 0, -400), system_cycle_time()); break;
+		case 1:
+			draw_model(g.ships[split_screen_preview_pilots[0]].model, vec2(0, -0.3), vec3(-700, -200, -1300), system_cycle_time()*1.1);
+			draw_model(g.ships[split_screen_preview_pilots[1]].model, vec2(0, -0.3), vec3( 700, -200, -1300), system_cycle_time()*1.2);
+			break;
 		case 2: draw_model(models.misc.options, vec2(0, -0.2), vec3(0, 0, -700), system_cycle_time()); break;
 		case 3: draw_model(models.misc.msdos, vec2(0, -0.2), vec3(0, 0, -700), system_cycle_time()); break;
 	}
@@ -929,9 +933,35 @@ static void page_split_screen_draw_player(int player, vec2i_t pos) {
 	ui_draw_text_centered(def.teams[pilot->team].name, ui_scaled_pos(anchor, pos), UI_SIZE_8, UI_COLOR_ACCENT);
 }
 
+// Small spinning ship under the player's column. pos is the column center in
+// ui units, relative to the bottom center of the screen.
+static void page_split_screen_draw_ship(int player, vec2i_t pos) {
+	vec2i_t screen = render_size();
+	float half_w = (float)screen.x / ui_get_scale() / 2.0f;
+	float half_h = (float)screen.y / ui_get_scale() / 2.0f;
+	vec2_t offset = vec2(pos.x / half_w, (half_h + pos.y) / half_h);
+	draw_model(g.ships[lobby.pilot[player]].model, offset, vec3(0, 0, -2000), system_cycle_time());
+}
+
 static void page_split_screen_draw(menu_t*, int) {
 	page_split_screen_handle_p1_input();
 	page_split_screen_handle_join_input();
+
+	// Spread the player columns across the screen width
+	int screen_width = render_size().x / ui_get_scale();
+	int spacing = clamp(screen_width / INPUT_MAX_PLAYERS, 80, 150);
+	vec2i_t columns[INPUT_MAX_PLAYERS];
+	for (int p = 0; p < INPUT_MAX_PLAYERS; p++) {
+		columns[p] = vec2i((p * 2 - (INPUT_MAX_PLAYERS - 1)) * spacing / 2, -116);
+	}
+
+	// 3d ships first, then switch back to 2d for everything else
+	for (int p = 0; p < INPUT_MAX_PLAYERS; p++) {
+		if (lobby.joined[p]) {
+			page_split_screen_draw_ship(p, vec2i(columns[p].x, -34));
+		}
+	}
+	render_set_view_2d();
 
 	bool is_championship = g.race_type == RACE_TYPE_CHAMPIONSHIP;
 	int circuit = is_championship ? 0 : lobby.circuits[lobby.circuit_index];
@@ -955,12 +985,8 @@ static void page_split_screen_draw(menu_t*, int) {
 		ui_draw_text_centered("WAITING FOR PLAYERS", hint_pos, UI_SIZE_8, UI_COLOR_DEFAULT);
 	}
 
-	// Spread the player columns across the screen width
-	int screen_width = render_size().x / ui_get_scale();
-	int spacing = clamp(screen_width / INPUT_MAX_PLAYERS, 80, 150);
 	for (int p = 0; p < INPUT_MAX_PLAYERS; p++) {
-		int x = (p * 2 - (INPUT_MAX_PLAYERS - 1)) * spacing / 2;
-		page_split_screen_draw_player(p, vec2i(x, -80));
+		page_split_screen_draw_player(p, columns[p]);
 	}
 }
 
@@ -1077,6 +1103,12 @@ void main_menu_init(void) {
 	input_set_menu_player(0); // ensure P1 controls menus on (re)entry
 
 	ships_reset_exhaust_plumes();
+
+	split_screen_preview_pilots[0] = rand_int(0, NUM_PILOTS);
+	split_screen_preview_pilots[1] = rand_int(0, NUM_PILOTS - 1);
+	if (split_screen_preview_pilots[1] >= split_screen_preview_pilots[0]) {
+		split_screen_preview_pilots[1]++; // never the same ship twice
+	}
 
 	main_menu = mem_bump(sizeof(menu_t));
 
