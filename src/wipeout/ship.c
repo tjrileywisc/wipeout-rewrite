@@ -430,12 +430,11 @@ void ship_update(ship_t *self) {
 		if (self->camera) {
 			sfx_play(SFX_POWERUP);
 			float equalizer_prob = 0.0f;
-			bool equalizer_allowed = (g.race_type == RACE_TYPE_SPLIT_SCREEN || g.race_type == RACE_TYPE_NETWORK);
+			bool equalizer_allowed = (g.local_player_count >= 2 || g.race_type == RACE_TYPE_NETWORK);
 			if (equalizer_allowed && self->position_rank > 1) {
-				float back_fraction = (NUM_PILOTS > 2)
-					? (float)(self->position_rank - 2) / (NUM_PILOTS - 2)
-					: 0.0f;
-				equalizer_prob = 0.02f + back_fraction * 0.01f;
+				// Raises by 0.5% each time, player 8 has a 5% chance of getting the weapon
+				float back_fraction = (float)(self->position_rank - 2) / (NUM_PILOTS - 2);
+				equalizer_prob = 0.02f + back_fraction * 0.03f;
 			}
 			if (rand_float(0, 1) < equalizer_prob) {
 				self->weapon_type = WEAPON_TYPE_EQUALIZER;

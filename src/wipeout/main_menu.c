@@ -17,10 +17,7 @@ static void page_race_class_init(menu_t *menu);
 static void page_race_type_init(menu_t *menu);
 static void page_team_init(menu_t *menu);
 static void page_pilot_init(menu_t *menu);
-static void page_pilot2_init(menu_t *menu);
-static void page_pilot3_init(menu_t *menu);
-static void page_pilot4_init(menu_t *menu);
-static void page_player_count_init(menu_t *menu);
+static void page_split_screen_init(menu_t *menu);
 static void page_circuit_init(menu_t *menu);
 static void page_network_init(menu_t *menu);
 static void page_network_connected_init(menu_t *menu);
@@ -64,6 +61,10 @@ static void button_start_game(menu_t *menu, int) {
 	page_race_type_init(menu);
 }
 
+static void button_split_screen(menu_t *menu, int) {
+	page_split_screen_init(menu);
+}
+
 static void button_options(menu_t *menu, int) {
 	page_options_init(menu);
 }
@@ -84,8 +85,9 @@ static void button_quit(menu_t *menu, int) {
 static void page_main_draw(menu_t*, int data) {
 	switch (data) {
 		case 0: draw_model(g.ships[0].model, vec2(0, -0.1), vec3(0, 0, -700), system_cycle_time()); break;
-		case 1: draw_model(models.misc.options, vec2(0, -0.2), vec3(0, 0, -700), system_cycle_time()); break;
-		case 2: draw_model(models.misc.msdos, vec2(0, -0.2), vec3(0, 0, -700), system_cycle_time()); break;
+		case 1: draw_model(models.misc.single_race, vec2(0, -0.2), vec3(0, 0, -400), system_cycle_time()); break;
+		case 2: draw_model(models.misc.options, vec2(0, -0.2), vec3(0, 0, -700), system_cycle_time()); break;
+		case 3: draw_model(models.misc.msdos, vec2(0, -0.2), vec3(0, 0, -700), system_cycle_time()); break;
 	}
 }
 
@@ -98,10 +100,11 @@ static void page_main_init(menu_t *menu) {
 	page->items_anchor = UI_POS_BOTTOM | UI_POS_CENTER;
 
 	menu_page_add_button(page, 0, "START GAME", button_start_game);
-	menu_page_add_button(page, 1, "OPTIONS", button_options);
+	menu_page_add_button(page, 1, "MULTIPLAYER", button_split_screen);
+	menu_page_add_button(page, 2, "OPTIONS", button_options);
 
 	#ifndef __EMSCRIPTEN__
-		menu_page_add_button(page, 2, "QUIT", button_quit);
+		menu_page_add_button(page, 3, "QUIT", button_quit);
 	#endif
 }
 
@@ -634,12 +637,6 @@ static void page_race_class_init(menu_t *menu) {
 // Race Type
 
 static void button_race_type_select(menu_t *menu, int data) {
-	if (data == RACE_TYPE_SPLIT_SCREEN) {
-		g.race_type = RACE_TYPE_SINGLE;
-		g.highscore_tab = HIGHSCORE_TAB_RACE;
-		page_player_count_init(menu);
-		return;
-	}
 	g.local_player_count = 1;
 	g.race_type = data;
 	g.highscore_tab = g.race_type == RACE_TYPE_TIME_TRIAL ? HIGHSCORE_TAB_TIME_TRIAL : HIGHSCORE_TAB_RACE;
@@ -656,7 +653,6 @@ static void page_race_type_draw(menu_t*, int data) {
 		case RACE_TYPE_CHAMPIONSHIP: draw_model(models.misc.championship, vec2(0, -0.2), vec3(0, 0, -400), system_cycle_time()); break;
 		case RACE_TYPE_SINGLE: draw_model(models.misc.single_race, vec2(0, -0.2), vec3(0, 0, -400), system_cycle_time()); break;
 		case RACE_TYPE_TIME_TRIAL: draw_model(models.options.stopwatch, vec2(0, -0.2), vec3(0, 0, -400), system_cycle_time()); break;
-		case RACE_TYPE_SPLIT_SCREEN: draw_model(models.misc.single_race, vec2(0, -0.2), vec3(0, 0, -400), system_cycle_time()); break;
 	}
 }
 
@@ -734,125 +730,276 @@ static void page_pilot_init(menu_t *menu) {
 	}
 }
 
-// Menu-player control helpers: each pilot-N page acquires control for player N
-// on enter (init_func) and releases it on back (exit_func). Forward selections
-// reset to 0 before pushing the next page so subsequent pages default to P1.
 
-static void menu_player_set_0(void) { input_set_menu_player(0); }
-static void menu_player_set_1(void) { input_set_menu_player(1); }
-static void menu_player_set_2(void) { input_set_menu_player(2); }
-static void menu_player_set_3(void) { input_set_menu_player(3); }
 
-// Player 2 pilot selection (split screen only)
+// -----------------------------------------------------------------------------
+// Split Screen
+//
+// A single lobby page. Player 1 moves up/down between the race settings and
+// their own racer column, and changes the selected one with left/right.
+// Players 2-4 join with their gamepad and cycle through the free racers in
+// their column. Player 1 starts the race once at least two players are in.
 
-static void button_pilot2_select(menu_t *menu, int data) {
-	g.pilot2 = data;
-	input_set_menu_player(0); // restore P1 for subsequent pages
-	if (g.local_player_count >= 3) {
-		page_pilot3_init(menu); // init_func will set to player 2
-	} else {
-		page_circuit_init(menu);
+enum {
+	LOBBY_ROW_CIRCUIT,
+	LOBBY_ROW_CLASS,
+	LOBBY_ROW_TYPE,
+	LOBBY_ROW_RACER,
+	NUM_LOBBY_ROWS
+};
+
+static const char *opts_split_screen_types[] = {"SINGLE RACE", "CHAMPIONSHIP"};
+static const int split_screen_types[] = {RACE_TYPE_SINGLE, RACE_TYPE_CHAMPIONSHIP};
+
+static struct {
+	bool joined[INPUT_MAX_PLAYERS];
+	int pilot[INPUT_MAX_PLAYERS];
+	int circuits[NUM_CIRCUITS];
+	int circuits_len;
+	int circuit_index;
+	int race_classes_len;
+	int race_type_index;
+	int row;
+} lobby;
+
+static bool lobby_pilot_taken(int pilot, int player) {
+	for (int p = 0; p < INPUT_MAX_PLAYERS; p++) {
+		if (p != player && lobby.joined[p] && lobby.pilot[p] == pilot) {
+			return true;
+		}
 	}
+	return false;
 }
 
-static void page_pilot2_draw(menu_t*, int data) {
-	draw_model(models.pilots[def.pilots[data].logo_model], vec2(0, -0.2), vec3(0, 0, -10000), system_cycle_time());
+// Step from pilot in direction dir to the next racer no other player has
+static int lobby_next_free_pilot(int player, int pilot, int dir) {
+	do {
+		pilot = wrap_around(pilot + dir, 0, NUM_PILOTS);
+	} while (lobby_pilot_taken(pilot, player));
+	return pilot;
 }
 
-static void page_pilot2_init(menu_t *menu) {
-	menu_page_t *page = menu_push(menu, "PLAYER 2 CHOOSE PILOT", page_pilot2_draw,
-		menu_player_set_1,   // init: P2 takes control
-		menu_player_set_0);  // exit (back): restore P1
-	flags_add(page->layout_flags, MENU_FIXED);
-	page->title_pos = vec2i(0, 30);
-	page->title_anchor = UI_POS_TOP | UI_POS_CENTER;
-	page->items_pos = vec2i(0, -110);
-	page->items_anchor = UI_POS_BOTTOM | UI_POS_CENTER;
-	for (unsigned int i = 0; i < (unsigned int)NUM_PILOTS; i++) {
-		if (i != (unsigned int)g.pilot) {
-			menu_page_add_button(page, i, def.pilots[i].name, button_pilot2_select);
+static int lobby_player_count(void) {
+	int count = 0;
+	for (int p = 0; p < INPUT_MAX_PLAYERS; p++) {
+		count += lobby.joined[p];
+	}
+	return count;
+}
+
+static void split_screen_start(void) {
+	int pilots[INPUT_MAX_PLAYERS];
+	int count = 0;
+	for (int p = 0; p < INPUT_MAX_PLAYERS; p++) {
+		if (lobby.joined[p]) {
+			pilots[count++] = lobby.pilot[p];
+		}
+	}
+
+	g.local_player_count = count;
+	g.pilot = pilots[0];
+	if (count >= 2) { g.pilot2 = pilots[1]; }
+	if (count >= 3) { g.pilot3 = pilots[2]; }
+	if (count >= 4) { g.pilot4 = pilots[3]; }
+	g.team = def.pilots[g.pilot].team;
+	g.highscore_tab = HIGHSCORE_TAB_RACE;
+
+	if (g.race_type == RACE_TYPE_CHAMPIONSHIP) {
+		g.circuit = 0;
+		game_reset_championship();
+	}
+	else {
+		g.circuit = lobby.circuits[lobby.circuit_index];
+	}
+	game_set_scene(GAME_SCENE_RACE);
+}
+
+static void page_split_screen_handle_p1_input(void) {
+	if (input_pressed(A_MENU_START) && lobby_player_count() >= 2) {
+		sfx_play(SFX_MENU_SELECT);
+		split_screen_start();
+		return;
+	}
+
+	if (input_pressed(A_MENU_UP)) {
+		lobby.row = wrap_around(lobby.row - 1, 0, NUM_LOBBY_ROWS);
+		sfx_play(SFX_MENU_MOVE);
+	}
+	else if (input_pressed(A_MENU_DOWN)) {
+		lobby.row = wrap_around(lobby.row + 1, 0, NUM_LOBBY_ROWS);
+		sfx_play(SFX_MENU_MOVE);
+	}
+
+	int dir = 0;
+	if (input_pressed(A_MENU_LEFT)) {
+		dir = -1;
+	}
+	else if (input_pressed(A_MENU_RIGHT) || input_pressed(A_MENU_SELECT)) {
+		dir = 1;
+	}
+	if (!dir) {
+		return;
+	}
+
+	switch (lobby.row) {
+		case LOBBY_ROW_CIRCUIT:
+			if (g.race_type == RACE_TYPE_CHAMPIONSHIP) {
+				return; // championship always runs every circuit
+			}
+			lobby.circuit_index = wrap_around(lobby.circuit_index + dir, 0, lobby.circuits_len);
+			break;
+		case LOBBY_ROW_CLASS:
+			g.race_class = wrap_around(g.race_class + dir, 0, lobby.race_classes_len);
+			break;
+		case LOBBY_ROW_TYPE:
+			lobby.race_type_index = wrap_around(lobby.race_type_index + dir, 0, len(opts_split_screen_types));
+			g.race_type = split_screen_types[lobby.race_type_index];
+			break;
+		case LOBBY_ROW_RACER:
+			lobby.pilot[0] = lobby_next_free_pilot(0, lobby.pilot[0], dir);
+			break;
+	}
+	sfx_play(SFX_MENU_SELECT);
+}
+
+static void page_split_screen_handle_join_input(void) {
+	// Players 2-4; player 1 is always in
+	for (int p = 1; p < INPUT_MAX_PLAYERS; p++) {
+		if (!lobby.joined[p]) {
+			if (input_pressed_p(A_MENU_SELECT, p) || input_pressed_p(A_MENU_START, p)) {
+				lobby.pilot[p] = lobby_next_free_pilot(p, NUM_PILOTS - 1, 1);
+				lobby.joined[p] = true;
+				sfx_play(SFX_MENU_SELECT);
+			}
+		}
+		else if (input_pressed_p(A_MENU_BACK, p)) {
+			lobby.joined[p] = false;
+			sfx_play(SFX_MENU_SELECT);
+		}
+		else if (input_pressed_p(A_MENU_LEFT, p)) {
+			lobby.pilot[p] = lobby_next_free_pilot(p, lobby.pilot[p], -1);
+			sfx_play(SFX_MENU_MOVE);
+		}
+		else if (input_pressed_p(A_MENU_RIGHT, p)) {
+			lobby.pilot[p] = lobby_next_free_pilot(p, lobby.pilot[p], 1);
+			sfx_play(SFX_MENU_MOVE);
 		}
 	}
 }
 
+static void page_split_screen_draw_setting(const char *label, const char *value, bool selected, vec2i_t pos) {
+	ui_pos_t anchor = UI_POS_MIDDLE | UI_POS_CENTER;
+	ui_draw_text(label, ui_scaled_pos(anchor, pos), UI_SIZE_12, UI_COLOR_ACCENT);
+	pos.x += 8;
+	pos.y += 14;
+	rgba_t color = (selected && blink()) ? UI_COLOR_ACCENT : UI_COLOR_DEFAULT;
+	ui_draw_text(value, ui_scaled_pos(anchor, pos), UI_SIZE_8, color);
+}
 
-// Player 3 pilot selection
+static void page_split_screen_draw_player(int player, vec2i_t pos) {
+	ui_pos_t anchor = UI_POS_BOTTOM | UI_POS_CENTER;
 
-static void button_pilot3_select(menu_t *menu, int data) {
-	g.pilot3 = data;
-	input_set_menu_player(0); // restore P1 for subsequent pages
-	if (g.local_player_count >= 4) {
-		page_pilot4_init(menu); // init_func will set to player 3
-	} else {
-		page_circuit_init(menu);
+	char label[16];
+	snprintf(label, sizeof(label), "PLAYER %d", player + 1);
+	ui_draw_text_centered(label, ui_scaled_pos(anchor, pos), UI_SIZE_8, UI_COLOR_DEFAULT);
+	pos.y += 16;
+
+	if (!lobby.joined[player]) {
+		ui_draw_text_centered("PRESS START", ui_scaled_pos(anchor, pos), UI_SIZE_8, UI_COLOR_ACCENT);
+		return;
+	}
+
+	// Split the pilot name into first name and surname so it fits the column
+	const pilot_t *pilot = &def.pilots[lobby.pilot[player]];
+	char first[32];
+	snprintf(first, sizeof(first), "%s", pilot->name);
+	char *rest = strchr(first, ' ');
+	if (rest) {
+		*rest++ = '\0';
+	}
+
+	bool selected = player == 0 && lobby.row == LOBBY_ROW_RACER;
+	rgba_t color = (selected && blink()) ? UI_COLOR_ACCENT : UI_COLOR_DEFAULT;
+	ui_draw_text_centered(first, ui_scaled_pos(anchor, pos), UI_SIZE_8, color);
+	pos.y += 10;
+	if (rest) {
+		ui_draw_text_centered(rest, ui_scaled_pos(anchor, pos), UI_SIZE_8, color);
+	}
+	pos.y += 14;
+	ui_draw_text_centered(def.teams[pilot->team].name, ui_scaled_pos(anchor, pos), UI_SIZE_8, UI_COLOR_ACCENT);
+}
+
+static void page_split_screen_draw(menu_t*, int) {
+	page_split_screen_handle_p1_input();
+	page_split_screen_handle_join_input();
+
+	bool is_championship = g.race_type == RACE_TYPE_CHAMPIONSHIP;
+	int circuit = is_championship ? 0 : lobby.circuits[lobby.circuit_index];
+
+	page_split_screen_draw_setting("CIRCUIT", is_championship ? "ALL CIRCUITS" : def.circuits[circuit].name, lobby.row == LOBBY_ROW_CIRCUIT, vec2i(-150, -90));
+	page_split_screen_draw_setting("CLASS", def.race_classes[g.race_class].name, lobby.row == LOBBY_ROW_CLASS, vec2i(-150, -62));
+	page_split_screen_draw_setting("TYPE", opts_split_screen_types[lobby.race_type_index], lobby.row == LOBBY_ROW_TYPE, vec2i(-150, -34));
+
+	if (circuit < track_images.len) {
+		vec2i_t pos = vec2i(90, -60);
+		vec2i_t size = vec2i(128, 74);
+		vec2i_t scaled_pos = ui_scaled_pos(UI_POS_MIDDLE | UI_POS_CENTER, vec2i(pos.x - size.x/2, pos.y - size.y/2));
+		render_push_2d(scaled_pos, ui_scaled(size), rgba(128, 128, 128, 255), texture_from_list(track_images, circuit));
+	}
+
+	vec2i_t hint_pos = ui_scaled_pos(UI_POS_MIDDLE | UI_POS_CENTER, vec2i(0, 4));
+	if (lobby_player_count() >= 2) {
+		ui_draw_text_centered("PRESS START TO RACE", hint_pos, UI_SIZE_8, blink() ? UI_COLOR_ACCENT : UI_COLOR_DEFAULT);
+	}
+	else {
+		ui_draw_text_centered("WAITING FOR PLAYERS", hint_pos, UI_SIZE_8, UI_COLOR_DEFAULT);
+	}
+
+	// Spread the player columns across the screen width
+	int screen_width = render_size().x / ui_get_scale();
+	int spacing = clamp(screen_width / INPUT_MAX_PLAYERS, 80, 150);
+	for (int p = 0; p < INPUT_MAX_PLAYERS; p++) {
+		int x = (p * 2 - (INPUT_MAX_PLAYERS - 1)) * spacing / 2;
+		page_split_screen_draw_player(p, vec2i(x, -80));
 	}
 }
 
-static void page_pilot3_draw(menu_t*, int data) {
-	draw_model(models.pilots[def.pilots[data].logo_model], vec2(0, -0.2), vec3(0, 0, -10000), system_cycle_time());
-}
+static void page_split_screen_init(menu_t *menu) {
+	for (int p = 0; p < INPUT_MAX_PLAYERS; p++) {
+		lobby.joined[p] = false;
+	}
+	lobby.joined[0] = true;
+	lobby.pilot[0] = g.pilot;
+	lobby.row = LOBBY_ROW_CIRCUIT;
 
-static void page_pilot3_init(menu_t *menu) {
-	menu_page_t *page = menu_push(menu, "PLAYER 3 CHOOSE PILOT", page_pilot3_draw,
-		menu_player_set_2,   // init: P3 takes control
-		menu_player_set_1);  // exit (back): restore P2
-	flags_add(page->layout_flags, MENU_FIXED);
-	page->title_pos = vec2i(0, 30);
-	page->title_anchor = UI_POS_TOP | UI_POS_CENTER;
-	page->items_pos = vec2i(0, -110);
-	page->items_anchor = UI_POS_BOTTOM | UI_POS_CENTER;
-	for (unsigned int i = 0; i < (unsigned int)NUM_PILOTS; i++) {
-		if ((int)i != g.pilot && (int)i != g.pilot2) {
-			menu_page_add_button(page, i, def.pilots[i].name, button_pilot3_select);
+	lobby.circuits_len = 0;
+	lobby.circuit_index = 0;
+	for (int i = 0; i < NUM_CIRCUITS; i++) {
+		if (
+			(i < CIRCUIT_TALONS_REACH || g.installed_circuits[i]) &&
+			(!def.circuits[i].is_bonus_circuit || save.has_bonus_circuits)
+		) {
+			if (i == g.circuit) {
+				lobby.circuit_index = lobby.circuits_len;
+			}
+			lobby.circuits[lobby.circuits_len++] = i;
 		}
 	}
-}
 
-// Player 4 pilot selection
-
-static void button_pilot4_select(menu_t *menu, int data) {
-	g.pilot4 = data;
-	input_set_menu_player(0); // restore P1 for circuit selection
-	page_circuit_init(menu);
-}
-
-static void page_pilot4_draw(menu_t*, int data) {
-	draw_model(models.pilots[def.pilots[data].logo_model], vec2(0, -0.2), vec3(0, 0, -10000), system_cycle_time());
-}
-
-static void page_pilot4_init(menu_t *menu) {
-	menu_page_t *page = menu_push(menu, "PLAYER 4 CHOOSE PILOT", page_pilot4_draw,
-		menu_player_set_3,   // init: P4 takes control
-		menu_player_set_2);  // exit (back): restore P3
-	flags_add(page->layout_flags, MENU_FIXED);
-	page->title_pos = vec2i(0, 30);
-	page->title_anchor = UI_POS_TOP | UI_POS_CENTER;
-	page->items_pos = vec2i(0, -110);
-	page->items_anchor = UI_POS_BOTTOM | UI_POS_CENTER;
-	for (unsigned int i = 0; i < (unsigned int)NUM_PILOTS; i++) {
-		if ((int)i != g.pilot && (int)i != g.pilot2 && (int)i != g.pilot3) {
-			menu_page_add_button(page, i, def.pilots[i].name, button_pilot4_select);
-		}
+	lobby.race_classes_len = save.has_rapier_class ? NUM_RACE_CLASSES : 1;
+	if (g.race_class >= lobby.race_classes_len) {
+		g.race_class = RACE_CLASS_VENOM;
 	}
-}
 
-// Player count selection (shown after choosing SPLIT SCREEN)
+	lobby.race_type_index = g.race_type == RACE_TYPE_CHAMPIONSHIP ? 1 : 0;
+	g.race_type = split_screen_types[lobby.race_type_index];
 
-static void button_player_count_select(menu_t *menu, int data) {
-	g.local_player_count = data;
-	page_race_class_init(menu);
-}
-
-static void page_player_count_init(menu_t *menu) {
-	menu_page_t *page = menu_push(menu, "SELECT PLAYER COUNT", NULL, NULL, NULL);
+	// No menu entries: all input is handled in the draw function. The menu
+	// still draws the title and handles player 1's back button.
+	menu_page_t *page = menu_push(menu, "SPLIT SCREEN", page_split_screen_draw, NULL, NULL);
 	flags_add(page->layout_flags, MENU_FIXED);
-	page->title_pos = vec2i(0, 30);
+	page->title_pos = vec2i(0, 20);
 	page->title_anchor = UI_POS_TOP | UI_POS_CENTER;
-	page->items_pos = vec2i(0, -110);
-	page->items_anchor = UI_POS_BOTTOM | UI_POS_CENTER;
-	menu_page_add_button(page, 2, "2 PLAYERS", button_player_count_select);
-	menu_page_add_button(page, 3, "3 PLAYERS", button_player_count_select);
-	menu_page_add_button(page, 4, "4 PLAYERS", button_player_count_select);
 }
 
 
