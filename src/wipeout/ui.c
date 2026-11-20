@@ -207,6 +207,23 @@ void ui_draw_icon(ui_icon_type_t icon, vec2i_t pos, rgba_t color) {
 	render_push_2d(pos, ui_scaled(render_texture_size(icon_textures[icon])), color, icon_textures[icon]);
 }
 
+void ui_draw_text_3d(const char *text, vec3_t pos, float texel_size, ui_text_size_t size, rgba_t color) {
+	char_set_t *cs = &char_set[size];
+	float x = -ui_text_width(text, size) * 0.5;
+
+	for (int i = 0; text[i] != 0; i++) {
+		if (text[i] == ' ') {
+			x += 8;
+			continue;
+		}
+		glyph_t *glyph = &cs->glyphs[char_to_glyph_index(text[i])];
+		vec2i_t offset = vec2i((x + glyph->width * 0.5) * texel_size, 0);
+		vec2i_t quad = vec2i(glyph->width * texel_size, cs->height * texel_size);
+		render_push_sprite_tile(pos, offset, quad, glyph->offset, vec2i(glyph->width, cs->height), color, cs->texture);
+		x += glyph->width;
+	}
+}
+
 void ui_draw_text_centered(const char *text, vec2i_t pos, ui_text_size_t size, rgba_t color) {
 	pos.x -= (ui_text_width(text, size) * ui_scale) >> 1;
 	ui_draw_text(text, pos, size, color);

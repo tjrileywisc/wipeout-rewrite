@@ -53,4 +53,8 @@ void ui_draw_image(vec2i_t pos, uint16_t texture);
 void ui_draw_icon(ui_icon_type_t icon, vec2i_t pos, rgba_t color);
 void ui_draw_text_centered(const char *text, vec2i_t pos, ui_text_size_t size, rgba_t color);
 
+// Draws text in the 3d scene as a camera facing billboard centered on pos.
+// texel_size is the world size of one font texel.
+void ui_draw_text_3d(const char *text, vec3_t pos, float texel_size, ui_text_size_t size, rgba_t color);
+
 #endif

@@ -595,6 +595,7 @@ save_t save = {
 	.post_effect = 0,
 	.enable_force_feedback = false,
 	.network_interface = 0,
+	.ship_markers = false,
 
 	.has_rapier_class = true,  // for testing; should be false in prod
 	.has_bonus_circuits = true, // for testing; should be false in prod
@@ -847,9 +848,12 @@ void game_init(void) {
 	uint32_t size;
 	save_t *save_file = (save_t *)platform_load_userdata("save.dat", &size);
 	if (save_file) {
-		// Save files from before texture_upscale was added end right before
-		// it; the field then keeps its default
-		bool size_ok = size == sizeof(save_t) || size == offsetof(save_t, texture_upscale);
+		// Older save files end right before a field that was added later;
+		// those fields then keep their defaults
+		bool size_ok =
+			size == sizeof(save_t) ||
+			size == offsetof(save_t, ship_markers) ||
+			size == offsetof(save_t, texture_upscale);
 		if (size_ok && save_file->magic == SAVE_DATA_MAGIC) {
 			printf("load save data success\n");
 			memcpy(&save, save_file, size);
