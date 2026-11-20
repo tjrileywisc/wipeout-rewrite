@@ -24,6 +24,7 @@ static void page_network_connected_init(menu_t *menu);
 static void page_options_controls_init(menu_t *menu);
 static void page_options_video_init(menu_t *menu);
 static void page_options_audio_init(menu_t *menu);
+static void page_options_game_init(menu_t *menu);
 static void page_options_highscores_init(menu_t *menu);
 
 static uint16_t background;
@@ -234,6 +235,10 @@ static void button_audio(menu_t *menu, int) {
 	page_options_audio_init(menu);
 }
 
+static void button_game(menu_t *menu, int) {
+	page_options_game_init(menu);
+}
+
 static void button_highscores(menu_t *menu, int) {
 	page_options_highscores_init(menu);
 }
@@ -244,6 +249,7 @@ static void page_options_draw(menu_t*, int data) {
 		case 1: draw_model(models.rescue, vec2(0, -0.2), vec3(0, 0, -700), system_cycle_time()); break; // TODO: needs better model
 		case 2: draw_model(models.options.headphones, vec2(0, -0.2), vec3(0, 0, -300), system_cycle_time()); break;
 		case 3: draw_model(models.options.stopwatch, vec2(0, -0.2), vec3(0, 0, -400), system_cycle_time()); break;
+		case 4: draw_model(models.misc.single_race, vec2(0, -0.2), vec3(0, 0, -400), system_cycle_time()); break;
 	}
 }
 
@@ -254,6 +260,7 @@ static void page_options_init(menu_t *menu) {
 	page->title_anchor = UI_POS_TOP | UI_POS_CENTER;
 	page->items_pos = vec2i(0, -110);
 	page->items_anchor = UI_POS_BOTTOM | UI_POS_CENTER;
+	menu_page_add_button(page, 4, "GAME", button_game);
 	menu_page_add_button(page, 0, "CONTROLS", button_controls);
 	menu_page_add_button(page, 1, "VIDEO", button_video);
 	menu_page_add_button(page, 2, "AUDIO", button_audio);
@@ -499,6 +506,27 @@ static void page_options_audio_init(menu_t *menu) {
 
 	menu_page_add_toggle(page, save.music_volume * 10, "MUSIC VOLUME", opts_volume, len(opts_volume), toggle_music_volume);
 	menu_page_add_toggle(page, save.sfx_volume * 10, "SOUND EFFECTS VOLUME", opts_volume, len(opts_volume), toggle_sfx_volume);
+}
+
+// -----------------------------------------------------------------------------
+// Options Game
+
+static void toggle_ship_markers(menu_t*, int data) {
+	save.ship_markers = data;
+	save.is_dirty = true;
+}
+
+static void page_options_game_init(menu_t *menu) {
+	menu_page_t *page = menu_push(menu, "GAME OPTIONS", NULL, NULL, NULL);
+
+	flags_set(page->layout_flags, MENU_VERTICAL | MENU_FIXED);
+	page->title_pos = vec2i(-160, -100);
+	page->title_anchor = UI_POS_MIDDLE | UI_POS_CENTER;
+	page->items_pos = vec2i(-160, -80);
+	page->block_width = 320;
+	page->items_anchor = UI_POS_MIDDLE | UI_POS_CENTER;
+
+	menu_page_add_toggle(page, save.ship_markers, "SHIP MARKERS", opts_off_on, len(opts_off_on), toggle_ship_markers);
 }
 
 // -----------------------------------------------------------------------------

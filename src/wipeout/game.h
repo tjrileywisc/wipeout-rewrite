@@ -311,6 +311,7 @@ typedef struct {
 	// Added after the first release of the save format; must stay last so
 	// older (shorter) save files can still be loaded
 	int texture_upscale;
+	bool ship_markers;
 } save_t;
 
 

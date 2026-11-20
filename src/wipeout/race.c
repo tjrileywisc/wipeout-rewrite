@@ -74,10 +74,14 @@ static void race_draw_view(int pilot_idx, camera_t *camera, droid_t *droid) {
 	track_draw(camera);
 	render_set_cull_backface(true);
 
-	ships_draw(pilot_idx);  // -1 = spectator: no ship suppressed
+	ships_draw(pilot_idx, camera->position);  // -1 = spectator: no ship suppressed
 	droid_draw(droid);
 	weapons_draw();
 	particles_draw();
+
+	if (save.ship_markers) {
+		hud_draw_player_markers(pilot_idx >= 0 ? &g.ships[pilot_idx] : NULL, camera->position);
+	}
 
 	// 2D HUD — skipped for spectator view (pilot_idx == -1)
 	render_set_screen_position(vec2(0, 0));

@@ -194,6 +194,44 @@ static void hud_draw_target_icon(vec3_t position) {
 	render_push_2d(pos, size, rgba(128, 128, 128, 128), target_reticle);
 }
 
+// Markers over the other human players' ships: "P1".."P4", drawn in the 3d
+// scene so the track and scenery hide them. They keep a constant on-screen
+// size and fade in with distance, so ships right next to you don't get one.
+#define PLAYER_MARKER_FADE_START 1500.0
+#define PLAYER_MARKER_FADE_END   4000.0
+#define PLAYER_MARKER_HEIGHT     400.0
+
+void hud_draw_player_markers(ship_t *viewer, vec3_t camera_pos) {
+	// World size of one screen pixel at distance 1; tan(vertical fov / 2) = 0.75
+	float world_per_px = 2.0 * 0.75 / render_size().y;
+	int scale = ui_get_scale();
+
+	render_set_model_mat(&mat4_identity());
+	render_set_depth_write(false);
+
+	for (unsigned int i = 0; i < len(g.ships); i++) {
+		ship_t *other = &g.ships[i];
+		if (other == viewer || other->player_index < 0) {
+			continue;
+		}
+
+		vec3_t pos = vec3_transform(vec3(0, -PLAYER_MARKER_HEIGHT, 0), &other->mat); // -y is up
+		float dist = vec3_len(vec3_sub(pos, camera_pos));
+		float fade = (dist - PLAYER_MARKER_FADE_START) / (PLAYER_MARKER_FADE_END - PLAYER_MARKER_FADE_START);
+		if (fade <= 0) {
+			continue;
+		}
+		fade = min(fade, 1.0);
+
+		char label[3] = {'P', '1' + other->player_index, 0};
+		rgba_t color = UI_COLOR_DEFAULT;
+		color.a = 255 * fade;
+		ui_draw_text_3d(label, pos, dist * world_per_px * scale, UI_SIZE_8, color);
+	}
+
+	render_set_depth_write(true);
+}
+
 void hud_draw(ship_t *ship) {
 	// Current lap time
 	if (ship->lap >= 0) {
