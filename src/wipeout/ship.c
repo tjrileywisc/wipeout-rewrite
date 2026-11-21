@@ -161,17 +161,91 @@ void ships_reset_exhaust_plumes(void) {
 }
 
 
-void ships_draw(int viewing_pilot) {
-	// Ship models
-	for (unsigned int i = 0; i < len(g.ships); i++) {
-		if (
-			(i == (unsigned int)viewing_pilot && flags_is(g.ships[i].flags, SHIP_VIEW_INTERNAL) && flags_not(g.ships[i].flags, SHIP_IN_RESCUE)) ||
-			(g.race_type == RACE_TYPE_TIME_TRIAL && i != (unsigned int)g.pilot)
-		) {
+static bool ship_is_drawn(unsigned int i, int viewing_pilot) {
+	return !(
+		(i == (unsigned int)viewing_pilot && flags_is(g.ships[i].flags, SHIP_VIEW_INTERNAL) && flags_not(g.ships[i].flags, SHIP_IN_RESCUE)) ||
+		(g.race_type == RACE_TYPE_TIME_TRIAL && i != (unsigned int)g.pilot)
+	);
+}
+
+// Engine glow: the plume triangles are drawn again into the renderer's glow
+// target, which gets blurred and added onto the frame (bloom). Beyond
+// PLUME_GLOW_SCALE_DIST the glow geometry is scaled up around the plume's
+// centre in proportion to the distance, so it keeps about the on-screen size
+// it has at that distance instead of shrinking to nothing.
+//
+// The glow is depth tested against the scene, so the track and scenery hide
+// it. To keep that test honest, the scaling only widens the glow across the
+// view; it never moves it towards the camera. The glow is pulled towards the
+// camera by a small fixed distance only, so it isn't hidden by the plume's own
+// depth.
+static const rgba_t plume_glow_color = rgba(255, 40, 24, 255);
+#define PLUME_GLOW_SCALE_DIST 5000.0
+#define PLUME_GLOW_MAX_SCALE  12.0
+#define PLUME_GLOW_DEPTH_BIAS 8.0
+
+static void ship_draw_plume_glow(ship_t *self, vec3_t camera_pos) {
+	Object *model = self->model;
+
+	// Centre of all plume vertices, in model space
+	vec3_t center = vec3(0, 0, 0);
+	int n = 0;
+	for (int i = 0; i < model->primitives_len; i++) {
+		primitive_t *prm = &model->primitives[i];
+		if (flags_is(prm->flag, PRM_SHIP_ENGINE) && prm->type == PRM_TYPE_TRI) {
+			for (int j = 0; j < 3; j++) {
+				center = vec3_add(center, model->vertices[prm->u.tri.v[j].coord]);
+			}
+			n += 3;
+		}
+	}
+	if (n == 0) {
+		return;
+	}
+	center = vec3_mulf(center, 1.0 / n);
+
+	vec3_t center_world = vec3_transform(center, &self->mat);
+	vec3_t to_center = vec3_sub(center_world, camera_pos);
+	float dist = vec3_len(to_center);
+	if (dist < 1) {
+		return;
+	}
+	vec3_t view_dir = vec3_mulf(to_center, 1.0 / dist);
+	float scale = clamp(dist / PLUME_GLOW_SCALE_DIST, 1.0, PLUME_GLOW_MAX_SCALE);
+	vec3_t bias = vec3_mulf(view_dir, -PLUME_GLOW_DEPTH_BIAS);
+
+	for (int i = 0; i < model->primitives_len; i++) {
+		primitive_t *prm = &model->primitives[i];
+		if (flags_not(prm->flag, PRM_SHIP_ENGINE) || prm->type != PRM_TYPE_TRI) {
 			continue;
 		}
 
-		ship_draw(&g.ships[i]);
+		vertex_t v[3];
+		for (int j = 0; j < 3; j++) {
+			// Split the offset from the centre into the part along the view
+			// direction (kept as is) and the part across it (scaled)
+			vec3_t offset = vec3_sub(vec3_transform(model->vertices[prm->u.tri.v[j].coord], &self->mat), center_world);
+			vec3_t along = vec3_mulf(view_dir, vec3_dot(offset, view_dir));
+			vec3_t across = vec3_sub(offset, along);
+			vec3_t pos = vec3_add(center_world, vec3_add(along, vec3_mulf(across, scale)));
+			v[j] = (vertex_t){
+				.pos = vec3_add(pos, bias),
+				.uv = {0, 0},
+				.color = plume_glow_color
+			};
+		}
+		// Both windings, so the plume glows from any side
+		render_push_tris((tris_t){.vertices = {v[2], v[1], v[0]}}, RENDER_NO_TEXTURE);
+		render_push_tris((tris_t){.vertices = {v[1], v[2], v[0]}}, RENDER_NO_TEXTURE);
+	}
+}
+
+void ships_draw(int viewing_pilot, vec3_t camera_pos) {
+	// Ship models
+	for (unsigned int i = 0; i < len(g.ships); i++) {
+		if (ship_is_drawn(i, viewing_pilot)) {
+			ship_draw(&g.ships[i]);
+		}
 	}
 
 
@@ -191,6 +265,21 @@ void ships_draw(int viewing_pilot) {
 		}
 
 		ship_draw_shadow(&g.ships[i]);
+	}
+
+	// Engine glow, if the renderer supports it. No polygon offset here: the
+	// shadows' offset is large at glancing angles and let the glow show
+	// through the track. The glow does its own small bias instead.
+	render_set_depth_offset(0.0);
+	if (render_set_glow_target(true)) {
+		render_set_blend_mode(RENDER_BLEND_LIGHTER);
+		for (unsigned int i = 0; i < len(g.ships); i++) {
+			if (ship_is_drawn(i, viewing_pilot)) {
+				ship_draw_plume_glow(&g.ships[i], camera_pos);
+			}
+		}
+		render_set_blend_mode(RENDER_BLEND_NORMAL);
+		render_set_glow_target(false);
 	}
 
 	render_set_depth_offset(0.0);

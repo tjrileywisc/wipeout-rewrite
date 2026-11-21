@@ -203,6 +203,11 @@ void render_set_cull_backface(bool enabled) {
 	cull_backface_enabled = enabled;
 }
 
+bool render_set_glow_target(bool enabled) {
+	(void) enabled;
+	return false;
+}
+
 vec3_t render_transform(vec3_t pos) {
 	return vec4_perspective_divide(vec3_transform_perspective(vec3_transform(pos, &view_mat), &projection_mat));
 }
@@ -339,6 +344,41 @@ void render_push_sprite(vec3_t pos, vec2i_t size, rgba_t color, uint16_t texture
 			{.pos = p2, .uv = {0, 0 + t->size.y}, .color = color},
 			{.pos = p1, .uv = {0 + t->size.x, 0}, .color = color},
 			{.pos = p3, .uv = {0 + t->size.x, 0 + t->size.y}, .color = color},
+		}
+	}, texture_index);
+}
+
+// Like render_push_sprite, but draws a sub-rectangle of the texture, and is
+// laid out in screen orientation: offset and size are in the billboard plane
+// with x pointing right and y pointing down on screen. (render_push_sprite's
+// own local x points left, so its textures appear mirrored)
+void render_push_sprite_tile(vec3_t pos, vec2i_t offset, vec2i_t size, vec2i_t uv_offset, vec2i_t uv_size, rgba_t color, uint16_t texture_index) {
+	error_if(texture_index >= textures_len, "Invalid texture %d", texture_index);
+
+	float l = offset.x - size.x * 0.5, r = offset.x + size.x * 0.5;
+	float t = offset.y - size.y * 0.5, b = offset.y + size.y * 0.5;
+	vec3_t tl = vec3_add(pos, vec3_transform(vec3(-l, t, 0), &sprite_mat));
+	vec3_t tr = vec3_add(pos, vec3_transform(vec3(-r, t, 0), &sprite_mat));
+	vec3_t bl = vec3_add(pos, vec3_transform(vec3(-l, b, 0), &sprite_mat));
+	vec3_t br = vec3_add(pos, vec3_transform(vec3(-r, b, 0), &sprite_mat));
+
+	float u0 = uv_offset.x, v0 = uv_offset.y;
+	float u1 = uv_offset.x + uv_size.x, v1 = uv_offset.y + uv_size.y;
+
+	// Same on-screen winding as render_push_sprite, so backface culling
+	// treats both alike
+	render_push_tris((tris_t){
+		.vertices = {
+			{.pos = tr, .uv = {u1, v0}, .color = color},
+			{.pos = tl, .uv = {u0, v0}, .color = color},
+			{.pos = br, .uv = {u1, v1}, .color = color},
+		}
+	}, texture_index);
+	render_push_tris((tris_t){
+		.vertices = {
+			{.pos = br, .uv = {u1, v1}, .color = color},
+			{.pos = tl, .uv = {u0, v0}, .color = color},
+			{.pos = bl, .uv = {u0, v1}, .color = color},
 		}
 	}, texture_index);
 }

@@ -297,6 +297,38 @@ static const char * const SHADER_POST_FS_CRT = SHADER_SOURCE(
 	}
 );
 
+// Bloom: blur and composite shaders, used with SHADER_POST_VS
+
+// 9 tap gaussian, done in 5 samples by using linear filtering to sample
+// between texels. `direction` is the step between taps in uv units.
+static const char * const SHADER_POST_FS_BLUR = SHADER_SOURCE(
+	varying vec2 v_uv;
+
+	uniform sampler2D texture;
+	uniform vec2 direction;
+
+	void main(void) {
+		vec4 color = texture2D(texture, v_uv) * 0.2270270270;
+		color += texture2D(texture, v_uv + direction * 1.3846153846) * 0.3162162162;
+		color += texture2D(texture, v_uv - direction * 1.3846153846) * 0.3162162162;
+		color += texture2D(texture, v_uv + direction * 3.2307692308) * 0.0702702703;
+		color += texture2D(texture, v_uv - direction * 3.2307692308) * 0.0702702703;
+		gl_FragColor = color;
+	}
+);
+
+// Copies the texture, scaled by `intensity`
+static const char * const SHADER_POST_FS_SCALED = SHADER_SOURCE(
+	varying vec2 v_uv;
+
+	uniform sampler2D texture;
+	uniform float intensity;
+
+	void main(void) {
+		gl_FragColor = vec4(texture2D(texture, v_uv).rgb * intensity, 1.0);
+	}
+);
+
 typedef struct {
 	GLuint program;
 	GLuint vao;
@@ -333,6 +365,32 @@ prg_post_t *shader_post_default_init(void) {
 	prg_post_t *s = mem_bump(sizeof(prg_post_t));
 	s->program = create_program(SHADER_POST_VS, SHADER_POST_FS_DEFAULT);	
 	shader_post_general_init(s);
+	return s;
+}
+
+typedef struct {
+	prg_post_t post;
+	GLint direction;
+} prg_blur_t;
+
+prg_blur_t *shader_blur_init(void) {
+	prg_blur_t *s = mem_bump(sizeof(prg_blur_t));
+	s->post.program = create_program(SHADER_POST_VS, SHADER_POST_FS_BLUR);
+	shader_post_general_init(&s->post);
+	s->direction = glGetUniformLocation(s->post.program, "direction");
+	return s;
+}
+
+typedef struct {
+	prg_post_t post;
+	GLint intensity;
+} prg_scaled_t;
+
+prg_scaled_t *shader_scaled_init(void) {
+	prg_scaled_t *s = mem_bump(sizeof(prg_scaled_t));
+	s->post.program = create_program(SHADER_POST_VS, SHADER_POST_FS_SCALED);
+	shader_post_general_init(&s->post);
+	s->intensity = glGetUniformLocation(s->post.program, "intensity");
 	return s;
 }
 
@@ -386,8 +444,29 @@ static GLuint backbuffer = 0;
 static GLuint backbuffer_texture = 0;
 static GLuint backbuffer_depth_buffer = 0;
 
+// Glow / bloom. The glow buffer is the size of the backbuffer and shares its
+// depth buffer. It is blurred at 1/2, 1/4 and 1/8 size, with two textures per
+// level to ping-pong between the horizontal and vertical blur passes. Each
+// level is added onto the frame with its own intensity: the small levels give
+// a tight bright halo, the large ones a wide soft one.
+#define BLOOM_LEVELS 3
+static const float bloom_intensities[BLOOM_LEVELS] = {1.4, 1.3, 1.2};
+
+typedef struct {
+	GLuint fb;
+	GLuint texture;
+	vec2i_t size;
+} render_target_t;
+
+static render_target_t glow_target;
+static render_target_t bloom_targets[BLOOM_LEVELS][2];
+static bool glow_is_active = false;
+static bool glow_has_content = false;
+
 prg_game_t *prg_game;
 prg_post_t *prg_post;
+prg_blur_t *prg_blur;
+prg_scaled_t *prg_scaled;
 prg_post_t *prg_post_effects[NUM_RENDER_POST_EFFECTS] = {};
 
 // Intra-frame counts
@@ -467,6 +546,8 @@ void render_init(vec2i_t screen_size) {
 	prg_post_effects[RENDER_POST_NONE] = shader_post_default_init();
 	prg_post_effects[RENDER_POST_CRT] = shader_post_crt_init();
 	render_set_post_effect(RENDER_POST_NONE);
+	prg_blur = shader_blur_init();
+	prg_scaled = shader_scaled_init();
 
 	// Game shader
 
@@ -544,6 +625,22 @@ void render_set_screen_size(vec2i_t size) {
 }
 
 
+static void render_target_resize(render_target_t *t, vec2i_t size) {
+	if (!t->fb) {
+		glGenFramebuffers(1, &t->fb);
+		glGenTextures(1, &t->texture);
+	}
+	t->size = size;
+	glBindTexture(GL_TEXTURE_2D, t->texture);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, size.x, size.y, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glBindFramebuffer(GL_FRAMEBUFFER, t->fb);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, t->texture, 0);
+}
+
 void render_set_resolution(render_resolution_t res) {
 	render_res = res;
 
@@ -587,6 +684,20 @@ void render_set_resolution(render_resolution_t res) {
 	projection_mat_2d = render_setup_2d_projection_mat(backbuffer_size);
 	projection_mat_3d = render_setup_3d_projection_mat(backbuffer_size);
 	current_viewport_size = backbuffer_size;
+
+
+	// Glow and bloom targets
+	render_target_resize(&glow_target, backbuffer_size);
+	glBindFramebuffer(GL_FRAMEBUFFER, glow_target.fb);
+	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, backbuffer_depth_buffer);
+	vec2i_t bloom_size = backbuffer_size;
+	for (int i = 0; i < BLOOM_LEVELS; i++) {
+		bloom_size = vec2i(max(1, bloom_size.x / 2), max(1, bloom_size.y / 2));
+		render_target_resize(&bloom_targets[i][0], bloom_size);
+		render_target_resize(&bloom_targets[i][1], bloom_size);
+	}
+	glBindFramebuffer(GL_FRAMEBUFFER, glow_is_active ? glow_target.fb : backbuffer);
+	glow_has_content = true; // force a clear of the new glow texture
 
 
 	// Use nearest texture min filter for 240p and 480p
@@ -651,13 +762,108 @@ void render_frame_prepare(void) {
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	glEnable(GL_DEPTH_TEST); 
 
+	glow_is_active = false;
+	if (glow_has_content) {
+		glBindFramebuffer(GL_FRAMEBUFFER, glow_target.fb);
+		glClearColor(0, 0, 0, 0);
+		glClear(GL_COLOR_BUFFER_BIT);
+		glBindFramebuffer(GL_FRAMEBUFFER, backbuffer);
+		glClearColor(0, 0, 0, 1);
+		glow_has_content = false;
+	}
+
 	running_stats.num_tris = 0;
 	running_stats.num_draw_calls = 0;
+}
+
+// Draws src over the whole of dst with a post shader. The caller has bound
+// the program and set its own uniforms.
+static void render_post_pass(prg_post_t *prg, GLuint src_texture, GLuint dst_fb, vec2i_t dst_size) {
+	glBindFramebuffer(GL_FRAMEBUFFER, dst_fb);
+	glViewport(0, 0, dst_size.x, dst_size.y);
+	glBindTexture(GL_TEXTURE_2D, src_texture);
+	mat4_t projection = render_setup_2d_projection_mat(dst_size);
+	glUniformMatrix4fv(prg->uniform.projection, 1, false, projection.m);
+
+	rgba_t white = rgba(128,128,128,255);
+	tris_buffer[tris_len++] = (tris_t){
+		.vertices = {
+			{.pos = {0, dst_size.y, 0}, .uv = {0, 0}, .color = white},
+			{.pos = {dst_size.x, 0, 0}, .uv = {1, 1}, .color = white},
+			{.pos = {0, 0, 0}, .uv = {0, 1}, .color = white},
+		}
+	};
+	tris_buffer[tris_len++] = (tris_t){
+		.vertices = {
+			{.pos = {dst_size.x, dst_size.y, 0}, .uv = {1, 0}, .color = white},
+			{.pos = {dst_size.x, 0, 0}, .uv = {1, 1}, .color = white},
+			{.pos = {0, dst_size.y, 0}, .uv = {0, 0}, .color = white},
+		}
+	};
+	render_flush();
+}
+
+static void render_bloom(void) {
+	if (!glow_has_content) {
+		return;
+	}
+
+	// The final pass to the screen relies on the depth test state the frame
+	// left behind (usually off, after the 2d HUD), so it must be restored as
+	// it was, not just re-enabled
+	GLboolean depth_test_was_enabled = glIsEnabled(GL_DEPTH_TEST);
+	glDisable(GL_DEPTH_TEST);
+	glDisable(GL_BLEND);
+
+	// At each level: downsample the previous level, then blur it
+	// horizontally and vertically
+	GLuint src = glow_target.texture;
+	for (int i = 0; i < BLOOM_LEVELS; i++) {
+		render_target_t *a = &bloom_targets[i][0];
+		render_target_t *b = &bloom_targets[i][1];
+
+		use_program(&prg_scaled->post);
+		glUniform1f(prg_scaled->intensity, 1.0);
+		render_post_pass(&prg_scaled->post, src, a->fb, a->size);
+
+		use_program(&prg_blur->post);
+		glUniform2f(prg_blur->direction, 1.0 / a->size.x, 0);
+		render_post_pass(&prg_blur->post, a->texture, b->fb, b->size);
+		glUniform2f(prg_blur->direction, 0, 1.0 / a->size.y);
+		render_post_pass(&prg_blur->post, b->texture, a->fb, a->size);
+
+		src = a->texture;
+	}
+
+	// Add the blurred levels onto the frame
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_ONE, GL_ONE);
+	use_program(&prg_scaled->post);
+	for (int i = 0; i < BLOOM_LEVELS; i++) {
+		glUniform1f(prg_scaled->intensity, bloom_intensities[i]);
+		render_post_pass(&prg_scaled->post, bloom_targets[i][0].texture, backbuffer, backbuffer_size);
+	}
+
+	// Restore state
+	if (blend_mode == RENDER_BLEND_LIGHTER) {
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+	}
+	else {
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	}
+	if (depth_test_was_enabled) {
+		glEnable(GL_DEPTH_TEST);
+	}
 }
 
 void render_frame_end(void) {
 	render_flush();
 	glDisable(GL_SCISSOR_TEST);
+	if (glow_is_active) {
+		render_set_glow_target(false);
+	}
+
+	render_bloom();
 
 	use_program(prg_post);
 
@@ -688,7 +894,7 @@ void render_frame_end(void) {
 	};
 
 	render_flush();
-	
+
 	// Only here do we have the complete stats
 	memcpy(&end_stats, &running_stats, sizeof(render_stats_t));
 }
@@ -815,6 +1021,16 @@ void render_set_cull_backface(bool enabled) {
 	}
 }
 
+bool render_set_glow_target(bool enabled) {
+	render_flush();
+	glow_is_active = enabled;
+	glBindFramebuffer(GL_FRAMEBUFFER, enabled ? glow_target.fb : backbuffer);
+	if (enabled) {
+		glow_has_content = true;
+	}
+	return true;
+}
+
 
 
 
@@ -883,6 +1099,41 @@ void render_push_sprite(vec3_t pos, vec2i_t size, rgba_t color, uint16_t texture
 				.uv = {0 + t->size.x, 0 + t->size.y},
 				.color = color
 			},
+		}
+	}, texture_index);
+}
+
+// Like render_push_sprite, but draws a sub-rectangle of the texture, and is
+// laid out in screen orientation: offset and size are in the billboard plane
+// with x pointing right and y pointing down on screen. (render_push_sprite's
+// own local x points left, so its textures appear mirrored)
+void render_push_sprite_tile(vec3_t pos, vec2i_t offset, vec2i_t size, vec2i_t uv_offset, vec2i_t uv_size, rgba_t color, uint16_t texture_index) {
+	error_if(texture_index >= textures_len, "Invalid texture %d", texture_index);
+
+	float l = offset.x - size.x * 0.5, r = offset.x + size.x * 0.5;
+	float t = offset.y - size.y * 0.5, b = offset.y + size.y * 0.5;
+	vec3_t tl = vec3_add(pos, vec3_transform(vec3(-l, t, 0), &sprite_mat));
+	vec3_t tr = vec3_add(pos, vec3_transform(vec3(-r, t, 0), &sprite_mat));
+	vec3_t bl = vec3_add(pos, vec3_transform(vec3(-l, b, 0), &sprite_mat));
+	vec3_t br = vec3_add(pos, vec3_transform(vec3(-r, b, 0), &sprite_mat));
+
+	float u0 = uv_offset.x, v0 = uv_offset.y;
+	float u1 = uv_offset.x + uv_size.x, v1 = uv_offset.y + uv_size.y;
+
+	// Same on-screen winding as render_push_sprite, so backface culling
+	// treats both alike
+	render_push_tris((tris_t){
+		.vertices = {
+			{.pos = tr, .uv = {u1, v0}, .color = color},
+			{.pos = tl, .uv = {u0, v0}, .color = color},
+			{.pos = br, .uv = {u1, v1}, .color = color},
+		}
+	}, texture_index);
+	render_push_tris((tris_t){
+		.vertices = {
+			{.pos = br, .uv = {u1, v1}, .color = color},
+			{.pos = tl, .uv = {u0, v0}, .color = color},
+			{.pos = bl, .uv = {u0, v1}, .color = color},
 		}
 	}, texture_index);
 }

@@ -151,7 +151,7 @@ typedef struct ship_t {
 
 void ships_load(void);
 void ships_init(section_t *section);
-void ships_draw(int viewing_pilot);
+void ships_draw(int viewing_pilot, vec3_t camera_pos);
 void ships_update(void);
 void ships_reset_exhaust_plumes(void);
 

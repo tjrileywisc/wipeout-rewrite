@@ -71,9 +71,18 @@ void render_set_screen_position(vec2_t pos);
 void render_set_blend_mode(render_blend_mode_t mode);
 void render_set_cull_backface(bool enabled);
 
+// Glow (bloom): while the glow target is enabled, geometry is drawn into a
+// separate glow buffer instead of the frame. It shares the frame's depth
+// buffer, so glowing geometry is still hidden behind the scene. At the end of
+// the frame the glow buffer is blurred and added onto the frame.
+// Returns false if the renderer doesn't support glow; nothing should be drawn
+// for glow in that case.
+bool render_set_glow_target(bool enabled);
+
 vec3_t render_transform(vec3_t pos);
 void render_push_tris(tris_t tris, uint16_t texture);
 void render_push_sprite(vec3_t pos, vec2i_t size, rgba_t color, uint16_t texture);
+void render_push_sprite_tile(vec3_t pos, vec2i_t offset, vec2i_t size, vec2i_t uv_offset, vec2i_t uv_size, rgba_t color, uint16_t texture_index);
 void render_push_2d(vec2i_t pos, vec2i_t size, rgba_t color, uint16_t texture);
 void render_push_2d_tile(vec2i_t pos, vec2i_t uv_offset, vec2i_t uv_size, vec2i_t size, rgba_t color, uint16_t texture_index);
 
