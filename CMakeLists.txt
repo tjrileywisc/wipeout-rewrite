@@ -95,6 +95,7 @@ set(common_src
 	src/wipeout/image.c
 	src/wipeout/ingame_menus.c
 	src/wipeout/intro.c
+	src/wipeout/lighting.c
 	src/wipeout/main_menu.c
 	src/wipeout/menu.c
 	src/wipeout/object.c

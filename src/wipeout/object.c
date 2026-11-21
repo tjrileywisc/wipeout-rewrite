@@ -215,6 +215,10 @@ Object *objects_load(char *name, texture_list_t tl) {
 
 
 void object_draw(Object *object, mat4_t *mat) {
+	object_draw_colored(object, mat, NULL);
+}
+
+void object_draw_colored(Object *object, mat4_t *mat, const rgba_t *colors) {
 	vec3_t *vertex = object->vertices;
 	render_set_model_mat(mat);
 
@@ -236,7 +240,7 @@ void object_draw(Object *object, mat4_t *mat) {
 				v[j] = (vertex_t){
 					.pos = vertex[p.coord],
 					.uv = {p.u, p.v},
-					.color = p.color
+					.color = colors ? colors[i * 4 + j] : p.color
 				};
 			}
 			render_push_tris((tris_t) {.vertices = {v[2],v[1],v[0]}}, prm->u.quad.texture);
@@ -251,7 +255,7 @@ void object_draw(Object *object, mat4_t *mat) {
 				v[j] = (vertex_t){
 					.pos = vertex[p.coord],
 					.uv = {p.u, p.v},
-					.color = p.color
+					.color = colors ? colors[i * 4 + j] : p.color
 				};
 			}
 			render_push_tris((tris_t) {.vertices = {v[2],v[1],v[0]}}, prm->u.quad.texture);

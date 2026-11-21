@@ -112,6 +112,7 @@ COMMON_SRC = \
 	src/wipeout/ingame_menus.c \
 	src/wipeout/title.c \
 	src/wipeout/intro.c \
+	src/wipeout/lighting.c \
 	src/wipeout/scene.c \
 	src/wipeout/ship.c \
 	src/wipeout/ship_ai.c \

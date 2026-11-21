@@ -16,6 +16,7 @@
 #include "particle.h"
 #include "menu.h"
 #include "ingame_menus.h"
+#include "lighting.h"
 
 #define ATTRACT_DURATION 60.0
 
@@ -140,6 +141,12 @@ void race_update(void) {
 			race_pause();
 		}
 	}
+
+	// Lights for this frame, shared by all views
+	lights_reset();
+	scene_add_lights();
+	ships_add_lights();
+	weapons_add_lights();
 
 	// Draw views
 	if (g.local_player_count >= 3) {

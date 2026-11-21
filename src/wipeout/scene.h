@@ -10,5 +10,7 @@ void scene_init(void);
 void scene_set_start_booms(int num_lights);
 void scene_init_aurora_borealis(void);
 void scene_update(void);
+// Adds the light of the red beacons to the frame's light list
+void scene_add_lights(void);
 
 #endif

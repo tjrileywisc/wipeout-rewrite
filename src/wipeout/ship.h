@@ -129,6 +129,11 @@ typedef struct ship_t {
 	Object *collision_model;
 	uint16_t shadow_texture;
 
+	// Lighting
+	vec3_t *face_normals;    // per primitive of the model, see lighting.h
+	vec3_t engine_light_pos; // model space
+	bool has_engine_light;
+
 	struct {
 		vec3_t *v;
 		vec3_t initial;
@@ -157,6 +162,9 @@ void ships_reset_exhaust_plumes(void);
 
 void ship_init(ship_t *self, section_t *section, int pilot, int position);
 void ship_init_exhaust_plume(ship_t *self);
+void ship_init_lighting(ship_t *self);
+// Adds the light of every ship's engine to the frame's light list
+void ships_add_lights(void);
 void ship_reset_exhaust_plume(ship_t *self);
 void ship_draw(ship_t *self);
 void ship_draw_shadow(ship_t *self);

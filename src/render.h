@@ -27,6 +27,15 @@ typedef struct {
 
 #define RENDER_USE_MIPMAPS 1
 
+// Point lights evaluated per pixel by the renderer (see render_set_lights)
+#define RENDER_LIGHTS_MAX 32
+
+typedef struct {
+	vec3_t pos;
+	float radius;  // no light beyond this distance
+	vec3_t color;  // added to the vertex color factor: 1.0 doubles it
+} render_light_t;
+
 // Textures are upscaled by this factor with xBR when they are created. The
 // texture atlas is allocated at this scale, so 4 needs an 8192x8192 atlas
 // (~340mb of video memory with mipmaps). The renderer falls back to a lower
@@ -78,6 +87,12 @@ void render_set_cull_backface(bool enabled);
 // Returns false if the renderer doesn't support glow; nothing should be drawn
 // for glow in that case.
 bool render_set_glow_target(bool enabled);
+
+// Lights everything drawn after this per pixel with the given point lights, on
+// top of the vertex colors. Faces "wrap" the light by `wrap` (0 = strict N.L).
+// len 0 turns it off again. Returns false if the renderer can't do this; the
+// caller then has to light on its own.
+bool render_set_lights(const render_light_t *lights, int len, float wrap);
 
 vec3_t render_transform(vec3_t pos);
 void render_push_tris(tris_t tris, uint16_t texture);
