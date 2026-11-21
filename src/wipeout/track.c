@@ -299,25 +299,83 @@ void track_draw_section(section_t *section) {
 	}
 }
 
-void track_draw(camera_t *camera) {	
+// Whether a section is (roughly) in front of the camera. Ideally we'd want to
+// do a full frustum culling here. FIXME.
+static bool track_section_is_visible(section_t *s, vec3_t cam_pos, vec3_t cam_dir) {
+	vec3_t diff = vec3_sub(s->center, cam_pos);
+	float cam_dot = vec3_dot(diff, cam_dir);
+	return
+		cam_dot > -s->radius &&
+		cam_dot < (RENDER_FADEOUT_FAR * RENDER_FADEOUT_FAR) + s->radius;
+}
+
+void track_draw(camera_t *camera) {
 	render_set_model_mat(&mat4_identity());
 
-	// Calculate the camera forward vector, so we can cull everything that's
-	// behind. Ideally we'd want to do a full frustum culling here. FIXME.
 	vec3_t cam_pos = camera->position;
 	vec3_t cam_dir = camera_forward(camera);
-	
+
 	for(int32_t i = 0; i < g.track.section_count; i++) {
 		section_t *s = &g.track.sections[i];
-		vec3_t diff = vec3_sub(s->center, cam_pos);
-		float cam_dot = vec3_dot(diff, cam_dir);
-		if (
-			cam_dot > -s->radius &&
-			cam_dot < (RENDER_FADEOUT_FAR * RENDER_FADEOUT_FAR) + s->radius
-		) {
+		if (track_section_is_visible(s, cam_pos, cam_dir)) {
 			track_draw_section(s);
 		}
 	}
+}
+
+// Pad glow: boost pads and active weapon pads are drawn again, faintly, into
+// the renderer's glow target, in their own texture and color. The pads lie on
+// the track surface, so they are moved towards the camera by a small fixed
+// distance to pass the depth test against it.
+#define TRACK_PAD_GLOW_ALPHA      70
+#define TRACK_PAD_GLOW_DEPTH_BIAS 4.0
+
+static void track_draw_face_glow(track_face_t *face, vec3_t cam_pos) {
+	uint16_t tex_index = texture_from_list(g.track.textures, face->texture);
+	for (int t = 0; t < 2; t++) {
+		tris_t tris = face->tris[t];
+		for (int v = 0; v < 3; v++) {
+			vec3_t to_cam = vec3_sub(cam_pos, tris.vertices[v].pos);
+			float dist = vec3_len(to_cam);
+			if (dist > 1) {
+				tris.vertices[v].pos = vec3_add(tris.vertices[v].pos, vec3_mulf(to_cam, TRACK_PAD_GLOW_DEPTH_BIAS / dist));
+			}
+			tris.vertices[v].color.a = TRACK_PAD_GLOW_ALPHA;
+		}
+		render_push_tris(tris, tex_index);
+	}
+}
+
+void track_draw_pad_glow(camera_t *camera) {
+	vec3_t cam_pos = camera->position;
+	vec3_t cam_dir = camera_forward(camera);
+
+	render_set_model_mat(&mat4_identity());
+	if (!render_set_glow_target(true)) {
+		return;
+	}
+	render_set_depth_write(false);
+	render_set_cull_backface(false);
+	render_set_blend_mode(RENDER_BLEND_LIGHTER);
+
+	for (int32_t i = 0; i < g.track.section_count; i++) {
+		section_t *s = &g.track.sections[i];
+		if (!track_section_is_visible(s, cam_pos, cam_dir)) {
+			continue;
+		}
+		// Pads are only ever on the two base faces of a section
+		track_face_t *face = track_section_get_base_face(s);
+		for (int f = 0; f < 2; f++, face++) {
+			if (flags_any(face->flags, FACE_BOOST | FACE_PICKUP_ACTIVE)) {
+				track_draw_face_glow(face, cam_pos);
+			}
+		}
+	}
+
+	render_set_blend_mode(RENDER_BLEND_NORMAL);
+	render_set_cull_backface(true);
+	render_set_depth_write(true);
+	render_set_glow_target(false);
 }
 
 void track_cycle_pickups(void) {

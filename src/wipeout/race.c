@@ -77,6 +77,7 @@ static void race_draw_view(int pilot_idx, camera_t *camera, droid_t *droid) {
 	ships_draw(pilot_idx, camera->position);  // -1 = spectator: no ship suppressed
 	droid_draw(droid);
 	weapons_draw();
+	track_draw_pad_glow(camera);
 	particles_draw();
 
 	if (save.ship_markers) {

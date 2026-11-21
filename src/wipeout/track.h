@@ -92,6 +92,9 @@ section_t *track_nearest_section(vec3_t pos, vec3_t bias, section_t *section, fl
 
 struct camera_t;
 void track_draw(struct camera_t *camera);
+// Draws the glow (bloom) of boost and weapon pads. Call after everything that
+// can cover the pads (ships, weapons) has been drawn.
+void track_draw_pad_glow(struct camera_t *camera);
 
 void track_cycle_pickups(void);
 
