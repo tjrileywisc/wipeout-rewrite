@@ -208,6 +208,11 @@ bool render_set_glow_target(bool enabled) {
 	return false;
 }
 
+bool render_set_lights(const render_light_t *lights, int len, float wrap) {
+	(void) lights; (void) len; (void) wrap;
+	return false;
+}
+
 vec3_t render_transform(vec3_t pos) {
 	return vec4_perspective_divide(vec3_transform_perspective(vec3_transform(pos, &view_mat), &projection_mat));
 }

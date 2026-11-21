@@ -53,4 +53,15 @@ void lighting_draw_object(
 // in world space, with normal as the face normal.
 void lighting_track_tris(tris_t *tris, vec3_t normal, const light_t *local, int local_len);
 
+// Track lighting modes (save.track_lighting)
+#define TRACK_LIGHTING_OFF    0
+#define TRACK_LIGHTING_VERTEX 1
+#define TRACK_LIGHTING_PIXEL  2
+
+// Has the renderer light the track per pixel with the frame's lights plus the
+// given extra ones, from here until lighting_track_pixel_end. Returns false if
+// the renderer can't; the track then has to be lit with lighting_track_tris.
+bool lighting_track_pixel_begin(const light_t *extra, int extra_len);
+void lighting_track_pixel_end(void);
+
 #endif

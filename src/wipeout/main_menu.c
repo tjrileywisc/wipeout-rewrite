@@ -55,6 +55,7 @@ static void draw_model(Object *model, vec2_t offset, vec3_t pos, float rotation)
 // -----------------------------------------------------------------------------
 // Commonly used settings choices
 static const char *opts_off_on[] = {"OFF", "ON"};
+static const char *opts_track_lighting[] = {"OFF", "VERTEX", "PIXEL"}; // TRACK_LIGHTING_*
 
 // -----------------------------------------------------------------------------
 // Main Menu
@@ -538,7 +539,7 @@ static void page_options_game_init(menu_t *menu) {
 
 	menu_page_add_toggle(page, save.ship_markers, "SHIP MARKERS", opts_off_on, len(opts_off_on), toggle_ship_markers);
 	menu_page_add_toggle(page, save.ship_lighting, "SHIP LIGHTING", opts_off_on, len(opts_off_on), toggle_ship_lighting);
-	menu_page_add_toggle(page, save.track_lighting, "TRACK LIGHTING", opts_off_on, len(opts_off_on), toggle_track_lighting);
+	menu_page_add_toggle(page, save.track_lighting, "TRACK LIGHTING", opts_track_lighting, len(opts_track_lighting), toggle_track_lighting);
 }
 
 // -----------------------------------------------------------------------------

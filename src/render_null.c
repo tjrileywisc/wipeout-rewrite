@@ -58,6 +58,11 @@ bool render_set_glow_target(bool enabled) {
 	return false;
 }
 
+bool render_set_lights(const render_light_t *lights, int len, float wrap) {
+	(void) lights; (void) len; (void) wrap;
+	return false;
+}
+
 vec3_t render_transform(vec3_t pos) {
 	return pos;
 }

@@ -1,5 +1,6 @@
 #include "../mem.h"
 #include "../utils.h"
+#include "../render.h"
 
 #include "lighting.h"
 
@@ -225,4 +226,25 @@ void lighting_track_tris(tris_t *tris, vec3_t normal, const light_t *local, int 
 			v->color.a
 		);
 	}
+}
+
+bool lighting_track_pixel_begin(const light_t *extra, int extra_len) {
+	render_light_t rl[RENDER_LIGHTS_MAX];
+	int rl_len = 0;
+	for (int src = 0; src < 2; src++) {
+		const light_t *list = src == 0 ? lights : extra;
+		int len = src == 0 ? lights_count : extra_len;
+		for (int i = 0; i < len && rl_len < RENDER_LIGHTS_MAX; i++) {
+			rl[rl_len++] = (render_light_t){
+				.pos = list[i].pos,
+				.radius = list[i].radius,
+				.color = vec3_mulf(list[i].color, LIGHTING_TRACK_STRENGTH),
+			};
+		}
+	}
+	return render_set_lights(rl, rl_len, LIGHTING_TRACK_WRAP);
+}
+
+void lighting_track_pixel_end(void) {
+	render_set_lights(NULL, 0, 0);
 }

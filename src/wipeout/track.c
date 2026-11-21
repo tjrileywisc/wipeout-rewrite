@@ -316,7 +316,7 @@ static bool track_section_is_visible(section_t *s, vec3_t cam_pos, vec3_t cam_di
 #define TRACK_SECTION_LIGHTS_MAX 24
 
 static const vec3_t boost_pad_light_color = {0.35f, 0.75f, 2.20f};
-#define PAD_LIGHT_INTENSITY 1.8
+#define PAD_LIGHT_INTENSITY 20
 #define PAD_LIGHT_RADIUS    1600.0
 #define PAD_LIGHT_HEIGHT    100.0 // above the pad, so it's not in a ship's plane when on the pad
 
@@ -379,12 +379,51 @@ static void track_draw_section_lit(section_t *section, const light_t *local, int
 	}
 }
 
+// With per pixel lighting, all pad lights within this distance of the camera
+// are handed to the renderer at once (it can't change lights per section).
+#define TRACK_PIXEL_PAD_LIGHTS_MAX  16
+#define TRACK_PIXEL_PAD_LIGHTS_DIST 16000.0
+
+static bool track_draw_pixel_lit(camera_t *camera) {
+	vec3_t cam_pos = camera->position;
+	vec3_t cam_dir = camera_forward(camera);
+
+	light_t pads[TRACK_PIXEL_PAD_LIGHTS_MAX];
+	int pads_len = 0;
+	float max_dist = TRACK_PIXEL_PAD_LIGHTS_DIST + PAD_LIGHT_RADIUS;
+	for (int32_t i = 0; i < g.track.section_count && pads_len < TRACK_PIXEL_PAD_LIGHTS_MAX; i++) {
+		section_t *s = &g.track.sections[i];
+		if (
+			track_section_is_visible(s, cam_pos, cam_dir) &&
+			vec3_len_sq(vec3_sub(s->center, cam_pos)) < max_dist * max_dist
+		) {
+			pads_len += track_pad_lights(s, 0, 0, pads + pads_len, TRACK_PIXEL_PAD_LIGHTS_MAX - pads_len);
+		}
+	}
+	if (!lighting_track_pixel_begin(pads, pads_len)) {
+		return false;
+	}
+
+	for (int32_t i = 0; i < g.track.section_count; i++) {
+		section_t *s = &g.track.sections[i];
+		if (track_section_is_visible(s, cam_pos, cam_dir)) {
+			track_draw_section(s);
+		}
+	}
+	lighting_track_pixel_end();
+	return true;
+}
+
 void track_draw(camera_t *camera) {
 	render_set_model_mat(&mat4_identity());
 
+	if (save.track_lighting == TRACK_LIGHTING_PIXEL && track_draw_pixel_lit(camera)) {
+		return;
+	}
+
 	vec3_t cam_pos = camera->position;
 	vec3_t cam_dir = camera_forward(camera);
-	bool lit = save.track_lighting;
+	bool lit = save.track_lighting != TRACK_LIGHTING_OFF;
 
 	for(int32_t i = 0; i < g.track.section_count; i++) {
 		section_t *s = &g.track.sections[i];

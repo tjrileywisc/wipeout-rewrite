@@ -597,7 +597,7 @@ save_t save = {
 	.network_interface = 0,
 	.ship_markers = false,
 	.ship_lighting = true,
-	.track_lighting = true,
+	.track_lighting = 2, // TRACK_LIGHTING_PIXEL
 
 	.has_rapier_class = true,  // for testing; should be false in prod
 	.has_bonus_circuits = true, // for testing; should be false in prod

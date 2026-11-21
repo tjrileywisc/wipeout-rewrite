@@ -44,6 +44,8 @@
 	// WebGL (GLES) needs the `precision` to be set, wheras OpenGL 2 
 	// doesn't like that...
 	#define SHADER_SOURCE(...) "precision highp float;" #__VA_ARGS__
+	#define SHADER_RAW(...) #__VA_ARGS__
+	#define RENDER_HAS_PIXEL_LIGHTS 0
 
 	// WebGL1 only allows for a 16 bit depth buffer attachment, so 
 	// we sacrifice a bit of the near plane to get more precision
@@ -53,6 +55,9 @@
 	#define RENDER_DEPTH_BUFFER_INTERNAL_FORMAT GL_DEPTH_COMPONENT16
 #else
 	#define SHADER_SOURCE(...) #__VA_ARGS__
+	#define SHADER_RAW(...) #__VA_ARGS__
+	// Per pixel lights need dFdx/dFdy, which GLES2 only has as an extension
+	#define RENDER_HAS_PIXEL_LIGHTS 1
 
 	#define NEAR_PLANE 16.0
 	#define FAR_PLANE (RENDER_FADEOUT_FAR)
@@ -126,6 +131,7 @@ static const char * const SHADER_GAME_VS = SHADER_SOURCE(
 
 	varying vec4 v_color;
 	varying vec2 v_uv;
+	varying vec3 v_world;
 	uniform mat4 view;
 	uniform mat4 model;
 	uniform mat4 projection;
@@ -135,25 +141,80 @@ static const char * const SHADER_GAME_VS = SHADER_SOURCE(
 	uniform float time;
 	
 	void main(void) {
-		gl_Position = projection * view * model * vec4(pos, 1.0);
+		vec4 world = model * vec4(pos, 1.0);
+		gl_Position = projection * view * world;
 		gl_Position.xy += screen.xy * gl_Position.w;
+		v_world = world.xyz;
 		v_color = color;
 		v_color.a *= smoothstep(
 			fade.y, fade.x, // fadeout far, near
-			length(vec4(camera_pos, 1.0) - model * vec4(pos, 1.0))
+			length(vec4(camera_pos, 1.0) - world)
 		);
 		v_uv = uv / 2048.0; // ATLAS_GRID * ATLAS_SIZE
 	}
 );
 
-static const char * const SHADER_GAME_FS = SHADER_SOURCE(
+// Point lights (render_set_lights), with a flat normal from the screen space
+// derivatives of the world position, turned towards the camera. The loop bound
+// must be a constant in GLSL 1.0; it's RENDER_LIGHTS_MAX.
+#if RENDER_HAS_PIXEL_LIGHTS
+static const char * const SHADER_GAME_FS_LIGHTS = SHADER_RAW(
+	varying vec3 v_world;
+	uniform vec3 camera_pos;
+	uniform int light_count;
+	uniform float light_wrap;
+	uniform vec4 light_pos[32];
+	uniform vec3 light_color[32];
+
+	vec3 point_lights(void) {
+		vec3 sum = vec3(0.0);
+		if (light_count == 0) {
+			return sum;
+		}
+		vec3 n = normalize(cross(dFdx(v_world), dFdy(v_world)));
+		if (dot(n, camera_pos - v_world) < 0.0) {
+			n = -n;
+		}
+		for (int i = 0; i < 32; i++) {
+			if (i >= light_count) {
+				break;
+			}
+			vec3 to_light = light_pos[i].xyz - v_world;
+			float dist = length(to_light);
+			float r = light_pos[i].w;
+			if (dist >= r) {
+				continue;
+			}
+			float ndl = dist > 0.0001 ? dot(n, to_light) / dist : 1.0;
+			ndl = (ndl + light_wrap) / (1.0 + light_wrap);
+			if (ndl <= 0.0) {
+				continue;
+			}
+			float atten = 1.0 - dist / r;
+			sum += light_color[i] * (atten * atten * ndl);
+		}
+		return sum;
+	}
+);
+#else
+static const char * const SHADER_GAME_FS_LIGHTS = SHADER_RAW(
+	vec3 point_lights(void) {
+		return vec3(0.0);
+	}
+);
+#endif
+
+static const char * const SHADER_GAME_FS_MAIN = SHADER_RAW(
 	varying vec4 v_color;
 	varying vec2 v_uv;
 	uniform sampler2D texture;
 
 	void main(void) {
 		vec4 tex_color = texture2D(texture, v_uv);
-		vec4 color = tex_color * v_color;
+		vec4 v = v_color;
+		// Same as the CPU lighting: the vertex color is scaled, then clamped
+		v.rgb = min(v.rgb * (vec3(1.0) + point_lights()), vec3(1.0));
+		vec4 color = tex_color * v;
 		if (color.a == 0.0) {
 			discard;
 		}
@@ -173,6 +234,10 @@ typedef struct {
 		GLuint camera_pos;
 		GLuint fade;
 		GLuint time;
+		GLint light_count;
+		GLint light_wrap;
+		GLint light_pos;
+		GLint light_color;
 	} uniform;
 	struct {
 		GLuint pos;
@@ -184,7 +249,10 @@ typedef struct {
 prg_game_t *shader_game_init(void) {
 	prg_game_t *s = mem_bump(sizeof(prg_game_t));
 	
-	s->program = create_program(SHADER_GAME_VS, SHADER_GAME_FS);
+	// The precision statement (GLES) must come before everything else
+	static char fs[4096];
+	snprintf(fs, sizeof(fs), "%s%s%s", SHADER_SOURCE(), SHADER_GAME_FS_LIGHTS, SHADER_GAME_FS_MAIN);
+	s->program = create_program(SHADER_GAME_VS, fs);
 
 	s->uniform.view = glGetUniformLocation(s->program, "view");
 	s->uniform.model = glGetUniformLocation(s->program, "model");
@@ -192,6 +260,10 @@ prg_game_t *shader_game_init(void) {
 	s->uniform.screen = glGetUniformLocation(s->program, "screen");
 	s->uniform.camera_pos = glGetUniformLocation(s->program, "camera_pos");
 	s->uniform.fade = glGetUniformLocation(s->program, "fade");
+	s->uniform.light_count = glGetUniformLocation(s->program, "light_count");
+	s->uniform.light_wrap = glGetUniformLocation(s->program, "light_wrap");
+	s->uniform.light_pos = glGetUniformLocation(s->program, "light_pos");
+	s->uniform.light_color = glGetUniformLocation(s->program, "light_color");
 
 	s->attribute.pos = glGetAttribLocation(s->program, "pos");
 	s->attribute.uv = glGetAttribLocation(s->program, "uv");
@@ -755,6 +827,9 @@ void render_frame_prepare(void) {
 
 	glBindTexture(GL_TEXTURE_2D, atlas_textures[atlas_current]);
 	glUniform2f(prg_game->uniform.screen, 0, 0);
+	if (prg_game->uniform.light_count >= 0) {
+		glUniform1i(prg_game->uniform.light_count, 0);
+	}
 	glEnable(GL_DEPTH_TEST);
 	glDepthMask(true);
 	glDisable(GL_POLYGON_OFFSET_FILL);
@@ -1028,6 +1103,34 @@ bool render_set_glow_target(bool enabled) {
 	if (enabled) {
 		glow_has_content = true;
 	}
+	return true;
+}
+
+bool render_set_lights(const render_light_t *lights, int len, float wrap) {
+	if (!RENDER_HAS_PIXEL_LIGHTS || prg_game->uniform.light_count < 0) {
+		return false;
+	}
+	render_flush();
+	if (len > RENDER_LIGHTS_MAX) {
+		len = RENDER_LIGHTS_MAX;
+	}
+	if (len > 0) {
+		GLfloat pos[RENDER_LIGHTS_MAX * 4];
+		GLfloat color[RENDER_LIGHTS_MAX * 3];
+		for (int i = 0; i < len; i++) {
+			pos[i * 4 + 0] = lights[i].pos.x;
+			pos[i * 4 + 1] = lights[i].pos.y;
+			pos[i * 4 + 2] = lights[i].pos.z;
+			pos[i * 4 + 3] = lights[i].radius;
+			color[i * 3 + 0] = lights[i].color.x;
+			color[i * 3 + 1] = lights[i].color.y;
+			color[i * 3 + 2] = lights[i].color.z;
+		}
+		glUniform4fv(prg_game->uniform.light_pos, len, pos);
+		glUniform3fv(prg_game->uniform.light_color, len, color);
+		glUniform1f(prg_game->uniform.light_wrap, wrap);
+	}
+	glUniform1i(prg_game->uniform.light_count, len);
 	return true;
 }
 
