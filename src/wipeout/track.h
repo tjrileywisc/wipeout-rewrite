@@ -98,4 +98,9 @@ void track_draw_pad_glow(struct camera_t *camera);
 
 void track_cycle_pickups(void);
 
+// Lights for the boost and active weapon pads on the sections from `back`
+// sections before `section` to `ahead` sections after it. Returns the count.
+struct light_t;
+int track_pad_lights(section_t *section, int back, int ahead, struct light_t *out, int out_max);
+
 #endif

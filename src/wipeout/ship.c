@@ -451,13 +451,6 @@ void ship_reset_exhaust_plume(ship_t* self) {
 static const vec3_t engine_light_color = {1.20, 0.50, 0.22};
 #define ENGINE_LIGHT_RADIUS 1400.0
 
-static const vec3_t boost_pad_light_color = {0.35, 0.75, 2.20};
-#define PAD_LIGHT_INTENSITY 1.8
-#define PAD_LIGHT_RADIUS    1600.0
-#define PAD_LIGHT_HEIGHT    100.0 // above the pad, so it's not in the ship's plane when on the pad
-#define PAD_LIGHT_SECTIONS_BACK  1
-#define PAD_LIGHT_SECTIONS_AHEAD 2
-
 void ship_init_lighting(ship_t *self) {
 	Object *model = self->model;
 	self->face_normals = lighting_face_normals(model);
@@ -496,49 +489,6 @@ void ships_add_lights(void) {
 	}
 }
 
-static int ship_add_pad_lights(ship_t *self, light_t *lights, int lights_max) {
-	int lights_len = 0;
-	section_t *s = self->section;
-	if (!s) {
-		return 0;
-	}
-	for (int i = 0; i < PAD_LIGHT_SECTIONS_BACK && s->prev; i++) {
-		s = s->prev;
-	}
-	for (int i = 0; i <= PAD_LIGHT_SECTIONS_BACK + PAD_LIGHT_SECTIONS_AHEAD && s; i++, s = s->next) {
-		// Pads are only ever on the two base faces of a section
-		track_face_t *face = track_section_get_base_face(s);
-		for (int f = 0; f < 2; f++, face++) {
-			vec3_t color;
-			if (flags_is(face->flags, FACE_BOOST)) {
-				color = boost_pad_light_color;
-			}
-			else if (flags_is(face->flags, FACE_PICKUP_ACTIVE)) {
-				// Weapon pads cycle through colors; light in the current one
-				rgba_t c = face->tris[0].vertices[0].color;
-				color = vec3_mulf(vec3(c.r, c.g, c.b), PAD_LIGHT_INTENSITY / 255.0);
-			}
-			else {
-				continue;
-			}
-			if (lights_len >= lights_max) {
-				return lights_len;
-			}
-			vec3_t center = vec3_mulf(vec3_add(
-				vec3_add(face->tris[0].vertices[0].pos, face->tris[0].vertices[1].pos),
-				vec3_add(face->tris[0].vertices[2].pos, face->tris[1].vertices[0].pos)
-			), 0.25);
-			lights[lights_len++] = (light_t){
-				.pos = vec3_add(center, vec3_mulf(face->normal, PAD_LIGHT_HEIGHT)),
-				.color = color,
-				.radius = PAD_LIGHT_RADIUS,
-				.owner = NULL
-			};
-		}
-	}
-	return lights_len;
-}
-
 void ship_draw(ship_t *self) {
 	if (!save.ship_lighting || !self->face_normals) {
 		object_draw(self->model, &self->mat);
@@ -546,7 +496,9 @@ void ship_draw(ship_t *self) {
 	}
 
 	light_t pad_lights[8];
-	int pad_lights_len = ship_add_pad_lights(self, pad_lights, len(pad_lights));
+	int pad_lights_len = self->section
+		? track_pad_lights(self->section, 1, 2, pad_lights, len(pad_lights))
+		: 0;
 	lighting_draw_object(
 		self->model, &self->mat, self->face_normals,
 		self, pad_lights, pad_lights_len, PRM_SHIP_ENGINE

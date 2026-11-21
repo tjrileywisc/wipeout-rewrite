@@ -14,6 +14,12 @@
 // from a light still catch some of it. With strict N.L, a pad under a ship
 // would only light its underside, which the camera hardly ever sees.
 #define LIGHTING_POINT_WRAP  0.5
+// The track keeps its baked lighting (no sun or ambient term) and only gets the
+// point lights on top. Its faces are large, so the lights wrap a little further
+// around them to make the pools wider and softer.
+#define LIGHTING_TRACK_WRAP     0.3
+#define LIGHTING_TRACK_STRENGTH 1.0
+
 static const vec3_t lighting_sun_dir = {0.30, -0.90, 0.32}; // towards the sun, normalized below
 
 // Limits for the per draw scratch buffers. Models above these are drawn unlit.
@@ -78,6 +84,50 @@ static uint8_t lighting_apply(uint8_t base, float factor) {
 	return c > 255 ? 255 : (c < 0 ? 0 : (uint8_t)c);
 }
 
+int lights_gather(
+	vec3_t center, float radius, const void *owner,
+	const light_t *extra, int extra_len, light_t *out, int out_max
+) {
+	int out_len = 0;
+	for (int src = 0; src < 2; src++) {
+		const light_t *list = src == 0 ? lights : extra;
+		int len = src == 0 ? lights_count : extra_len;
+		for (int i = 0; i < len && out_len < out_max; i++) {
+			if (owner && list[i].owner == owner) {
+				continue;
+			}
+			float reach = list[i].radius + radius;
+			if (vec3_len_sq(vec3_sub(list[i].pos, center)) < reach * reach) {
+				out[out_len++] = list[i];
+			}
+		}
+	}
+	return out_len;
+}
+
+// Sum of the point lights at p, for a surface with the (unit) normal n
+static vec3_t lighting_point_lights(const light_t *local, int local_len, vec3_t p, vec3_t n, float wrap) {
+	vec3_t f = vec3(0, 0, 0);
+	for (int l = 0; l < local_len; l++) {
+		vec3_t to_light = vec3_sub(local[l].pos, p);
+		float dist_sq = vec3_len_sq(to_light);
+		float r = local[l].radius;
+		if (dist_sq >= r * r) {
+			continue;
+		}
+		float dist = sqrtf(dist_sq);
+		float ndl = dist > 0.0001 ? vec3_dot(n, to_light) / dist : 1;
+		ndl = (ndl + wrap) / (1.0 + wrap);
+		if (ndl <= 0) {
+			continue;
+		}
+		float atten = 1.0 - dist / r;
+		atten *= atten;
+		f = vec3_add(f, vec3_mulf(local[l].color, atten * ndl));
+	}
+	return f;
+}
+
 void lighting_draw_object(
 	Object *object, mat4_t *mat, const vec3_t *face_normals,
 	const void *owner, const light_t *extra, int extra_len, int unlit_flags
@@ -99,20 +149,7 @@ void lighting_draw_object(
 
 	// Lights that can reach this object at all
 	light_t local[LIGHTING_LOCAL_MAX];
-	int local_len = 0;
-	for (int src = 0; src < 2; src++) {
-		const light_t *list = src == 0 ? lights : extra;
-		int len = src == 0 ? lights_count : extra_len;
-		for (int i = 0; i < len && local_len < LIGHTING_LOCAL_MAX; i++) {
-			if (owner && list[i].owner == owner) {
-				continue;
-			}
-			float reach = list[i].radius + object->radius;
-			if (vec3_len_sq(vec3_sub(list[i].pos, center)) < reach * reach) {
-				local[local_len++] = list[i];
-			}
-		}
-	}
+	int local_len = lights_gather(center, object->radius, owner, extra, extra_len, local, LIGHTING_LOCAL_MAX);
 
 	for (int i = 0; i < object->vertices_len; i++) {
 		world_pos[i] = vec3_transform(object->vertices[i], mat);
@@ -156,26 +193,10 @@ void lighting_draw_object(
 		float flat = LIGHTING_AMBIENT + LIGHTING_SUN * (sun_dot > 0 ? sun_dot : 0);
 
 		for (int j = 0; j < v_len; j++) {
-			vec3_t f = vec3(flat, flat, flat);
-			vec3_t p = world_pos[v[j].coord];
-
-			for (int l = 0; l < local_len; l++) {
-				vec3_t to_light = vec3_sub(local[l].pos, p);
-				float dist_sq = vec3_len_sq(to_light);
-				float r = local[l].radius;
-				if (dist_sq >= r * r) {
-					continue;
-				}
-				float dist = sqrtf(dist_sq);
-				float ndl = dist > 0.0001 ? vec3_dot(n, to_light) / dist : 1;
-				ndl = (ndl + LIGHTING_POINT_WRAP) / (1.0 + LIGHTING_POINT_WRAP);
-				if (ndl <= 0) {
-					continue;
-				}
-				float atten = 1.0 - dist / r;
-				atten *= atten;
-				f = vec3_add(f, vec3_mulf(local[l].color, atten * ndl));
-			}
+			vec3_t f = vec3_add(
+				vec3(flat, flat, flat),
+				lighting_point_lights(local, local_len, world_pos[v[j].coord], n, LIGHTING_POINT_WRAP)
+			);
 
 			rgba_t base = v[j].color;
 			colors[i * 4 + j] = rgba(
@@ -188,4 +209,20 @@ void lighting_draw_object(
 	}
 
 	object_draw_colored(object, mat, colors);
+}
+
+void lighting_track_tris(tris_t *tris, vec3_t normal, const light_t *local, int local_len) {
+	for (int j = 0; j < 3; j++) {
+		vertex_t *v = &tris->vertices[j];
+		vec3_t f = vec3_add(
+			vec3(1, 1, 1),
+			vec3_mulf(lighting_point_lights(local, local_len, v->pos, normal, LIGHTING_TRACK_WRAP), LIGHTING_TRACK_STRENGTH)
+		);
+		v->color = rgba(
+			lighting_apply(v->color.r, f.x),
+			lighting_apply(v->color.g, f.y),
+			lighting_apply(v->color.b, f.z),
+			v->color.a
+		);
+	}
 }

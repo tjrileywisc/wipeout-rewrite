@@ -5,6 +5,7 @@
 #include "../platform.h"
 
 #include "track.h"
+#include "lighting.h"
 #include "camera.h"
 #include "game.h"
 
@@ -309,15 +310,98 @@ static bool track_section_is_visible(section_t *s, vec3_t cam_pos, vec3_t cam_di
 		cam_dot < (RENDER_FADEOUT_FAR * RENDER_FADEOUT_FAR) + s->radius;
 }
 
+// Dynamic lighting (see lighting.h): sections that a light reaches are drawn
+// with the lights added to their baked vertex colors.
+// Boost and weapon pads light what's around them, the track and ships alike.
+#define TRACK_SECTION_LIGHTS_MAX 24
+
+static const vec3_t boost_pad_light_color = {0.35f, 0.75f, 2.20f};
+#define PAD_LIGHT_INTENSITY 1.8
+#define PAD_LIGHT_RADIUS    1600.0
+#define PAD_LIGHT_HEIGHT    100.0 // above the pad, so it's not in a ship's plane when on the pad
+
+int track_pad_lights(section_t *section, int back, int ahead, light_t *out, int out_max) {
+	int out_len = 0;
+	section_t *s = section;
+	int count = 1 + ahead;
+	for (int i = 0; i < back && s->prev; i++, count++) {
+		s = s->prev;
+	}
+	for (int i = 0; i < count && s; i++, s = s->next) {
+		// Pads are only ever on the two base faces of a section
+		track_face_t *face = track_section_get_base_face(s);
+		for (int f = 0; f < 2; f++, face++) {
+			vec3_t color;
+			if (flags_is(face->flags, FACE_BOOST)) {
+				color = boost_pad_light_color;
+			}
+			else if (flags_is(face->flags, FACE_PICKUP_ACTIVE)) {
+				// Weapon pads cycle through colors; light in the current one
+				rgba_t c = face->tris[0].vertices[0].color;
+				color = vec3_mulf(vec3(c.r, c.g, c.b), PAD_LIGHT_INTENSITY / 255.0);
+			}
+			else {
+				continue;
+			}
+			if (out_len >= out_max) {
+				return out_len;
+			}
+			vec3_t center = vec3_mulf(vec3_add(
+				vec3_add(face->tris[0].vertices[0].pos, face->tris[0].vertices[1].pos),
+				vec3_add(face->tris[0].vertices[2].pos, face->tris[1].vertices[0].pos)
+			), 0.25);
+			out[out_len++] = (light_t){
+				.pos = vec3_add(center, vec3_mulf(face->normal, PAD_LIGHT_HEIGHT)),
+				.color = color,
+				.radius = PAD_LIGHT_RADIUS,
+				.owner = NULL
+			};
+		}
+	}
+	return out_len;
+}
+
+static void track_draw_section_lit(section_t *section, const light_t *local, int local_len) {
+	track_face_t *face = g.track.faces + section->face_start;
+	for (uint32_t j = 0; j < section->face_count; j++, face++) {
+		uint16_t tex_index = texture_from_list(g.track.textures, face->texture);
+		// The pads glow by themselves; more light would only wash them out
+		if (flags_any(face->flags, FACE_BOOST | FACE_PICKUP_ACTIVE)) {
+			render_push_tris(face->tris[0], tex_index);
+			render_push_tris(face->tris[1], tex_index);
+			continue;
+		}
+		for (int t = 0; t < 2; t++) {
+			tris_t tris = face->tris[t];
+			lighting_track_tris(&tris, face->normal, local, local_len);
+			render_push_tris(tris, tex_index);
+		}
+	}
+}
+
 void track_draw(camera_t *camera) {
 	render_set_model_mat(&mat4_identity());
 
 	vec3_t cam_pos = camera->position;
 	vec3_t cam_dir = camera_forward(camera);
+	bool lit = save.track_lighting;
 
 	for(int32_t i = 0; i < g.track.section_count; i++) {
 		section_t *s = &g.track.sections[i];
-		if (track_section_is_visible(s, cam_pos, cam_dir)) {
+		if (!track_section_is_visible(s, cam_pos, cam_dir)) {
+			continue;
+		}
+		light_t local[TRACK_SECTION_LIGHTS_MAX];
+		int local_len = 0;
+		if (lit) {
+			light_t pads[6];
+			int pads_len = track_pad_lights(s, 1, 1, pads, len(pads));
+			local_len = lights_gather(s->center, s->radius, NULL, pads, pads_len, local, TRACK_SECTION_LIGHTS_MAX);
+		}
+		if (local_len > 0) {
+			track_draw_section_lit(s, local, local_len);
+		}
+		else {
 			track_draw_section(s);
 		}
 	}

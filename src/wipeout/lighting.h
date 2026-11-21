@@ -4,7 +4,7 @@
 #include "../types.h"
 #include "object.h"
 
-// Dynamic lighting for models (currently the ships).
+// Dynamic lighting for models (currently the ships) and the track.
 //
 // The game's art has all its lighting baked into vertex colors. This adds a
 // directional "sun", an ambient term and a set of point lights on top of that,
@@ -18,7 +18,7 @@
 
 #define LIGHTS_MAX 64
 
-typedef struct {
+typedef struct light_t {
 	vec3_t pos;
 	vec3_t color;       // 1.0 = full strength; may go above
 	float radius;       // no light beyond this distance
@@ -29,6 +29,13 @@ void lights_reset(void);
 void lights_add(vec3_t pos, vec3_t color, float radius, const void *owner);
 int lights_len(void);
 const light_t *lights_get(void);
+
+// Copies the lights (from the frame's list and `extra`, minus those owned by
+// `owner`) that reach a sphere at center/radius into out. Returns the count.
+int lights_gather(
+	vec3_t center, float radius, const void *owner,
+	const light_t *extra, int extra_len, light_t *out, int out_max
+);
 
 // Per face normals of an object in model space, pointing out of the model.
 // Allocated with mem_bump; computed once at load time.
@@ -41,5 +48,9 @@ void lighting_draw_object(
 	Object *object, mat4_t *mat, const vec3_t *face_normals,
 	const void *owner, const light_t *extra, int extra_len, int unlit_flags
 );
+
+// Adds the given point lights to the (baked) vertex colors of a track triangle
+// in world space, with normal as the face normal.
+void lighting_track_tris(tris_t *tris, vec3_t normal, const light_t *local, int local_len);
 
 #endif

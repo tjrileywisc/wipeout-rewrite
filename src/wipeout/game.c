@@ -597,6 +597,7 @@ save_t save = {
 	.network_interface = 0,
 	.ship_markers = false,
 	.ship_lighting = true,
+	.track_lighting = true,
 
 	.has_rapier_class = true,  // for testing; should be false in prod
 	.has_bonus_circuits = true, // for testing; should be false in prod
@@ -853,6 +854,7 @@ void game_init(void) {
 		// those fields then keep their defaults
 		bool size_ok =
 			size == sizeof(save_t) ||
+			size == offsetof(save_t, track_lighting) ||
 			size == offsetof(save_t, ship_lighting) ||
 			size == offsetof(save_t, ship_markers) ||
 			size == offsetof(save_t, texture_upscale);
