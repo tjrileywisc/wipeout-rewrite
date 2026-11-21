@@ -11,6 +11,7 @@
 #include "image.h"
 #include "particle.h"
 #include "camera.h"
+#include "lighting.h"
 
 typedef struct weapon_t {
 	float timer;
@@ -212,6 +213,31 @@ void weapons_update(void) {
 		if (!weapon->active) {
 			weapons[i--] = weapons[--weapons_active];
 			continue;
+		}
+	}
+}
+
+// Projectiles in flight light the ships they pass; mines blink red
+#define WEAPON_LIGHT_RADIUS 1500.0
+#define MINE_LIGHT_RADIUS   700.0
+
+void weapons_add_lights(void) {
+	for (int i = 0; i < weapons_active; i++) {
+		weapon_t *weapon = &weapons[i];
+		if (!weapon->model) {
+			continue;
+		}
+		// weapon->type isn't set for every weapon; the model tells them apart
+		Object *m = weapon->model;
+		if (m == weapon_assets.rocket || m == weapon_assets.missile) {
+			lights_add(weapon->position, vec3(1.6, 0.8, 0.3), WEAPON_LIGHT_RADIUS, NULL);
+		}
+		else if (m == weapon_assets.ebolt) {
+			lights_add(weapon->position, vec3(0.6, 1.2, 1.8), WEAPON_LIGHT_RADIUS, NULL);
+		}
+		else if (m == weapon_assets.mine) {
+			float pulse = sinf(system_cycle_time() * M_PI * 2 + i * 0.66) * 0.5 + 0.5;
+			lights_add(weapon->position, vec3(1.2 * pulse, 0.1 * pulse, 0), MINE_LIGHT_RADIUS, NULL);
 		}
 	}
 }

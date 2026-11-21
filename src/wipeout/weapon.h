@@ -51,6 +51,8 @@ void weapons_fire(ship_t *ship, int weapon_type);
 void weapons_fire_delayed(ship_t *ship, int weapon_type);
 void weapons_update(void);
 void weapons_draw(void);
+// Adds the light of projectiles and mines to the frame's light list
+void weapons_add_lights(void);
 int weapon_get_random_type(int type_class);
 
 #endif

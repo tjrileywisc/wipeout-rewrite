@@ -12,6 +12,7 @@
 #include "game.h"
 #include "race.h"
 #include "sfx.h"
+#include "lighting.h"
 
 void ships_load(void) {
 	texture_list_t ship_textures = image_get_compressed_textures("wipeout/common/allsh.cmp");
@@ -33,6 +34,7 @@ void ships_load(void) {
 		collision_model = collision_model->next;
 
 		ship_init_exhaust_plume(&g.ships[ship_index]);
+		ship_init_lighting(&g.ships[ship_index]);
 	}
 
 	error_if(object_index != len(g.ships), "Expected %ld ship models, got %d", len(g.ships), object_index);
@@ -443,8 +445,112 @@ void ship_reset_exhaust_plume(ship_t* self) {
 }
 
 
+// Lighting: ships are drawn with dynamic lighting (see lighting.h). Their
+// engines light the ships around them, and the boost and weapon pads they pass
+// over light them from below.
+static const vec3_t engine_light_color = {1.20, 0.50, 0.22};
+#define ENGINE_LIGHT_RADIUS 1400.0
+
+static const vec3_t boost_pad_light_color = {0.35, 0.75, 2.20};
+#define PAD_LIGHT_INTENSITY 1.8
+#define PAD_LIGHT_RADIUS    1600.0
+#define PAD_LIGHT_HEIGHT    100.0 // above the pad, so it's not in the ship's plane when on the pad
+#define PAD_LIGHT_SECTIONS_BACK  1
+#define PAD_LIGHT_SECTIONS_AHEAD 2
+
+void ship_init_lighting(ship_t *self) {
+	Object *model = self->model;
+	self->face_normals = lighting_face_normals(model);
+
+	// Centre of the engine plume, in model space
+	vec3_t center = vec3(0, 0, 0);
+	int n = 0;
+	for (int i = 0; i < model->primitives_len; i++) {
+		primitive_t *prm = &model->primitives[i];
+		if (flags_is(prm->flag, PRM_SHIP_ENGINE) && prm->type == PRM_TYPE_TRI) {
+			for (int j = 0; j < 3; j++) {
+				center = vec3_add(center, model->vertices[prm->u.tri.v[j].coord]);
+			}
+			n += 3;
+		}
+	}
+	self->has_engine_light = n > 0;
+	self->engine_light_pos = n > 0 ? vec3_mulf(center, 1.0 / n) : vec3(0, 0, 0);
+}
+
+void ships_add_lights(void) {
+	for (unsigned int i = 0; i < len(g.ships); i++) {
+		ship_t *self = &g.ships[i];
+		if (!self->has_engine_light || flags_not(self->flags, SHIP_VISIBLE)) {
+			continue;
+		}
+		// Brighter with more thrust, but never quite off
+		float thrust = self->thrust_max > 0 ? clamp(self->thrust_mag / self->thrust_max, 0, 1) : 0;
+		float strength = 0.35 + 0.65 * thrust;
+		lights_add(
+			vec3_transform(self->engine_light_pos, &self->mat),
+			vec3_mulf(engine_light_color, strength),
+			ENGINE_LIGHT_RADIUS,
+			self
+		);
+	}
+}
+
+static int ship_add_pad_lights(ship_t *self, light_t *lights, int lights_max) {
+	int lights_len = 0;
+	section_t *s = self->section;
+	if (!s) {
+		return 0;
+	}
+	for (int i = 0; i < PAD_LIGHT_SECTIONS_BACK && s->prev; i++) {
+		s = s->prev;
+	}
+	for (int i = 0; i <= PAD_LIGHT_SECTIONS_BACK + PAD_LIGHT_SECTIONS_AHEAD && s; i++, s = s->next) {
+		// Pads are only ever on the two base faces of a section
+		track_face_t *face = track_section_get_base_face(s);
+		for (int f = 0; f < 2; f++, face++) {
+			vec3_t color;
+			if (flags_is(face->flags, FACE_BOOST)) {
+				color = boost_pad_light_color;
+			}
+			else if (flags_is(face->flags, FACE_PICKUP_ACTIVE)) {
+				// Weapon pads cycle through colors; light in the current one
+				rgba_t c = face->tris[0].vertices[0].color;
+				color = vec3_mulf(vec3(c.r, c.g, c.b), PAD_LIGHT_INTENSITY / 255.0);
+			}
+			else {
+				continue;
+			}
+			if (lights_len >= lights_max) {
+				return lights_len;
+			}
+			vec3_t center = vec3_mulf(vec3_add(
+				vec3_add(face->tris[0].vertices[0].pos, face->tris[0].vertices[1].pos),
+				vec3_add(face->tris[0].vertices[2].pos, face->tris[1].vertices[0].pos)
+			), 0.25);
+			lights[lights_len++] = (light_t){
+				.pos = vec3_add(center, vec3_mulf(face->normal, PAD_LIGHT_HEIGHT)),
+				.color = color,
+				.radius = PAD_LIGHT_RADIUS,
+				.owner = NULL
+			};
+		}
+	}
+	return lights_len;
+}
+
 void ship_draw(ship_t *self) {
-	object_draw(self->model, &self->mat);
+	if (!save.ship_lighting || !self->face_normals) {
+		object_draw(self->model, &self->mat);
+		return;
+	}
+
+	light_t pad_lights[8];
+	int pad_lights_len = ship_add_pad_lights(self, pad_lights, len(pad_lights));
+	lighting_draw_object(
+		self->model, &self->mat, self->face_normals,
+		self, pad_lights, pad_lights_len, PRM_SHIP_ENGINE
+	);
 }
 
 void ship_draw_shadow(ship_t *self) {	

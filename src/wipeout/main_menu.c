@@ -516,6 +516,11 @@ static void toggle_ship_markers(menu_t*, int data) {
 	save.is_dirty = true;
 }
 
+static void toggle_ship_lighting(menu_t*, int data) {
+	save.ship_lighting = data;
+	save.is_dirty = true;
+}
+
 static void page_options_game_init(menu_t *menu) {
 	menu_page_t *page = menu_push(menu, "GAME OPTIONS", NULL, NULL, NULL);
 
@@ -527,6 +532,7 @@ static void page_options_game_init(menu_t *menu) {
 	page->items_anchor = UI_POS_MIDDLE | UI_POS_CENTER;
 
 	menu_page_add_toggle(page, save.ship_markers, "SHIP MARKERS", opts_off_on, len(opts_off_on), toggle_ship_markers);
+	menu_page_add_toggle(page, save.ship_lighting, "SHIP LIGHTING", opts_off_on, len(opts_off_on), toggle_ship_lighting);
 }
 
 // -----------------------------------------------------------------------------

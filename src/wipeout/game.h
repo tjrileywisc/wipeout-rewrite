@@ -312,6 +312,7 @@ typedef struct {
 	// older (shorter) save files can still be loaded
 	int texture_upscale;
 	bool ship_markers;
+	int ship_lighting;
 } save_t;
 
 

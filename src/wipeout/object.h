@@ -80,4 +80,9 @@ typedef struct Object {
 Object *objects_load(char *name, texture_list_t tl);
 void object_draw(Object *object, mat4_t *mat);
 
+// Like object_draw, but with the vertex colors of every tri and quad replaced.
+// colors holds 4 entries per primitive (indexed primitive * 4 + vertex); the
+// 4th entry is unused for tris. Sprites keep their own color.
+void object_draw_colored(Object *object, mat4_t *mat, const rgba_t *colors);
+
 #endif

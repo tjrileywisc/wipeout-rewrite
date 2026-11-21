@@ -5,6 +5,7 @@
 #include "scene.h"
 #include "camera.h"
 #include "game.h"
+#include "lighting.h"
 
 
 #define SCENE_START_BOOMS_MAX 4
@@ -195,6 +196,24 @@ void scene_pulsate_red_light(Object *obj) {
 
 	for (int v = 0; v < 4; v++) {
 		prm->u.quad.v[v].color = rgba(r,0,0,0xFF);
+	}
+}
+
+// The red beacons light the ships near them, pulsing with the beacon
+static const vec3_t red_light_color = {2.2, 0.15, 0.1};
+#define RED_LIGHT_RADIUS 2500.0
+
+void scene_add_lights(void) {
+	for (int i = 0; i < red_lights_len; i++) {
+		Object *obj = red_lights[i];
+		primitive_t *prm = obj->primitives;
+		float pulse = prm->u.quad.v[0].color.r / 255.0;
+		lights_add(
+			vec3_transform(obj->vertices[prm->u.quad.v[0].coord], &obj->mat),
+			vec3_mulf(red_light_color, pulse),
+			RED_LIGHT_RADIUS,
+			NULL
+		);
 	}
 }
 
