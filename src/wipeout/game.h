@@ -274,6 +274,11 @@ typedef struct {
 	// Profile slot per local player (index into save.profiles), or PROFILE_NONE
 	int profile[MAX_LOCAL_PLAYERS];
 	int race_player; // local player who set g.race_time
+
+	// Grand prix championships: the finishing order of the previous race,
+	// used as the starting grid of the next one (index 0 = pole position)
+	int grand_prix_grid[NUM_PILOTS];
+	bool has_grand_prix_grid;
 } game_t;
 
 
@@ -332,6 +337,8 @@ typedef struct {
 	// Per profile slot: use the stock engine colors instead of profile_t.color.
 	// Kept out of profile_t so saves written before it was added still load.
 	bool profile_default_color[NUM_PROFILES];
+	// Single player championships run as a grand prix (see game_is_grand_prix)
+	bool grand_prix;
 } save_t;
 
 
@@ -344,6 +351,10 @@ extern save_t save;
 void game_init(void);
 void game_set_scene(game_scene_t scene);
 void game_reset_championship(void);
+// A grand prix is a championship where every race starts in the finishing
+// order of the previous one and there's no need to qualify (top 3) to go on.
+// Split-screen championships always are; single player ones by option.
+bool game_is_grand_prix(void);
 void game_update(void);
 
 // The profile in the given save slot, or NULL if the slot is unused/invalid

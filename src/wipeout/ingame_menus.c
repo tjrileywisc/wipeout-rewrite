@@ -127,7 +127,7 @@ static void button_qualify_confirm(menu_t*, int data) {
 
 static void button_race_stats_continue(menu_t *menu, int) {
 	if (g.race_type == RACE_TYPE_CHAMPIONSHIP) {
-		if (g.race_position <= QUALIFYING_RANK) {
+		if (g.race_position <= QUALIFYING_RANK || game_is_grand_prix()) {
 			page_race_points_init(menu);
 		}
 		else {
@@ -197,6 +197,9 @@ menu_t *race_stats_menu_init(void) {
 	}
 	else if (g.race_position <= QUALIFYING_RANK) {
 		title = "CONGRATULATIONS";
+	}
+	else if (game_is_grand_prix()) {
+		title = "RACE COMPLETE";
 	}
 	else {
 		title = "FAILED TO QUALIFY";

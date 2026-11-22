@@ -379,9 +379,46 @@ void race_end(void) {
 			}
 		}
 		sort(g.championship_ranks, len(g.championship_ranks), sort_points_compare);
+
+		if (game_is_grand_prix()) {
+			for (unsigned int i = 0; i < len(g.grand_prix_grid); i++) {
+				g.grand_prix_grid[i] = g.race_ranks[i].pilot;
+			}
+			g.has_grand_prix_grid = true;
+		}
 	}
 
 	active_menu = race_stats_menu_init();
+}
+
+static char * const grand_prix_lost_text[] = {
+	"#CHAMPIONSHIP OVER",
+	"",
+	"FINISH IN THE TOP THREE",
+	"",
+	"OF THE CHAMPIONSHIP TABLE",
+	"",
+	"TO WIN THE CHAMPIONSHIP",
+	"",
+	"",
+	"#TRY AGAIN",
+};
+
+// Whether a local player ended the championship in a qualifying rank. Outside
+// of a grand prix every race had to be qualified for, so this always holds.
+static bool championship_won(void) {
+	if (!game_is_grand_prix()) {
+		return true;
+	}
+	int local_pilots[4] = {g.pilot, g.pilot2, g.pilot3, g.pilot4};
+	for (int i = 0; i < QUALIFYING_RANK; i++) {
+		for (int p = 0; p < g.local_player_count; p++) {
+			if (g.championship_ranks[i].pilot == local_pilots[p]) {
+				return true;
+			}
+		}
+	}
+	return false;
 }
 
 void race_next(void) {
@@ -392,7 +429,10 @@ void race_next(void) {
 		(save.has_bonus_circuits && next_circuit >= NUM_WIPEOUT_CIRCUITS) ||
 		(!save.has_bonus_circuits && next_circuit >= NUM_NON_BONUS_CIRCUITS)
 	) {
-		if (g.race_class == RACE_CLASS_RAPIER) {
+		if (!championship_won()) {
+			active_menu = text_scroll_menu_init(grand_prix_lost_text, len(grand_prix_lost_text));
+		}
+		else if (g.race_class == RACE_CLASS_RAPIER) {
 			if (save.has_bonus_circuits) {
 				active_menu = text_scroll_menu_init(def.congratulations.rapier_all_circuits, len(def.congratulations.rapier_all_circuits));
 			}
