@@ -61,8 +61,16 @@ void ships_init(section_t *section) {
 		ranks_to_pilots[i] = i;
 	}
 
+	// Grand prix: everyone starts where they finished the previous race
+	bool use_grand_prix_grid = game_is_grand_prix() && g.has_grand_prix_grid;
+	if (use_grand_prix_grid) {
+		for (unsigned int i = 0; i < len(g.ships); i++) {
+			ranks_to_pilots[i] = g.grand_prix_grid[i];
+		}
+	}
+
 	// Randomize order for single race or new championship
-	if (g.race_type != RACE_TYPE_CHAMPIONSHIP || g.circuit == CIRCUIT_ALTIMA_VII) {
+	else if (g.race_type != RACE_TYPE_CHAMPIONSHIP || g.circuit == CIRCUIT_ALTIMA_VII) {
 		shuffle(ranks_to_pilots, len(ranks_to_pilots));
 	}
 
@@ -79,7 +87,7 @@ void ships_init(section_t *section) {
 	// Player pilots go at the back of the grid (last N slots for N players)
 	// Push them in reverse order so P1 ends up last, P2 second-to-last, etc.
 	int local_pilots[4] = {g.pilot, g.pilot2, g.pilot3, g.pilot4};
-	for (int p = 0; p < g.local_player_count; p++) {
+	for (int p = 0; p < g.local_player_count && !use_grand_prix_grid; p++) {
 		int target_rank = (int)len(ranks_to_pilots) - 1 - p; // slot for this player
 		for (int i = 0; i < target_rank; i++) {
 			if (ranks_to_pilots[i] == local_pilots[p]) {

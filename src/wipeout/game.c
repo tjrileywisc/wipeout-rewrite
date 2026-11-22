@@ -599,6 +599,7 @@ save_t save = {
 	.ship_lighting = true,
 	.track_lighting = 2, // TRACK_LIGHTING_PIXEL
 	.last_profile = PROFILE_NONE,
+	.grand_prix = false,
 
 	.has_rapier_class = true,  // for testing; should be false in prod
 	.has_bonus_circuits = true, // for testing; should be false in prod
@@ -898,6 +899,7 @@ void game_init(void) {
 		// those fields then keep their defaults
 		bool size_ok =
 			size == sizeof(save_t) ||
+			size == offsetof(save_t, grand_prix) ||
 			size == offsetof(save_t, profile_default_color) ||
 			size == offsetof(save_t, profiles) ||
 			size == offsetof(save_t, track_lighting) ||
@@ -1054,6 +1056,11 @@ void game_reset_championship(void) {
 		g.championship_ranks[i].pilot = i;
 	}
 	g.lives = NUM_LIVES;
+	g.has_grand_prix_grid = false;
+}
+
+bool game_is_grand_prix(void) {
+	return g.race_type == RACE_TYPE_CHAMPIONSHIP && (g.local_player_count > 1 || save.grand_prix);
 }
 
 void game_update(void) {

@@ -595,6 +595,13 @@ static void toggle_track_lighting(menu_t*, int data) {
 	save.is_dirty = true;
 }
 
+static void toggle_grand_prix(menu_t*, int data) {
+	save.grand_prix = data;
+	save.is_dirty = true;
+}
+
+static const char *opts_championship_mode[] = {"CLASSIC", "GRAND PRIX"};
+
 static void page_options_game_init(menu_t *menu) {
 	menu_page_t *page = menu_push(menu, "GAME OPTIONS", NULL, NULL, NULL);
 
@@ -608,6 +615,7 @@ static void page_options_game_init(menu_t *menu) {
 	menu_page_add_toggle(page, save.ship_markers, "SHIP MARKERS", opts_off_on, len(opts_off_on), toggle_ship_markers);
 	menu_page_add_toggle(page, save.ship_lighting, "SHIP LIGHTING", opts_off_on, len(opts_off_on), toggle_ship_lighting);
 	menu_page_add_toggle(page, save.track_lighting, "TRACK LIGHTING", opts_track_lighting, len(opts_track_lighting), toggle_track_lighting);
+	menu_page_add_toggle(page, save.grand_prix, "CHAMPIONSHIP MODE", opts_championship_mode, len(opts_championship_mode), toggle_grand_prix);
 }
 
 // -----------------------------------------------------------------------------
