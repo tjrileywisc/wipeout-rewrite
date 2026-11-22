@@ -115,6 +115,12 @@ void ships_init(section_t *section) {
 		g.ships[local_pilots[p]].camera = player_cam[p];
 		g.ships[local_pilots[p]].player_index = p;
 	}
+
+	// Engine colors: players with a profile get theirs, everyone else the default
+	for (unsigned int i = 0; i < len(g.ships); i++) {
+		profile_t *profile = g.is_attract_mode ? NULL : game_player_profile(g.ships[i].player_index);
+		ship_set_engine_color(&g.ships[i], game_profile_engine_color(profile));
+	}
 }
 
 static inline bool sort_rank_compare(pilot_points_t *pa, pilot_points_t *pb) {
@@ -181,12 +187,11 @@ static bool ship_is_drawn(unsigned int i, int viewing_pilot) {
 // view; it never moves it towards the camera. The glow is pulled towards the
 // camera by a small fixed distance only, so it isn't hidden by the plume's own
 // depth.
-static const rgba_t plume_glow_color = rgba(255, 40, 24, 255);
 #define PLUME_GLOW_SCALE_DIST 5000.0
 #define PLUME_GLOW_MAX_SCALE  12.0
 #define PLUME_GLOW_DEPTH_BIAS 8.0
 
-static void ship_draw_plume_glow(ship_t *self, vec3_t camera_pos) {
+void ship_draw_plume_glow(ship_t *self, mat4_t *mat, vec3_t camera_pos) {
 	Object *model = self->model;
 
 	// Centre of all plume vertices, in model space
@@ -206,7 +211,7 @@ static void ship_draw_plume_glow(ship_t *self, vec3_t camera_pos) {
 	}
 	center = vec3_mulf(center, 1.0 / n);
 
-	vec3_t center_world = vec3_transform(center, &self->mat);
+	vec3_t center_world = vec3_transform(center, mat);
 	vec3_t to_center = vec3_sub(center_world, camera_pos);
 	float dist = vec3_len(to_center);
 	if (dist < 1) {
@@ -226,14 +231,14 @@ static void ship_draw_plume_glow(ship_t *self, vec3_t camera_pos) {
 		for (int j = 0; j < 3; j++) {
 			// Split the offset from the centre into the part along the view
 			// direction (kept as is) and the part across it (scaled)
-			vec3_t offset = vec3_sub(vec3_transform(model->vertices[prm->u.tri.v[j].coord], &self->mat), center_world);
+			vec3_t offset = vec3_sub(vec3_transform(model->vertices[prm->u.tri.v[j].coord], mat), center_world);
 			vec3_t along = vec3_mulf(view_dir, vec3_dot(offset, view_dir));
 			vec3_t across = vec3_sub(offset, along);
 			vec3_t pos = vec3_add(center_world, vec3_add(along, vec3_mulf(across, scale)));
 			v[j] = (vertex_t){
 				.pos = vec3_add(pos, bias),
 				.uv = {0, 0},
-				.color = plume_glow_color
+				.color = self->plume_glow_color
 			};
 		}
 		// Both windings, so the plume glows from any side
@@ -277,7 +282,7 @@ void ships_draw(int viewing_pilot, vec3_t camera_pos) {
 		render_set_blend_mode(RENDER_BLEND_LIGHTER);
 		for (unsigned int i = 0; i < len(g.ships); i++) {
 			if (ship_is_drawn(i, viewing_pilot)) {
-				ship_draw_plume_glow(&g.ships[i], camera_pos);
+				ship_draw_plume_glow(&g.ships[i], &g.ships[i].mat, camera_pos);
 			}
 		}
 		render_set_blend_mode(RENDER_BLEND_NORMAL);
@@ -376,7 +381,52 @@ void ship_init(ship_t *self, section_t *section, int pilot, int inv_start_rank) 
 	self->angle.y = -atan2(direction.x, direction.z);
 }
 
-const rgba_t exhaust_plume_color = rgba(180,97,120,140);
+// Default engine colors, used by ships without a player profile
+static const rgba_t default_plume_color = rgba(180, 97, 120, 140);
+static const rgba_t default_plume_glow_color = rgba(255, 40, 24, 255);
+static const vec3_t default_engine_light_color = {1.20, 0.50, 0.22};
+
+// A profile color sets the glow directly. The plume is scaled to the default
+// plume's brightness (vertex colors are modulated 2x, 128 = unchanged) and the
+// light to the default light's brightest channel.
+#define PROFILE_PLUME_SCALE (180.0 / 255.0)
+#define PROFILE_LIGHT_SCALE (1.20 / 255.0)
+
+void ship_set_engine_color(ship_t *self, const uint8_t *rgb) {
+	if (rgb) {
+		self->plume_color = rgba(
+			(uint8_t)(rgb[0] * PROFILE_PLUME_SCALE),
+			(uint8_t)(rgb[1] * PROFILE_PLUME_SCALE),
+			(uint8_t)(rgb[2] * PROFILE_PLUME_SCALE),
+			default_plume_color.a
+		);
+		self->plume_glow_color = rgba(rgb[0], rgb[1], rgb[2], 255);
+		self->engine_light_color = vec3(rgb[0] * PROFILE_LIGHT_SCALE, rgb[1] * PROFILE_LIGHT_SCALE, rgb[2] * PROFILE_LIGHT_SCALE);
+	}
+	else {
+		self->plume_color = default_plume_color;
+		self->plume_glow_color = default_plume_glow_color;
+		self->engine_light_color = default_engine_light_color;
+	}
+
+	if (!self->model) {
+		return;
+	}
+	for (int i = 0; i < self->model->primitives_len; i++) {
+		primitive_t *prm = &self->model->primitives[i];
+		if (flags_is(prm->flag, PRM_SHIP_ENGINE) && prm->type == PRM_TYPE_TRI) {
+			for (int j = 0; j < 3; j++) {
+				prm->u.tri.v[j].color = self->plume_color;
+			}
+		}
+	}
+}
+
+void ships_reset_engine_colors(void) {
+	for (unsigned int i = 0; i < len(g.ships); i++) {
+		ship_set_engine_color(&g.ships[i], NULL);
+	}
+}
 
 void ship_init_exhaust_plume(ship_t *self) {
 	int16_t indices[64];
@@ -393,11 +443,9 @@ void ship_init_exhaust_plume(ship_t *self) {
 			indices[indices_len++] = v[0].coord;
 			indices[indices_len++] = v[1].coord;
 			indices[indices_len++] = v[2].coord;
-			for (int j = 0; j < 3; j++) {
-				v[j].color = exhaust_plume_color;
-			}
 		}
 	}
+	ship_set_engine_color(self, NULL);
 
 
 	// get out the center vertex
@@ -448,7 +496,6 @@ void ship_reset_exhaust_plume(ship_t* self) {
 // Lighting: ships are drawn with dynamic lighting (see lighting.h). Their
 // engines light the ships around them, and the boost and weapon pads they pass
 // over light them from below.
-static const vec3_t engine_light_color = {1.20, 0.50, 0.22};
 #define ENGINE_LIGHT_RADIUS 1400.0
 
 void ship_init_lighting(ship_t *self) {
@@ -482,7 +529,7 @@ void ships_add_lights(void) {
 		float strength = 0.35 + 0.65 * thrust;
 		lights_add(
 			vec3_transform(self->engine_light_pos, &self->mat),
-			vec3_mulf(engine_light_color, strength),
+			vec3_mulf(self->engine_light_color, strength),
 			ENGINE_LIGHT_RADIUS,
 			self
 		);

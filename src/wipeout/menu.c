@@ -1,3 +1,5 @@
+#include <string.h>
+
 #include "../system.h"
 #include "../input.h"
 #include "../utils.h"
@@ -247,4 +249,70 @@ void menu_update(menu_t *menu) {
 			}
 		}
 	}
+}
+
+
+// -----------------------------------------------------------------------------
+// Name entry
+
+static const char *name_entry_charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+#define NAME_ENTRY_DEL 36
+#define NAME_ENTRY_END 37
+
+void menu_name_entry_reset(menu_name_entry_t *entry, const char *name) {
+	snprintf(entry->name, sizeof(entry->name), "%s", name ? name : "");
+	entry->char_index = 0;
+}
+
+bool menu_name_entry_update(menu_name_entry_t *entry, ui_pos_t anchor, vec2i_t pos, ui_text_size_t size) {
+	int entry_len = strlen(entry->name);
+	int entry_width = ui_text_width(entry->name, size);
+	vec2i_t c_pos = ui_scaled_pos(anchor, vec2i(pos.x + entry_width, pos.y));
+
+	// No END while empty; only DEL/END once full
+	int c_first = 0;
+	int c_last = NAME_ENTRY_END + 1;
+	if (entry_len == 0) {
+		c_last = NAME_ENTRY_END;
+	}
+	else if (entry_len == 3) {
+		c_first = NAME_ENTRY_DEL;
+	}
+
+	if (input_pressed(A_MENU_UP)) {
+		entry->char_index++;
+	}
+	else if (input_pressed(A_MENU_DOWN)) {
+		entry->char_index--;
+	}
+	entry->char_index = wrap_around(entry->char_index, c_first, c_last);
+
+	bool select = input_pressed(A_MENU_SELECT) || input_pressed(A_MENU_START);
+	bool done = false;
+
+	if (entry->char_index == NAME_ENTRY_DEL) {
+		ui_draw_icon(UI_ICON_DEL, c_pos, UI_COLOR_ACCENT);
+		if (select) {
+			sfx_play(SFX_MENU_SELECT);
+			if (entry_len > 0) {
+				entry->name[entry_len-1] = '\0';
+			}
+		}
+	}
+	else if (entry->char_index == NAME_ENTRY_END) {
+		ui_draw_icon(UI_ICON_END, c_pos, UI_COLOR_ACCENT);
+		done = select;
+	}
+	else {
+		char selector[2] = {name_entry_charset[entry->char_index], '\0'};
+		ui_draw_text(selector, c_pos, size, UI_COLOR_ACCENT);
+		if (select) {
+			sfx_play(SFX_MENU_SELECT);
+			entry->name[entry_len] = name_entry_charset[entry->char_index];
+			entry->name[entry_len+1] = '\0';
+		}
+	}
+
+	ui_draw_text(entry->name, ui_scaled_pos(anchor, pos), size, UI_COLOR_ACCENT);
+	return done;
 }

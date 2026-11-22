@@ -598,6 +598,7 @@ save_t save = {
 	.ship_markers = false,
 	.ship_lighting = true,
 	.track_lighting = 2, // TRACK_LIGHTING_PIXEL
+	.last_profile = PROFILE_NONE,
 
 	.has_rapier_class = true,  // for testing; should be false in prod
 	.has_bonus_circuits = true, // for testing; should be false in prod
@@ -832,6 +833,47 @@ static int global_textures_len = 0;
 static void *global_mem_mark = 0;
 static double notification_until = 0;
 
+profile_t *game_profile(int slot) {
+	if (slot < 0 || slot >= NUM_PROFILES || !save.profiles[slot].used) {
+		return NULL;
+	}
+	return &save.profiles[slot];
+}
+
+profile_t *game_player_profile(int player) {
+	if (player < 0 || player >= MAX_LOCAL_PLAYERS) {
+		return NULL;
+	}
+	return game_profile(g.profile[player]);
+}
+
+const uint8_t *game_profile_engine_color(const profile_t *profile) {
+	if (!profile || save.profile_default_color[profile - save.profiles]) {
+		return NULL;
+	}
+	return profile->color;
+}
+
+// The built-in best times, copied from the save defaults before the save file
+// is loaded over them
+static highscores_t default_highscores[NUM_RACE_CLASSES][NUM_CIRCUITS][NUM_HIGHSCORE_TABS];
+
+void game_reset_highscores(void) {
+	memcpy(save.highscores, default_highscores, sizeof(save.highscores));
+	save.is_dirty = true;
+}
+
+void game_profile_deleted(int slot) {
+	for (int p = 0; p < MAX_LOCAL_PLAYERS; p++) {
+		if (g.profile[p] == slot) {
+			g.profile[p] = PROFILE_NONE;
+		}
+	}
+	if (save.last_profile == slot) {
+		save.last_profile = PROFILE_NONE;
+	}
+}
+
 void game_init(void) {
 	error_if(!platform_asset_exists("wipeout/track01/"), "Wipeout game content missing. Check your wipeout/ directory.\n");
 	if (platform_asset_exists("wipeout2/track01/") || platform_asset_exists("wipeout64/track01/")) {
@@ -847,6 +889,8 @@ void game_init(void) {
 	}
 	printf("\n");
 
+	memcpy(default_highscores, save.highscores, sizeof(default_highscores));
+
 	uint32_t size;
 	save_t *save_file = (save_t *)platform_load_userdata("save.dat", &size);
 	if (save_file) {
@@ -854,6 +898,8 @@ void game_init(void) {
 		// those fields then keep their defaults
 		bool size_ok =
 			size == sizeof(save_t) ||
+			size == offsetof(save_t, profile_default_color) ||
+			size == offsetof(save_t, profiles) ||
 			size == offsetof(save_t, track_lighting) ||
 			size == offsetof(save_t, ship_lighting) ||
 			size == offsetof(save_t, ship_markers) ||
@@ -866,6 +912,16 @@ void game_init(void) {
 			printf("unexpected size/magic for save data\n");
 		}
 		mem_temp_free(save_file);
+	}
+
+	for (int p = 0; p < MAX_LOCAL_PLAYERS; p++) {
+		g.profile[p] = PROFILE_NONE;
+	}
+	if (game_profile(save.last_profile)) {
+		g.profile[0] = save.last_profile;
+	}
+	else {
+		save.last_profile = PROFILE_NONE;
 	}
 
 	platform_set_fullscreen(save.fullscreen);

@@ -134,6 +134,11 @@ typedef struct ship_t {
 	vec3_t engine_light_pos; // model space
 	bool has_engine_light;
 
+	// Engine colors, see ship_set_engine_color()
+	rgba_t plume_color;
+	rgba_t plume_glow_color;
+	vec3_t engine_light_color;
+
 	struct {
 		vec3_t *v;
 		vec3_t initial;
@@ -166,6 +171,12 @@ void ship_init_lighting(ship_t *self);
 // Adds the light of every ship's engine to the frame's light list
 void ships_add_lights(void);
 void ship_reset_exhaust_plume(ship_t *self);
+// Color the plume, its glow and the engine light; rgb NULL = default colors
+void ship_set_engine_color(ship_t *self, const uint8_t *rgb);
+void ships_reset_engine_colors(void);
+// Pushes the plume's glow geometry for the ship model placed at mat. The
+// caller enables the glow target and additive blending around it.
+void ship_draw_plume_glow(ship_t *self, mat4_t *mat, vec3_t camera_pos);
 void ship_draw(ship_t *self);
 void ship_draw_shadow(ship_t *self);
 void ship_update(ship_t *self);

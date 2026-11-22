@@ -65,4 +65,15 @@ void menu_page_add_button(menu_page_t *page, int data, const char *text, void(*s
 void menu_page_add_toggle(menu_page_t *page, int data, const char *text, const char **options, int len, void(*select_func)(menu_t *, int));
 void menu_update(menu_t *menu);
 
+// Hall of fame style 1-3 character name entry: up/down picks a character
+// (A-Z, 0-9, DEL, END), select adds it.
+typedef struct {
+	char name[4];
+	int char_index;
+} menu_name_entry_t;
+
+void menu_name_entry_reset(menu_name_entry_t *entry, const char *name);
+// Handles input and draws the entry at pos. Returns true once END is selected.
+bool menu_name_entry_update(menu_name_entry_t *entry, ui_pos_t anchor, vec2i_t pos, ui_text_size_t size);
+
 #endif
