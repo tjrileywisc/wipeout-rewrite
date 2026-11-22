@@ -194,7 +194,8 @@ static void hud_draw_target_icon(vec3_t position) {
 	render_push_2d(pos, size, rgba(128, 128, 128, 128), target_reticle);
 }
 
-// Markers over the other human players' ships: "P1".."P4", drawn in the 3d
+// Markers over the other human players' ships: their profile code or
+// "P1".."P4", drawn in the 3d
 // scene so the track and scenery hide them. They keep a constant on-screen
 // size and fade in with distance, so ships right next to you don't get one.
 #define PLAYER_MARKER_FADE_START 1500.0
@@ -223,7 +224,12 @@ void hud_draw_player_markers(ship_t *viewer, vec3_t camera_pos) {
 		}
 		fade = min(fade, 1.0);
 
-		char label[3] = {'P', '1' + other->player_index, 0};
+		// The player's profile code, else "P1".."P4"
+		char label[4] = {'P', '1' + other->player_index, 0, 0};
+		profile_t *profile = game_player_profile(other->player_index);
+		if (profile) {
+			snprintf(label, sizeof(label), "%s", profile->code);
+		}
 		rgba_t color = UI_COLOR_DEFAULT;
 		color.a = 255 * fade;
 		ui_draw_text_3d(label, pos, dist * world_per_px * scale, UI_SIZE_8, color);

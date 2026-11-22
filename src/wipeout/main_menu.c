@@ -1,3 +1,5 @@
+#include <string.h>
+
 #include "../utils.h"
 #include "../system.h"
 #include "../mem.h"
@@ -26,6 +28,8 @@ static void page_options_video_init(menu_t *menu);
 static void page_options_audio_init(menu_t *menu);
 static void page_options_game_init(menu_t *menu);
 static void page_options_highscores_init(menu_t *menu);
+static void page_options_profiles_init(menu_t *menu);
+static void page_profile_select_init(menu_t *menu);
 
 static uint16_t background;
 static texture_list_t track_images;
@@ -42,14 +46,57 @@ static struct {
 	Object *controller;
 } models;
 
-static void draw_model(Object *model, vec2_t offset, vec3_t pos, float rotation) {
-	render_set_view(vec3(0,0,0), vec3(0, -M_PI, -M_PI));
-	render_set_screen_position(offset);
+static mat4_t model_mat(vec3_t pos, float rotation) {
 	mat4_t mat = mat4_identity();
 	mat4_set_translation(&mat, pos);
 	mat4_set_yaw_pitch_roll(&mat, vec3(0, rotation, M_PI));
+	return mat;
+}
+
+static void draw_model(Object *model, vec2_t offset, vec3_t pos, float rotation) {
+	render_set_view(vec3(0,0,0), vec3(0, -M_PI, -M_PI));
+	render_set_screen_position(offset);
+	mat4_t mat = model_mat(pos, rotation);
 	object_draw(model, &mat);
 	render_set_screen_position(vec2(0, 0));
+}
+
+// A spinning ship with its engine running in the given color (rgb NULL =
+// default): the plume flickers like an AI ship's in a race and gets the same
+// glow, which is most of what makes the color visible. The ship is left as
+// it was.
+#define PREVIEW_PLUME_LEN 150
+
+static void draw_engine_color_preview(ship_t *ship, const uint8_t *rgb, vec2_t offset, vec3_t pos) {
+	ship_set_engine_color(ship, rgb);
+	for (int i = 0; i < 3; i++) {
+		if (ship->exhaust_plume[i].v) {
+			vec3_t jitter = vec3_rand(7);
+			jitter.z *= 4;
+			*ship->exhaust_plume[i].v = vec3_add(ship->exhaust_plume[i].initial, jitter);
+			ship->exhaust_plume[i].v->z -= PREVIEW_PLUME_LEN;
+		}
+	}
+
+	render_set_view(vec3(0,0,0), vec3(0, -M_PI, -M_PI));
+	render_set_screen_position(offset);
+	mat4_t mat = model_mat(pos, system_cycle_time());
+	object_draw(ship->model, &mat);
+
+	// Glow pass, as in ships_draw(); the camera sits at the origin
+	render_set_model_mat(&mat4_identity());
+	render_set_depth_write(false);
+	if (render_set_glow_target(true)) {
+		render_set_blend_mode(RENDER_BLEND_LIGHTER);
+		ship_draw_plume_glow(ship, &mat, vec3(0, 0, 0));
+		render_set_blend_mode(RENDER_BLEND_NORMAL);
+		render_set_glow_target(false);
+	}
+	render_set_depth_write(true);
+	render_set_screen_position(vec2(0, 0));
+
+	ship_reset_exhaust_plume(ship);
+	ship_set_engine_color(ship, NULL);
 }
 
 // -----------------------------------------------------------------------------
@@ -60,8 +107,23 @@ static const char *opts_track_lighting[] = {"OFF", "VERTEX", "PIXEL"}; // TRACK_
 // -----------------------------------------------------------------------------
 // Main Menu
 
+static bool any_profiles(void) {
+	for (int i = 0; i < NUM_PROFILES; i++) {
+		if (game_profile(i)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 static void button_start_game(menu_t *menu, int) {
-	page_race_type_init(menu);
+	if (any_profiles()) {
+		page_profile_select_init(menu);
+	}
+	else {
+		g.profile[0] = PROFILE_NONE;
+		page_race_type_init(menu);
+	}
 }
 
 static void button_split_screen(menu_t *menu, int) {
@@ -251,7 +313,12 @@ static void page_options_draw(menu_t*, int data) {
 		case 2: draw_model(models.options.headphones, vec2(0, -0.2), vec3(0, 0, -300), system_cycle_time()); break;
 		case 3: draw_model(models.options.stopwatch, vec2(0, -0.2), vec3(0, 0, -400), system_cycle_time()); break;
 		case 4: draw_model(models.misc.single_race, vec2(0, -0.2), vec3(0, 0, -400), system_cycle_time()); break;
+		case 5: draw_engine_color_preview(&g.ships[0], NULL, vec2(0, -0.1), vec3(0, 0, -700)); break;
 	}
+}
+
+static void button_profiles(menu_t *menu, int) {
+	page_options_profiles_init(menu);
 }
 
 static void page_options_init(menu_t *menu) {
@@ -266,6 +333,7 @@ static void page_options_init(menu_t *menu) {
 	menu_page_add_button(page, 1, "VIDEO", button_video);
 	menu_page_add_button(page, 2, "AUDIO", button_audio);
 	menu_page_add_button(page, 3, "BEST TIMES", button_highscores);
+	menu_page_add_button(page, 5, "PROFILES", button_profiles);
 }
 
 
@@ -543,6 +611,281 @@ static void page_options_game_init(menu_t *menu) {
 }
 
 // -----------------------------------------------------------------------------
+// Options Profiles
+//
+// A list of the saved profiles plus NEW PROFILE. Each profile has an edit page
+// with its code, engine color and DELETE; the code is typed on its own page
+// with the hall of fame name entry.
+
+#define PROFILE_COLOR_STEP 17 // 16 steps from 0 to 255
+// The stock engine colors aren't a single rgb value (see ship.c), so a profile
+// using them has save.profile_default_color set. Its RGB toggles then show this
+// nearest 16-step color to the stock glow, as a start for customizing.
+static const uint8_t profile_default_color[3] = {255, 34, 17};
+
+enum {
+	PROFILE_EDIT_CODE,
+	PROFILE_EDIT_RED,
+	PROFILE_EDIT_GREEN,
+	PROFILE_EDIT_BLUE,
+	PROFILE_EDIT_DEFAULT,
+	PROFILE_EDIT_DELETE,
+};
+static const char *opts_color_channel[] = {
+	"0", "17", "34", "51", "68", "85", "102", "119",
+	"136", "153", "170", "187", "204", "221", "238", "255"
+};
+
+static int profile_edit_slot;
+static bool profiles_list_dirty;
+static const char *profile_edit_code_opts[1];
+
+static menu_name_entry_t profile_code_entry;
+static int profile_code_slot;     // slot being named
+static bool profile_code_is_new;  // slot becomes used once a code is entered
+static bool profile_code_taken;   // the last code entered belongs to another profile
+static bool profile_code_done;    // a valid code was entered; applied next frame
+
+static void page_profile_edit_init(menu_t *menu, int slot);
+static void page_profile_code_init(menu_t *menu, int slot, bool is_new);
+
+static int profile_free_slot(void) {
+	for (int i = 0; i < NUM_PROFILES; i++) {
+		if (!save.profiles[i].used) {
+			return i;
+		}
+	}
+	return PROFILE_NONE;
+}
+
+static bool profile_code_in_use(const char *code, int except_slot) {
+	for (int i = 0; i < NUM_PROFILES; i++) {
+		if (i != except_slot && save.profiles[i].used && strcmp(save.profiles[i].code, code) == 0) {
+			return true;
+		}
+	}
+	return false;
+}
+
+// Code entry
+
+static void page_profile_code_draw(menu_t *menu, int) {
+	// Applied a frame after END was selected, so the select press doesn't
+	// also trigger an entry on the page we return to
+	if (profile_code_done) {
+		profile_code_done = false;
+		profile_t *profile = &save.profiles[profile_code_slot];
+		memcpy(profile->code, profile_code_entry.name, sizeof(profile->code));
+		if (profile_code_is_new) {
+			profile->used = true;
+			memcpy(profile->color, profile_default_color, sizeof(profile->color));
+			save.profile_default_color[profile_code_slot] = true;
+		}
+		save.is_dirty = true;
+		profiles_list_dirty = true;
+
+		menu_pop(menu);
+		if (profile_code_is_new) {
+			page_profile_edit_init(menu, profile_code_slot);
+		}
+		return;
+	}
+
+	ui_pos_t anchor = UI_POS_MIDDLE | UI_POS_CENTER;
+	if (menu_name_entry_update(&profile_code_entry, anchor, vec2i(-24, -10), UI_SIZE_16)) {
+		profile_code_taken = profile_code_in_use(profile_code_entry.name, profile_code_slot);
+		profile_code_done = !profile_code_taken;
+		sfx_play(SFX_MENU_SELECT);
+	}
+	if (profile_code_taken) {
+		ui_draw_text_centered("CODE IN USE", ui_scaled_pos(anchor, vec2i(0, 30)), UI_SIZE_8, UI_COLOR_ACCENT);
+	}
+}
+
+static void page_profile_code_init(menu_t *menu, int slot, bool is_new) {
+	profile_code_slot = slot;
+	profile_code_is_new = is_new;
+	profile_code_taken = false;
+	profile_code_done = false;
+	menu_name_entry_reset(&profile_code_entry, is_new ? "" : save.profiles[slot].code);
+
+	// No entries: all input is handled by the name entry
+	menu_page_t *page = menu_push(menu, "PROFILE CODE", page_profile_code_draw, NULL, NULL);
+	flags_add(page->layout_flags, MENU_FIXED);
+	page->title_anchor = UI_POS_MIDDLE | UI_POS_CENTER;
+	page->title_pos = vec2i(0, -60);
+}
+
+// Edit page
+
+static void toggle_profile_code(menu_t *menu, int) {
+	if (input_pressed(A_MENU_SELECT) || input_pressed(A_MENU_START)) {
+		page_profile_code_init(menu, profile_edit_slot, false);
+	}
+}
+
+static void profile_set_color_channel(int channel, int data) {
+	save.profiles[profile_edit_slot].color[channel] = data * PROFILE_COLOR_STEP;
+	save.profile_default_color[profile_edit_slot] = false;
+	save.is_dirty = true;
+}
+
+static void toggle_profile_red(menu_t*, int data)   { profile_set_color_channel(0, data); }
+static void toggle_profile_green(menu_t*, int data) { profile_set_color_channel(1, data); }
+static void toggle_profile_blue(menu_t*, int data)  { profile_set_color_channel(2, data); }
+
+static void button_profile_default_color(menu_t *menu, int) {
+	profile_t *profile = &save.profiles[profile_edit_slot];
+	memcpy(profile->color, profile_default_color, sizeof(profile->color));
+	save.profile_default_color[profile_edit_slot] = true;
+	save.is_dirty = true;
+
+	// Show the reset values on the RGB toggles
+	menu_page_t *page = &menu->pages[menu->index];
+	for (int c = 0; c < 3; c++) {
+		page->entries[PROFILE_EDIT_RED + c].data = profile->color[c] / PROFILE_COLOR_STEP;
+	}
+}
+
+static void button_profile_delete_confirm(menu_t *menu, int data) {
+	menu_pop(menu); // the confirm page
+	if (data) {
+		save.profiles[profile_edit_slot].used = false;
+		game_profile_deleted(profile_edit_slot);
+		save.is_dirty = true;
+		profiles_list_dirty = true;
+		menu_pop(menu); // the edit page
+	}
+}
+
+static void button_profile_delete(menu_t *menu, int) {
+	menu_confirm(menu, "DELETE PROFILE", save.profiles[profile_edit_slot].code, "YES", "NO", button_profile_delete_confirm);
+}
+
+static void page_profile_edit_draw(menu_t*, int) {
+	profile_t *profile = &save.profiles[profile_edit_slot];
+	draw_engine_color_preview(&g.ships[0], game_profile_engine_color(profile), vec2(0, -0.1), vec3(0, 0, -700));
+	if (save.profile_default_color[profile_edit_slot]) {
+		render_set_view_2d();
+		ui_draw_text_centered("DEFAULT COLORS", ui_scaled_pos(UI_POS_TOP | UI_POS_CENTER, vec2i(0, 50)), UI_SIZE_8, UI_COLOR_DEFAULT);
+	}
+}
+
+static void page_profile_edit_init(menu_t *menu, int slot) {
+	profile_edit_slot = slot;
+	profile_t *profile = &save.profiles[slot];
+	profile_edit_code_opts[0] = profile->code; // live, so a new code shows up
+
+	menu_page_t *page = menu_push(menu, "EDIT PROFILE", page_profile_edit_draw, NULL, NULL);
+	flags_set(page->layout_flags, MENU_VERTICAL | MENU_FIXED);
+	page->title_pos = vec2i(0, 30);
+	page->title_anchor = UI_POS_TOP | UI_POS_CENTER;
+	page->items_pos = vec2i(-160, -110);
+	page->items_anchor = UI_POS_BOTTOM | UI_POS_CENTER;
+	page->block_width = 320;
+
+	// Same order as the PROFILE_EDIT_* entries
+	menu_page_add_toggle(page, 0, "CODE", profile_edit_code_opts, 1, toggle_profile_code);
+	menu_page_add_toggle(page, profile->color[0] / PROFILE_COLOR_STEP, "RED", opts_color_channel, len(opts_color_channel), toggle_profile_red);
+	menu_page_add_toggle(page, profile->color[1] / PROFILE_COLOR_STEP, "GREEN", opts_color_channel, len(opts_color_channel), toggle_profile_green);
+	menu_page_add_toggle(page, profile->color[2] / PROFILE_COLOR_STEP, "BLUE", opts_color_channel, len(opts_color_channel), toggle_profile_blue);
+	menu_page_add_button(page, 0, "DEFAULT COLORS", button_profile_default_color);
+	menu_page_add_button(page, 0, "DELETE", button_profile_delete);
+}
+
+// List page
+
+static void button_profile_edit(menu_t *menu, int data) {
+	page_profile_edit_init(menu, data);
+}
+
+static void button_profile_new(menu_t *menu, int) {
+	int slot = profile_free_slot();
+	if (slot != PROFILE_NONE) {
+		page_profile_code_init(menu, slot, true);
+	}
+}
+
+static void page_options_profiles_build(menu_page_t *page) {
+	for (int i = 0; i < page->entries_len; i++) {
+		free(page->entries[i].text);
+	}
+	page->entries_len = 0;
+
+	for (int i = 0; i < NUM_PROFILES; i++) {
+		if (save.profiles[i].used) {
+			menu_page_add_button(page, i, save.profiles[i].code, button_profile_edit);
+		}
+	}
+	if (profile_free_slot() != PROFILE_NONE) {
+		menu_page_add_button(page, PROFILE_NONE, "NEW PROFILE", button_profile_new);
+	}
+	page->index = clamp(page->index, 0, page->entries_len - 1);
+	profiles_list_dirty = false;
+}
+
+static void page_options_profiles_draw(menu_t *menu, int data) {
+	menu_page_t *page = &menu->pages[menu->index];
+	if (profiles_list_dirty) {
+		page_options_profiles_build(page);
+		data = page->entries[page->index].data;
+	}
+	profile_t *profile = game_profile(data);
+	draw_engine_color_preview(&g.ships[0], game_profile_engine_color(profile), vec2(0, -0.1), vec3(0, 0, -700));
+}
+
+static void page_options_profiles_init(menu_t *menu) {
+	menu_page_t *page = menu_push(menu, "PROFILES", page_options_profiles_draw, NULL, NULL);
+	flags_add(page->layout_flags, MENU_FIXED);
+	page->title_pos = vec2i(0, 30);
+	page->title_anchor = UI_POS_TOP | UI_POS_CENTER;
+	page->items_pos = vec2i(0, -130);
+	page->items_anchor = UI_POS_BOTTOM | UI_POS_CENTER;
+	page_options_profiles_build(page);
+}
+
+
+// -----------------------------------------------------------------------------
+// Single player profile selection
+
+static void button_profile_select(menu_t *menu, int data) {
+	g.profile[0] = data;
+	if (save.last_profile != data) {
+		save.last_profile = data;
+		save.is_dirty = true;
+	}
+	page_race_type_init(menu);
+}
+
+static void page_profile_select_draw(menu_t*, int data) {
+	profile_t *profile = game_profile(data);
+	draw_engine_color_preview(&g.ships[0], game_profile_engine_color(profile), vec2(0, -0.1), vec3(0, 0, -700));
+}
+
+static void page_profile_select_init(menu_t *menu) {
+	menu_page_t *page = menu_push(menu, "SELECT PROFILE", page_profile_select_draw, NULL, NULL);
+	flags_add(page->layout_flags, MENU_FIXED);
+	page->title_pos = vec2i(0, 30);
+	page->title_anchor = UI_POS_TOP | UI_POS_CENTER;
+	page->items_pos = vec2i(0, -130);
+	page->items_anchor = UI_POS_BOTTOM | UI_POS_CENTER;
+
+	for (int i = 0; i < NUM_PROFILES; i++) {
+		if (save.profiles[i].used) {
+			if (i == save.last_profile) {
+				page->index = page->entries_len; // start on the last used one
+			}
+			menu_page_add_button(page, i, save.profiles[i].code, button_profile_select);
+		}
+	}
+	if (!game_profile(save.last_profile)) {
+		page->index = page->entries_len;
+	}
+	menu_page_add_button(page, PROFILE_NONE, "NO PROFILE", button_profile_select);
+}
+
+
+// -----------------------------------------------------------------------------
 // Options Best Times
 
 static int options_highscores_race_class;
@@ -620,6 +963,17 @@ static void button_highscores_viewer(menu_t *menu, int data) {
 	page_options_highscores_viewer_init(menu);
 }
 
+static void button_highscores_reset_confirm(menu_t *menu, int data) {
+	if (data) {
+		game_reset_highscores();
+	}
+	menu_pop(menu);
+}
+
+static void button_highscores_reset(menu_t *menu, int) {
+	menu_confirm(menu, "RESET ALL BEST TIMES", "AND LAP RECORDS", "YES", "NO", button_highscores_reset_confirm);
+}
+
 static void page_options_highscores_draw(menu_t*, int) {
 	draw_model(models.options.stopwatch, vec2(0, -0.2), vec3(0, 0, -400), system_cycle_time());
 }
@@ -638,6 +992,7 @@ static void page_options_highscores_init(menu_t *menu) {
 
 	menu_page_add_button(page, HIGHSCORE_TAB_TIME_TRIAL, "TIME TRIAL TIMES", button_highscores_viewer);
 	menu_page_add_button(page, HIGHSCORE_TAB_RACE, "RACE TIMES", button_highscores_viewer);
+	menu_page_add_button(page, 0, "RESET TIMES", button_highscores_reset);
 }
 
 
@@ -790,6 +1145,7 @@ enum {
 	LOBBY_ROW_CLASS,
 	LOBBY_ROW_TYPE,
 	LOBBY_ROW_RACER,
+	LOBBY_ROW_PROFILE,
 	NUM_LOBBY_ROWS
 };
 
@@ -799,6 +1155,7 @@ static const int split_screen_types[] = {RACE_TYPE_SINGLE, RACE_TYPE_CHAMPIONSHI
 static struct {
 	bool joined[INPUT_MAX_PLAYERS];
 	int pilot[INPUT_MAX_PLAYERS];
+	int profile[INPUT_MAX_PLAYERS];
 	int circuits[NUM_CIRCUITS];
 	int circuits_len;
 	int circuit_index;
@@ -824,6 +1181,28 @@ static int lobby_next_free_pilot(int player, int pilot, int dir) {
 	return pilot;
 }
 
+static bool lobby_profile_taken(int slot, int player) {
+	for (int p = 0; p < INPUT_MAX_PLAYERS; p++) {
+		if (p != player && lobby.joined[p] && lobby.profile[p] == slot) {
+			return true;
+		}
+	}
+	return false;
+}
+
+// Step to the next profile no other player has; NO PROFILE is always free
+static int lobby_next_free_profile(int player, int dir) {
+	int slot = lobby.profile[player];
+	for (int i = 0; i <= NUM_PROFILES; i++) {
+		// PROFILE_NONE (-1) and the slots 0..NUM_PROFILES-1 form one cycle
+		slot = wrap_around(slot + 1 + dir, 0, NUM_PROFILES + 1) - 1;
+		if (slot == PROFILE_NONE || (game_profile(slot) && !lobby_profile_taken(slot, player))) {
+			return slot;
+		}
+	}
+	return PROFILE_NONE;
+}
+
 static int lobby_player_count(void) {
 	int count = 0;
 	for (int p = 0; p < INPUT_MAX_PLAYERS; p++) {
@@ -835,8 +1214,12 @@ static int lobby_player_count(void) {
 static void split_screen_start(void) {
 	int pilots[INPUT_MAX_PLAYERS];
 	int count = 0;
+	for (int p = 0; p < MAX_LOCAL_PLAYERS; p++) {
+		g.profile[p] = PROFILE_NONE;
+	}
 	for (int p = 0; p < INPUT_MAX_PLAYERS; p++) {
 		if (lobby.joined[p]) {
+			g.profile[count] = lobby.profile[p];
 			pilots[count++] = lobby.pilot[p];
 		}
 	}
@@ -903,6 +1286,9 @@ static void page_split_screen_handle_p1_input(void) {
 		case LOBBY_ROW_RACER:
 			lobby.pilot[0] = lobby_next_free_pilot(0, lobby.pilot[0], dir);
 			break;
+		case LOBBY_ROW_PROFILE:
+			lobby.profile[0] = lobby_next_free_profile(0, dir);
+			break;
 	}
 	sfx_play(SFX_MENU_SELECT);
 }
@@ -913,6 +1299,7 @@ static void page_split_screen_handle_join_input(void) {
 		if (!lobby.joined[p]) {
 			if (input_pressed_p(A_MENU_SELECT, p) || input_pressed_p(A_MENU_START, p)) {
 				lobby.pilot[p] = lobby_next_free_pilot(p, NUM_PILOTS - 1, 1);
+				lobby.profile[p] = PROFILE_NONE;
 				lobby.joined[p] = true;
 				sfx_play(SFX_MENU_SELECT);
 			}
@@ -927,6 +1314,14 @@ static void page_split_screen_handle_join_input(void) {
 		}
 		else if (input_pressed_p(A_MENU_RIGHT, p)) {
 			lobby.pilot[p] = lobby_next_free_pilot(p, lobby.pilot[p], 1);
+			sfx_play(SFX_MENU_MOVE);
+		}
+		else if (input_pressed_p(A_MENU_UP, p)) {
+			lobby.profile[p] = lobby_next_free_profile(p, -1);
+			sfx_play(SFX_MENU_MOVE);
+		}
+		else if (input_pressed_p(A_MENU_DOWN, p)) {
+			lobby.profile[p] = lobby_next_free_profile(p, 1);
 			sfx_play(SFX_MENU_MOVE);
 		}
 	}
@@ -972,6 +1367,14 @@ static void page_split_screen_draw_player(int player, vec2i_t pos) {
 	}
 	pos.y += 14;
 	ui_draw_text_centered(def.teams[pilot->team].name, ui_scaled_pos(anchor, pos), UI_SIZE_8, UI_COLOR_ACCENT);
+
+	profile_t *profile = game_profile(lobby.profile[player]);
+	bool profile_selected = player == 0 && lobby.row == LOBBY_ROW_PROFILE;
+	pos.y += 14;
+	ui_draw_text_centered(
+		profile ? profile->code : "NO PROFILE", ui_scaled_pos(anchor, pos), UI_SIZE_8,
+		(profile_selected && blink()) ? UI_COLOR_ACCENT : UI_COLOR_DEFAULT
+	);
 }
 
 // Small spinning ship under the player's column. pos is the column center in
@@ -981,7 +1384,8 @@ static void page_split_screen_draw_ship(int player, vec2i_t pos) {
 	float half_w = (float)screen.x / ui_get_scale() / 2.0f;
 	float half_h = (float)screen.y / ui_get_scale() / 2.0f;
 	vec2_t offset = vec2(pos.x / half_w, (half_h + pos.y) / half_h);
-	draw_model(g.ships[lobby.pilot[player]].model, offset, vec3(0, 0, -2000), system_cycle_time());
+	profile_t *profile = game_profile(lobby.profile[player]);
+	draw_engine_color_preview(&g.ships[lobby.pilot[player]], game_profile_engine_color(profile), offset, vec3(0, 0, -2000));
 }
 
 static void page_split_screen_draw(menu_t*, int) {
@@ -993,7 +1397,7 @@ static void page_split_screen_draw(menu_t*, int) {
 	int spacing = clamp(screen_width / INPUT_MAX_PLAYERS, 80, 150);
 	vec2i_t columns[INPUT_MAX_PLAYERS];
 	for (int p = 0; p < INPUT_MAX_PLAYERS; p++) {
-		columns[p] = vec2i((p * 2 - (INPUT_MAX_PLAYERS - 1)) * spacing / 2, -116);
+		columns[p] = vec2i((p * 2 - (INPUT_MAX_PLAYERS - 1)) * spacing / 2, -130);
 	}
 
 	// 3d ships first, then switch back to 2d for everything else
@@ -1037,6 +1441,7 @@ static void page_split_screen_init(menu_t *menu) {
 	}
 	lobby.joined[0] = true;
 	lobby.pilot[0] = g.pilot;
+	lobby.profile[0] = game_profile(g.profile[0]) ? g.profile[0] : PROFILE_NONE;
 	lobby.row = LOBBY_ROW_CIRCUIT;
 
 	lobby.circuits_len = 0;
@@ -1144,6 +1549,7 @@ void main_menu_init(void) {
 	input_set_menu_player(0); // ensure P1 controls menus on (re)entry
 
 	ships_reset_exhaust_plumes();
+	ships_reset_engine_colors();
 
 	split_screen_preview_pilots[0] = rand_int(0, NUM_PILOTS);
 	split_screen_preview_pilots[1] = rand_int(0, NUM_PILOTS - 1);

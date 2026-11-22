@@ -18,6 +18,9 @@
 #define NUM_LIVES 3
 #define QUALIFYING_RANK 3
 #define SAVE_DATA_MAGIC 0x64736f77
+#define NUM_PROFILES 8
+#define PROFILE_NONE -1
+#define MAX_LOCAL_PLAYERS 4
 
 typedef enum {
 	GAME_WIPEOUT, 
@@ -267,11 +270,21 @@ typedef struct {
 
 	bool additional_circuits;
 	bool installed_circuits[NUM_CIRCUITS];
+
+	// Profile slot per local player (index into save.profiles), or PROFILE_NONE
+	int profile[MAX_LOCAL_PLAYERS];
+	int race_player; // local player who set g.race_time
 } game_t;
 
 
 
 // Save Data
+
+typedef struct {
+	bool used;
+	char code[4];     // 1-3 chars from the hall of fame charset, NUL terminated
+	uint8_t color[3]; // engine color: r, g, b
+} profile_t;
 
 typedef struct {
 	char name[4];
@@ -314,6 +327,11 @@ typedef struct {
 	bool ship_markers;
 	int ship_lighting;
 	int track_lighting;
+	profile_t profiles[NUM_PROFILES];
+	int last_profile; // last profile used in single player, or PROFILE_NONE
+	// Per profile slot: use the stock engine colors instead of profile_t.color.
+	// Kept out of profile_t so saves written before it was added still load.
+	bool profile_default_color[NUM_PROFILES];
 } save_t;
 
 
@@ -327,5 +345,17 @@ void game_init(void);
 void game_set_scene(game_scene_t scene);
 void game_reset_championship(void);
 void game_update(void);
+
+// The profile in the given save slot, or NULL if the slot is unused/invalid
+profile_t *game_profile(int slot);
+// The profile's engine color for ship_set_engine_color(); NULL = the default
+// colors (no profile, or the profile uses the defaults)
+const uint8_t *game_profile_engine_color(const profile_t *profile);
+// Restore all best times and lap records to the built-in ones
+void game_reset_highscores(void);
+// The profile of local player 0..3 in the current game, or NULL
+profile_t *game_player_profile(int player);
+// Forget a deleted profile everywhere it is selected
+void game_profile_deleted(int slot);
 
 #endif

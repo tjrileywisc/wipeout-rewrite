@@ -307,64 +307,21 @@ static highscores_entry_t hs_new_entry = {
 	.time = 0,
 	.name = ""
 };
-static const char *hs_charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-static int hs_char_index = 0;
+static menu_name_entry_t hs_name_entry;
+static bool hs_entry_from_profile = false; // name is the player's profile code
 static bool hs_entry_complete = false;
 
 static void hall_of_fame_draw_name_entry(menu_t*, ui_pos_t anchor, vec2i_t pos) {
-	int entry_len = strlen(hs_new_entry.name);
-	int entry_width = ui_text_width(hs_new_entry.name, UI_SIZE_16);
-
-	vec2i_t c_pos = ui_scaled_pos(anchor, vec2i(pos.x + entry_width, pos.y));
-	int c_first = 0;
-	int c_last = 38;
-	if (entry_len == 0) {
-		c_last = 37;
-	}
-	else if (entry_len == 3) {
-		c_first = 36;
-	}
-
-	if (input_pressed(A_MENU_UP)) {
-		hs_char_index++;
-	}
-	else if (input_pressed(A_MENU_DOWN)) {
-		hs_char_index--;
-	}
-	hs_char_index = wrap_around(hs_char_index, c_first, c_last);
-
-	// DEL
-	if (hs_char_index == 36) {
-		ui_draw_icon(UI_ICON_DEL, c_pos, UI_COLOR_ACCENT);
-		if (input_pressed(A_MENU_SELECT) || input_pressed(A_MENU_START)) {
-			sfx_play(SFX_MENU_SELECT);
-			if (entry_len > 0) {
-				hs_new_entry.name[entry_len-1] = '\0';
-			}
-		}
-	}
-
-	// END
-	else if (hs_char_index == 37) {
-		ui_draw_icon(UI_ICON_END, c_pos, UI_COLOR_ACCENT);
+	if (hs_entry_from_profile) {
+		// Nothing to type; just confirm
+		ui_draw_text(hs_name_entry.name, ui_scaled_pos(anchor, pos), UI_SIZE_16, blink() ? UI_COLOR_ACCENT : UI_COLOR_DEFAULT);
 		if (input_pressed(A_MENU_SELECT) || input_pressed(A_MENU_START)) {
 			hs_entry_complete = true;
 		}
 	}
-
-	// A-Z, 0-9
-	else {
-		char selector[2] = {hs_charset[hs_char_index], '\0'};
-		ui_draw_text(selector, c_pos, UI_SIZE_16, UI_COLOR_ACCENT);
-
-		if (input_pressed(A_MENU_SELECT) || input_pressed(A_MENU_START)) {
-			sfx_play(SFX_MENU_SELECT);
-			hs_new_entry.name[entry_len] = hs_charset[hs_char_index];
-			hs_new_entry.name[entry_len+1] = '\0';
-		}
+	else if (menu_name_entry_update(&hs_name_entry, anchor, pos, UI_SIZE_16)) {
+		hs_entry_complete = true;
 	}
-
-	ui_draw_text(hs_new_entry.name, ui_scaled_pos(anchor, pos), UI_SIZE_16, UI_COLOR_ACCENT);
 }
 
 static void page_hall_of_fame_draw(menu_t *menu, int) {
@@ -375,9 +332,13 @@ static void page_hall_of_fame_draw(menu_t *menu, int) {
 	
 	if (hs_entry_complete) {
 		sfx_play(SFX_MENU_SELECT);
-		strncpy(save.highscores_name, hs_new_entry.name, 4);
+		memcpy(hs_new_entry.name, hs_name_entry.name, sizeof(hs_new_entry.name));
+		if (!hs_entry_from_profile) {
+			// Remember the typed name as the default for the next entry
+			memcpy(save.highscores_name, hs_name_entry.name, sizeof(save.highscores_name));
+		}
 		save.is_dirty = true;
-		
+
 		// Insert new highscore entry into the save struct
 		for (int i = 0; i < NUM_HIGHSCORES; i++) {
 			if (hs_new_entry.time < hs->entries[i].time) {
@@ -430,8 +391,11 @@ static void page_hall_of_fame_init(menu_t *menu) {
 	page->title_pos = vec2i(0, -100);
 
 	hs_new_entry.time = g.race_time;
-	strncpy(hs_new_entry.name, save.highscores_name, 4);
-	hs_char_index = 0;
+
+	// The player who set the time enters with their profile code, if any
+	profile_t *profile = game_player_profile(g.race_player);
+	hs_entry_from_profile = profile != NULL;
+	menu_name_entry_reset(&hs_name_entry, profile ? profile->code : save.highscores_name);
 	hs_entry_complete = false;
 }
 

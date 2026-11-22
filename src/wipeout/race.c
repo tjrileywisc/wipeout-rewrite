@@ -323,6 +323,7 @@ void race_end(void) {
 	int local_pilots[4] = {g.pilot, g.pilot2, g.pilot3, g.pilot4};
 
 	g.race_position = g.ships[g.pilot].position_rank;
+	g.race_player = 0;
 	g.race_time = 0;
 	g.best_lap = g.lap_times[g.pilot][0];
 	for (int i = 0; i < NUM_LAPS; i++) {
@@ -347,6 +348,7 @@ void race_end(void) {
 		if (total > 0 && total < g.race_time) {
 			g.race_time = total;
 			g.race_position = g.ships[pilot].position_rank;
+			g.race_player = p;
 		}
 	}
 
